@@ -1,0 +1,37 @@
+# build output
+dist/
+.astro/
+node_modules/
+
+# secrets / env (none used today; kept per project convention)
+.env
+*.env
+credentials*
+logs/
+
+# Private source material: contains phone, address and other personal data. NEVER commit.
+PeterChang_rv.pdf
+PeterChang_core.md
+*.pdf
+# Raw Canva export + source CSV: contain staff names, internal URLs, transaction ids.
+# Only redacted crops under src/assets/ are published.
+canva-export/
+*.csv
+# Exception: de-identified output of scripts/deidentify_cc_csv.py (published on the Credit Card page)
+!public/data/*.csv
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Python caches
+__pycache__/
+.pytest_cache/
+*.pyc
+
+# Local Lark utilities (not part of the portfolio site)
+lark_get_info.py
+larksheet_api.py
+tests/test_lark_get_info.py
+.env.example

@@ -1,0 +1,266 @@
+---
+import { getCollection, render } from "astro:content";
+import Base from "../../layouts/Base.astro";
+import { url } from "../../lib/url";
+
+export async function getStaticPaths() {
+  const projects = await getCollection("projects");
+  return projects.map((project) => ({ params: { slug: project.id }, props: { project } }));
+}
+
+const { project } = Astro.props;
+const p           = project.data;
+const { Content } = await render(project);
+---
+
+<Base title={p.title} description={p.summary}>
+  <article class="case-study" data-accent={p.accent}>
+    <a class="back mono" href={url("projects/")}>← All projects</a>
+
+    <header class="page-head">
+      <p class="eyebrow mono">{p.company} · {p.period}</p>
+      <h1>{p.title}</h1>
+      <p class="project-subtitle">{p.subtitle}</p>
+      <p class="lead">{p.summary}</p>
+    </header>
+
+    <dl class="case-meta">
+      <div><dt class="mono">Role</dt><dd>{p.role}</dd></div>
+      <div><dt class="mono">Stack</dt><dd><ul class="tags">{p.stack.map((s) => <li>{s}</li>)}</ul></dd></div>
+    </dl>
+
+    {p.metrics.length > 0 && (
+      <dl class="metrics metrics-lg">
+        {p.metrics.map((m) => (
+          <div><dt>{m.value}</dt><dd>{m.label}</dd></div>
+        ))}
+      </dl>
+    )}
+
+    <div class="prose">
+      <Content />
+    </div>
+  </article>
+</Base>
+
+<script>
+  // Render ```mermaid code blocks. Loaded only on project pages; Astro bundles the npm package.
+  import mermaid from "mermaid";
+
+  // Evidence images keep their full resolution; click opens the original so small text stays readable.
+  document.querySelectorAll<HTMLImageElement>(".prose p > img, .prose td img").forEach((img) => {
+    img.addEventListener("click", () => window.open(img.currentSrc || img.src, "_blank", "noopener"));
+  });
+
+  // ---------- Chapters: one "## section" per page, with collapsible tabs ----------
+  // Progressive enhancement: without JS the page stays one long article.
+  function buildChapters(): void {
+    const prose = document.querySelector<HTMLElement>(".prose");
+    if (!prose) return;
+    const heads = Array.from(prose.querySelectorAll<HTMLHeadingElement>(":scope > h2"));
+    if (heads.length < 2) return;
+
+    const total    = heads.length;
+    const pad      = (n: number) => String(n).padStart(2, "0");
+    const chapters = heads.map((h2, i) => {
+      const section = document.createElement("section");
+      section.className = "chapter";
+      section.id        = `ch-${i + 1}`;
+      section.setAttribute("role", "tabpanel");
+      section.setAttribute("aria-labelledby", `tab-${i + 1}`);
+      h2.dataset.num = pad(i + 1);
+      h2.before(section);
+
+      // Move the heading and everything up to the next h2 into this chapter.
+      let node: ChildNode | null = h2;
+      while (node && (node === h2 || !(node instanceof HTMLHeadingElement && node.tagName === "H2"))) {
+        const next: ChildNode | null = node.nextSibling;
+        section.appendChild(node);
+        node = next;
+      }
+      return { section, title: h2.textContent ?? "" };
+    });
+
+    // Tab bar
+    const nav = document.createElement("nav");
+    nav.className = "chapter-tabs";
+    nav.setAttribute("aria-label", "Chapters");
+    const list = document.createElement("div");
+    list.className = "chapter-tab-list";
+    list.setAttribute("role", "tablist");
+    const progress = document.createElement("div");
+    progress.className = "chapter-progress";
+    nav.append(list, progress);
+
+    const tabs = chapters.map((ch, i) => {
+      const tab = document.createElement("button");
+      tab.type      = "button";
+      tab.id        = `tab-${i + 1}`;
+      tab.className = "chapter-tab";
+      tab.title     = ch.title;
+      tab.setAttribute("role", "tab");
+      tab.setAttribute("aria-controls", ch.section.id);
+      tab.innerHTML = `<span class="chapter-tab-num"></span><span class="chapter-tab-label"></span>`;
+      tab.querySelector(".chapter-tab-num")!.textContent   = pad(i + 1);
+      tab.querySelector(".chapter-tab-label")!.textContent = ch.title;
+      // Reuse the heading's badge colour (defined once in global.css) as a dot on the tab.
+      const tone = getComputedStyle(heads[i]).getPropertyValue("--tone").trim();
+      if (tone) {
+        tab.classList.add("has-tone");
+        tab.style.setProperty("--tone", tone);
+      }
+      tab.addEventListener("click", () => go(i));
+      list.appendChild(tab);
+      return tab;
+    });
+
+    // Pager at the end of every chapter
+    chapters.forEach((ch, i) => {
+      const pager = document.createElement("div");
+      pager.className = "chapter-pager";
+      const make = (idx: number, dir: "prev" | "next") => {
+        if (idx < 0 || idx >= total) return document.createElement("span");
+        const b = document.createElement("button");
+        b.type      = "button";
+        b.className = `chapter-turn ${dir}`;
+        b.innerHTML = `<span class="chapter-turn-dir mono"></span><span class="chapter-turn-title"></span>`;
+        b.querySelector(".chapter-turn-dir")!.textContent   = dir === "prev" ? "← 上一章" : "下一章 →";
+        b.querySelector(".chapter-turn-title")!.textContent = `${pad(idx + 1)} ${chapters[idx].title}`;
+        b.addEventListener("click", () => go(idx));
+        return b;
+      };
+      const folio = document.createElement("span");
+      folio.className   = "chapter-folio mono";
+      folio.textContent = `${pad(i + 1)} / ${pad(total)}`;
+      pager.append(make(i - 1, "prev"), folio, make(i + 1, "next"));
+      ch.section.appendChild(pager);
+    });
+
+    prose.classList.add("paged");
+    prose.before(nav);
+
+    let current = -1;
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    function go(i: number, opts: { scroll?: boolean } = {}): void {
+      if (i === current || i < 0 || i >= total) return;
+      const forward = i > current;
+      chapters.forEach((ch, j) => {
+        ch.section.hidden = j !== i;
+        ch.section.classList.remove("turn-next", "turn-prev");
+        tabs[j].setAttribute("aria-selected", String(j === i));
+        tabs[j].tabIndex = j === i ? 0 : -1;
+      });
+      if (current !== -1 && !reduce) {
+        void chapters[i].section.offsetWidth; // restart animation
+        chapters[i].section.classList.add(forward ? "turn-next" : "turn-prev");
+      }
+      progress.style.setProperty("--progress", `${((i + 1) / total) * 100}%`);
+      // Keep the active tab visible inside the (horizontally scrollable) tab list without moving the window.
+      const listBox = list.getBoundingClientRect(), tabBox = tabs[i].getBoundingClientRect();
+      list.scrollTo({ left: list.scrollLeft + tabBox.left - listBox.left - (listBox.width - tabBox.width) / 2 });
+      // Keep a clean URL on first load; once the reader turns a page, the hash makes the chapter shareable.
+      if (current !== -1 || location.hash) history.replaceState(null, "", `#${chapters[i].section.id}`);
+      // Jump to the new chapter's heading, just below the sticky header (56px) + sticky tab bar.
+      // The tab bar's own position cannot be the target: being sticky, it always reads "already here".
+      if (opts.scroll !== false && current !== -1) {
+        const offset = 56 + nav.offsetHeight + 8;
+        const top    = chapters[i].section.getBoundingClientRect().top + window.scrollY - offset;
+        window.scrollTo({ top, behavior: reduce ? "auto" : "smooth" });
+      }
+      current = i;
+    }
+
+    document.addEventListener("keydown", (e) => {
+      if (e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.target instanceof Element && e.target.closest("input, textarea, select")) return;
+      if (e.key === "ArrowRight") go(current + 1);
+      if (e.key === "ArrowLeft")  go(current - 1);
+    });
+
+    const fromHash = /^#ch-(\d+)$/.exec(location.hash);
+    go(fromHash ? Math.min(Math.max(Number(fromHash[1]) - 1, 0), total - 1) : 0, { scroll: false });
+  }
+
+  buildChapters();
+
+  // ---------- CSV viewer: <div class="csv-viewer" data-src="..."> in Markdown ----------
+  // Without JS the download link inside the div is still there.
+  function parseCsv(text: string): string[][] {
+    const rows: string[][] = [];
+    let row: string[] = [], field = "", quoted = false;
+    for (let i = 0; i < text.length; i++) {
+      const c = text[i];
+      if (quoted) {
+        if (c === '"' && text[i + 1] === '"') { field += '"'; i++; }
+        else if (c === '"') quoted = false;
+        else field += c;
+      } else if (c === '"') quoted = true;
+      else if (c === ",") { row.push(field); field = ""; }
+      else if (c === "\n") { row.push(field.replace(/\r$/, "")); rows.push(row); row = []; field = ""; }
+      else field += c;
+    }
+    if (field || row.length) { row.push(field); rows.push(row); }
+    return rows;
+  }
+
+  const escapeHtml = (s: string) => s.replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]!);
+  // Same definition as the page text: review = error*, or a note naming a wrong / duplicate refund.
+  const ERROR_NOTE = /wrong|double|twice|duplicate|overpaid|underpaid|correct amount/i;
+
+  // Collapsed by default: the CSV is fetched and rendered only the first time its <details> is opened.
+  for (const viewer of document.querySelectorAll<HTMLElement>(".csv-viewer[data-src]")) {
+    const details = viewer.closest("details");
+    if (!details) { void loadCsv(viewer); continue; }
+    details.addEventListener("toggle", () => { if (details.open) void loadCsv(viewer); });
+  }
+
+  async function loadCsv(viewer: HTMLElement): Promise<void> {
+    if (viewer.dataset.loaded) return;
+    viewer.dataset.loaded = "1";
+    const src = new URL(viewer.dataset.src!, location.href).href;
+    try {
+      const res = await fetch(src);
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const [header, ...rows] = parseCsv(await res.text()).filter((r) => r.length > 1);
+      const col  = (name: string) => header.indexOf(name);
+      const [iTx, iNote, iReview] = [col("Tx"), col("Note"), col("Review")];
+      const body = rows.map((r) => {
+        const cls = r[iTx] === "-" ? "is-empty"
+          : /^error/i.test(r[iReview] ?? "") || ERROR_NOTE.test(`${r[iNote] ?? ""} ${r[iReview] ?? ""}`) ? "is-error" : "";
+        return `<tr class="${cls}">${r.map((v) => `<td>${escapeHtml(v)}</td>`).join("")}</tr>`;
+      }).join("");
+      const wrap = document.createElement("div");
+      wrap.className = "csv-table-wrap";
+      wrap.innerHTML = `<table class="csv-table"><thead><tr>${header.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table>`;
+      const meta = document.createElement("p");
+      meta.className   = "csv-meta mono";
+      meta.textContent = `${rows.length.toLocaleString()} rows · 可上下左右捲動`;
+      viewer.prepend(meta, wrap);
+    } catch (err) {
+      console.error("CSV viewer failed", { src, err });
+    }
+  }
+
+  // ---------- Mermaid ----------
+  // Astro emits excluded languages as <pre><code class="language-mermaid">…</code></pre>.
+  // mermaid.render() measures text in its own temporary element, so diagrams inside hidden chapters still size correctly.
+  const blocks = Array.from(document.querySelectorAll<HTMLElement>("pre > code.language-mermaid"));
+  if (blocks.length > 0) {
+    const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "neutral", securityLevel: "strict" });
+
+    for (const [i, code] of blocks.entries()) {
+      const div     = document.createElement("div");
+      div.className = "mermaid";
+      code.parentElement!.replaceWith(div);
+      try {
+        const { svg } = await mermaid.render(`mermaid-${i}`, code.textContent ?? "");
+        div.innerHTML = svg;
+      } catch (err) {
+        console.error("Mermaid render failed", { index: i, err });
+        div.textContent = code.textContent ?? "";
+      }
+    }
+  }
+</script>

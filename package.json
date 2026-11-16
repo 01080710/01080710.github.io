@@ -1,0 +1,16 @@
+{
+  "name": "peter-chang-portfolio",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview"
+  },
+  "description": "Peter Chang engineering portfolio (Astro static site)",
+  "dependencies": {
+    "astro": "7.3.8",
+    "mermaid": "12.3.0"
+  },
+  "private": true,
+  "type": "module"
+}

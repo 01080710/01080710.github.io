@@ -1,0 +1,38 @@
+---
+import type { CollectionEntry } from "astro:content";
+import { url } from "../lib/url";
+
+interface Props {
+  project: CollectionEntry<"projects">;
+  index:   number;
+}
+
+const { project, index } = Astro.props;
+const p = project.data;
+---
+
+<article class="project-card" data-accent={p.accent}>
+  <a href={url(`projects/${project.id}/`)} class="project-card-link">
+    <div class="project-card-head">
+      <span class="mono muted">{String(index + 1).padStart(2, "0")} · {p.period}</span>
+      <span class="mono muted">{p.company}</span>
+    </div>
+    <h3>{p.title}</h3>
+    <p class="project-subtitle">{p.subtitle}</p>
+    <p>{p.summary}</p>
+    {p.metrics.length > 0 && (
+      <dl class="metrics">
+        {p.metrics.map((m) => (
+          <div>
+            <dt>{m.value}</dt>
+            <dd>{m.label}</dd>
+          </div>
+        ))}
+      </dl>
+    )}
+    <ul class="tags">
+      {p.tags.map((t) => <li>{t}</li>)}
+    </ul>
+    <span class="read-more mono">Read case study →</span>
+  </a>
+</article>

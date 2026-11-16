@@ -1,0 +1,28 @@
+---
+import { profile } from "../data/profile";
+
+interface Props {
+  compact?: boolean;
+}
+
+const { compact = false } = Astro.props;
+const { github, linkedin, email } = profile.contact;
+
+// Empty values come from profile.ts and are rendered as TODO instead of a broken link.
+const links = [
+  { label: "GitHub",   href: github,                       text: github.replace(/^https?:\/\//, "") },
+  { label: "LinkedIn", href: linkedin,                     text: linkedin.replace(/^https?:\/\/(www\.)?/, "") },
+  { label: "Email",    href: email ? `mailto:${email}` : "", text: email },
+];
+---
+
+<ul class:list={["contact-links", { compact }]}>
+  {links.map((link) => (
+    <li>
+      <span class="contact-label mono">{link.label}</span>
+      {link.href
+        ? <a href={link.href} target={link.label === "Email" ? undefined : "_blank"} rel="noopener">{compact ? link.label : link.text}</a>
+        : <span class="todo">TODO</span>}
+    </li>
+  ))}
+</ul>

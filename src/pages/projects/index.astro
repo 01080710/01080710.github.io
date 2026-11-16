@@ -1,0 +1,19 @@
+---
+import { getCollection } from "astro:content";
+import Base from "../../layouts/Base.astro";
+import ProjectCard from "../../components/ProjectCard.astro";
+
+const projects = (await getCollection("projects")).sort((a, b) => a.data.order - b.data.order);
+---
+
+<Base title="Projects" description="Engineering case studies: business problem, architecture, solution and impact.">
+  <section class="page-head">
+    <p class="eyebrow mono">Projects</p>
+    <h1>Engineering Case Studies</h1>
+    <p class="lead">每個專案都包含業務問題、技術挑戰、個人貢獻、系統架構與實際成果。</p>
+  </section>
+
+  <div class="project-grid">
+    {projects.map((project, i) => <ProjectCard project={project} index={i} />)}
+  </div>
+</Base>
