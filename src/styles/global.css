@@ -473,3 +473,10 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
   .chapter-turn { padding: 10px 12px; }
   .prose.paged h2 { font-size: 1.35rem; }
 }
+
+/* ---------- Video comparison (Result) ---------- */
+.video-figure { margin: 24px 0; }
+.video-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; }
+.prose .video-label { margin: 0 0 6px; font: 600 0.8rem/1.4 var(--mono); color: var(--muted); }
+.video-item video { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: 6px; background: #000; }
+.video-figure figcaption { margin-top: 10px; font-size: 0.85rem; color: var(--muted); font-style: italic; }

@@ -22,10 +22,25 @@ accent: ocean
 - IT 可以提供待處理的 UID 名單，但不提供這些欄位。OP 只能在多個 CRM 後台之間反覆切換 regulator，逐筆查詢、逐筆確認。
 - 需求來自不同團隊，而且常常是整批出現，逐筆查詢的作業模式撐不住批量案件。
 
+**名詞說明：**
+
+| 名詞 | 說明 |
+|---|---|
+| OP | 營運部門（Operations）同仁，負責客戶帳戶的日常處理 |
+| CRM 後台 | 管理客戶與交易帳戶的內部系統；每個 regulator 各有一套 |
+| regulator | 客戶所屬的金融監管機構（例如 VFSC） |
+| UID／userId | 客戶在 CRM 的唯一編號；一個客戶可以有多個交易帳戶 |
+| Account | MT4／MT5 交易帳號 |
+| Account Server | 交易帳戶所在的交易伺服器（例如 MT5_AU7） |
+| Trading Account／Rebate Account | 客戶交易用的帳戶／IB（介紹經紀商）收取返佣的帳戶 |
+| Balance／Equity／Margin／Profit／Credit | 餘額／淨值／已用保證金／浮動損益／贈金或信用額度 |
+| 清退 | 關閉高風險客戶的帳戶並結清 |
+| 轉歸屬 | 把客戶轉到另一個 IB 或業務名下 |
+
 <figure class="pain-figure">
 <div class="pain-grid">
 <section class="pain-card tone-grey pain-wide">
-<h4 class="pain-title">🔀 逐筆查詢、反覆切換</h4>
+<h4 class="pain-title">逐筆查詢、反覆切換</h4>
 <p class="pain-label"><span>Pain</span>一個帳戶要走一次完整查詢流程</p>
 <ul class="pain-note">
 <li>不同 regulator 的客戶在不同 CRM 後台，查之前要先切對後台。</li>
@@ -33,18 +48,18 @@ accent: ocean
 </ul>
 <div class="pain-evidence">
 <p class="pain-evidence-title">證據：人工查詢一個帳戶的步驟</p>
-<ul class="pain-flow">
-<li>① 從 IT 給的 UID 名單取出一筆 userId。</li>
-<li>② 判斷客戶所屬 regulator，切換到對應的 CRM 後台。</li>
-<li>③ 搜尋客戶，進入帳戶頁，找到 Trading Account／Rebate Account。</li>
-<li>④ 逐項記下 Balance、Margin、Profit、Equity、Credit、Account Server 等欄位。</li>
-<li>⑤ 回到名單，換下一筆，重複 ①–④。</li>
-</ul>
+<ol class="pain-flow">
+<li>從 IT 給的 UID 名單取出一筆 userId。</li>
+<li>判斷客戶所屬 regulator，切換到對應的 CRM 後台。</li>
+<li>搜尋客戶，進入帳戶頁，找到 Trading Account／Rebate Account。</li>
+<li>逐項記下 Balance、Margin、Profit、Equity、Credit、Account Server 等欄位。</li>
+<li>回到名單，換下一筆，重複步驟 1–4。</li>
+</ol>
 <p class="pain-caption">平均每個帳戶約 <b>45 秒</b>（估計）→ 1,000 個帳戶 ≈ <b>12.5 小時</b>人工。</p>
 </div>
 </section>
 <section class="pain-card tone-red">
-<h4 class="pain-title">📈 批量案件撐不住</h4>
+<h4 class="pain-title">批量案件撐不住</h4>
 <p class="pain-label"><span>Pain</span>案件量遠超過逐筆查詢的速度</p>
 <ul class="pain-note">
 <li>清退、轉歸屬這類案件常常一次就是上千個帳戶。</li>
@@ -60,7 +75,7 @@ accent: ocean
 </div>
 </section>
 <section class="pain-card tone-yellow">
-<h4 class="pain-title">⚠️ 核心工作被壓縮</h4>
+<h4 class="pain-title">核心工作被壓縮</h4>
 <p class="pain-label"><span>Pain</span>人力耗在查找、切系統、最後確認</p>
 <ul class="pain-note">
 <li>OP 的時間被資料搜尋與整理佔滿。</li>
@@ -86,7 +101,10 @@ accent: ocean
 
 ## Solution Design
 
-依照三個痛點，拆成五個要解決的面向，每一個都對應到使用規則中的一條：
+依照三個痛點，拆成五個要解決的面向。下圖是 LarkSheet 上給使用者看的使用規則，表格的「對應」欄指向圖中的各列：
+
+![帳務營運自動化引擎的使用規則：核心規則與四個標準程序步驟](../../assets/projects/account-automation-engine/rule-zh.png)
+*圖 2　LarkSheet 上的使用規則（節錄 Rule 工作表中文部分，英文版內容相同；點擊可放大）*
 
 | 痛點 | 解決方向 | 對應 |
 |---|---|---|
@@ -95,9 +113,6 @@ accent: ocean
 | 結果分散、難以最後確認 | 每批輸出一列摘要到 Record（帳戶數、國家／Server／regulator 涵蓋數、查無資料清單），逐帳戶明細到 Output | 步驟三：執行狀態審查 |
 | 多個團隊共用同一個入口 | 排隊獨佔：Input 空白才能填寫，單次上限 2,000 筆 | 核心規則 1–3 |
 | 入口佔用後無法輪替 | Record 與 Output 都寫入後自動清空 Input，換下一個申請 | 步驟四：釋放系統資源 |
-
-![帳務營運自動化引擎的使用規則：核心規則與四個標準程序步驟](../../assets/projects/account-automation-engine/rule-zh.png)
-*圖 2　LarkSheet 上的使用規則，「對應」欄即指這張圖的各列（節錄 Rule 工作表中文部分，英文版內容相同；點擊可放大）*
 
 **設計時必須面對的限制：**
 
@@ -152,6 +167,24 @@ flowchart TB
 - **權限範圍**：TODO：補充引擎讀取 CRM 使用的帳號、讀寫範圍（預期為唯讀）、核准者、帳密存放方式。
 
 ## Result
+
+### 操作畫面：人工查詢 vs 引擎執行
+
+同一類查詢，左邊是在 CRM 後台人工操作，右邊是引擎批量執行：
+
+<figure class="video-figure">
+<div class="video-grid">
+<div class="video-item">
+<p class="video-label">Before：人工查詢（57 秒）</p>
+<video controls muted playsinline preload="metadata" src="../../media/account-automation-engine/crm_manual.mp4"></video>
+</div>
+<div class="video-item">
+<p class="video-label">After：引擎執行（68 秒）</p>
+<video controls muted playsinline preload="metadata" src="../../media/account-automation-engine/crm_system.mp4"></video>
+</div>
+</div>
+<figcaption>圖 3　實際操作錄影（點擊播放）</figcaption>
+</figure>
 
 ### 一次實際執行的紀錄
 
@@ -239,7 +272,7 @@ Output 每個帳戶一列，共 23 個欄位。以下兩列取自 2026-11-16 的
 
 <figure class="ba-figure">
 <div class="ba-table">
-<div class="ba-row ba-head"><p class="ba-item">項目</p><p class="ba-before">🔴 Before：逐筆人工查詢</p><p class="ba-after">🟢 After：批量查詢引擎</p></div>
+<div class="ba-row ba-head"><p class="ba-item">項目</p><p class="ba-before">Before：逐筆人工查詢</p><p class="ba-after">After：批量查詢引擎</p></div>
 <div class="ba-row"><p class="ba-item">查詢方式</p><p class="ba-before">每個帳戶切換對應 regulator 的 CRM 後台，逐筆查</p><p class="ba-after">一次輸入整份名單，跨 regulator、跨 Server 批量查回<small>依據：Rule 工作表；單批最多涵蓋 4 個 regulator、40 個 Server</small></p></div>
 <div class="ba-row"><p class="ba-item">處理規模</p><p class="ba-before">筆數未紀錄</p><p class="ba-after">單批最多 17,416 個帳戶；累計 381,629 個<small>依據：Record，531 次成功執行</small></p></div>
 <div class="ba-row"><p class="ba-item">人工工時</p><p class="ba-before">每帳戶約 45 秒；1,000 個帳戶 ≈ 12.5 小時</p><p class="ba-after">累計約 4,770 小時改由引擎處理<small>依據：381,629 × 45 秒 ÷ 3,600；45 秒為估計值</small></p></div>
@@ -247,7 +280,7 @@ Output 每個帳戶一列，共 23 個欄位。以下兩列取自 2026-11-16 的
 <div class="ba-row"><p class="ba-item">使用方式</p><p class="ba-before">需要 OP 親自操作每一個後台</p><p class="ba-after">各團隊自行填表送件，排程每 5 分鐘自動執行<small>依據：Rule 工作表；10 月單月 207 次成功執行</small></p></div>
 <div class="ba-row"><p class="ba-item">錯誤輸入</p><p class="ba-before">無紀錄</p><p class="ba-after">32 次不完整申請在查詢前被攔下，並說明缺少的欄位<small>依據：Record 的 return_msg</small></p></div>
 </div>
-<figcaption>圖 3　Before / After 對照（工時與成本為估計值，計算基準見下方）</figcaption>
+<figcaption>圖 4　Before / After 對照（工時與成本為估計值，計算基準見下方）</figcaption>
 </figure>
 
 ### 尚未量化或需要說明的部分

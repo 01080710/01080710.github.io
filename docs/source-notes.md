@@ -82,7 +82,10 @@ CSV 為對帳管線的輸出紀錄：每列 `Comparison` = 一次執行時間；
 - `total_missing` 的意義：例如某批 75 users、127 accounts，但 missing 115；頁面只寫「查無資料會收集」，不引用數字。
 - `requestor` 是自由輸入（同一人有多種寫法，也有整句話），無法計算使用人數，頁面不寫。
 - CRM 資料取得方式、權限範圍（帳號、唯讀、核准者、帳密存放）、Alternative Solutions 實際評估過的方案。
-- 影片 `canva-export/vedio/*.mp4`：環境沒有 ffmpeg，無法檢視內容與去識別，頁面未使用。
+
+**Peter 確認（2026-11-17）**
+- Problem Assessment 名詞說明（OP、CRM 後台、regulator、UID、Account、Account Server、Trading／Rebate Account、Balance 等欄位、清退、轉歸屬）的定義由 Claude 草擬，Peter 確認全部正確。
+- 影片 `crm_manual.mp4`（57 秒，人工查詢）與 `crm_system.mp4`（68 秒，引擎執行）屬於本專案，Peter 確認畫面可直接公開，未做裁切或模糊；原樣複製到 `public/media/account-automation-engine/`。
 
 **公開資料處理**：`scripts/deidentify_account_record.py` 產生 `public/data/account-engine-record-2026-06-11.csv`。刪除 requestor、`total_users_list`／`total_missing_list`（客戶 ID）、`total_balance`／`total_equity`／`total_credit`（客戶資金總額）與 3 個空欄；輸出後掃描姓名與 6 位數以上 ID。Output 範例列移除 user_id、帳號、客戶與 IB 姓名、group（含品牌代碼）。品牌代碼 VIG／VTJ 不出現在頁面上。圖 2 只裁切 `rule.png` 的中文區塊（浮水印為 Peter 本人姓名，保留）。
 
