@@ -11,6 +11,7 @@ metrics:
   - { value: "≈574 hr", label: "3–7 月節省的人工比對工時（估計）" }
   - { value: "3,162", label: "3–7 月自動對帳執行次數" }
 tags: ["Reverse Engineering", "Automation", "Risk Control"]
+categories: ["Data Pipeline", "Automation"]
 featured: true
 order: 2
 accent: violet
@@ -18,13 +19,37 @@ accent: violet
 
 ## Problem Assessment
 
+<hr data-slide="背景與名詞">
+
 - 信用卡入金的客戶申請出金時，退款在支付端 **Payabl** 執行，同時要在內部 **CRM** 記帳。
 - 兩邊金額不一致（退錯金額、重複退款、CRM 漏記）就代表公司的錢實際流出卻沒有被正確記錄。
+
+<details class="glossary-details">
+<summary>名詞說明<span class="mono">11 個名詞 · 點擊展開</span></summary>
+<table>
+<thead><tr><th>名詞</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td>入金／出金</td><td>客戶存入／提領資金</td></tr>
+<tr><td>PSP</td><td>Payment Service Provider，外部支付服務商</td></tr>
+<tr><td>Payabl</td><td>本專案的信用卡 PSP，實際執行刷卡與退款</td></tr>
+<tr><td>CRM</td><td>內部管理客戶與交易紀錄的系統</td></tr>
+<tr><td>Refund</td><td>信用卡入金的客戶出金時，款項退回原卡</td></tr>
+<tr><td>Parent Ticket</td><td>客戶的一筆出金申請</td></tr>
+<tr><td>Child Ticket</td><td>該申請拆成的實際退款交易（可能多筆）</td></tr>
+<tr><td>QC</td><td>Quality Control，負責人工比對的營運輪班</td></tr>
+<tr><td>對帳（Reconcile）</td><td>比對兩邊紀錄的金額是否一致</td></tr>
+<tr><td>T ~ T-4</td><td>今天往前 4 天內的資料</td></tr>
+<tr><td>Mismatch</td><td>兩邊金額不一致，或一邊查無紀錄</td></tr>
+</tbody>
+</table>
+</details>
+
+<hr data-slide="痛點與證據">
 
 <figure class="pain-figure">
 <div class="pain-grid">
 <section class="pain-card tone-grey pain-wide">
-<h4 class="pain-title">🧩 流程繁重導致斷層</h4>
+<h4 class="pain-title">流程繁重導致斷層</h4>
 <p class="pain-label"><span>Pain</span>跨系統手動搬運資料</p>
 <ul class="pain-note">
 <li>需反覆進入 Payabl／CRM 下載。</li>
@@ -34,14 +59,14 @@ accent: violet
 <p class="pain-evidence-title">證據：每一輪人工比對都要走過這兩個後台</p>
 <div class="pain-shots">
 <div class="pain-shot">
-<p class="pain-shot-title"><b>① Payabl 後台</b>（有交易明細）</p>
+<p class="pain-shot-title"><b>後台 1　Payabl</b>（有交易明細）</p>
 
 ![Payabl 後台：Sales Volume 頁面只有日期與多個篩選下拉選單，沒有下載按鈕](../../assets/projects/credit-card-anomaly-detection/platform-payabl.png)
 
 <p class="pain-shot-note"><mark>沒有下載按鈕</mark>（紅圈處）。只能在 View 頁面設定日期區間與篩選條件，再把畫面上的資料重複複製貼上。</p>
 </div>
 <div class="pain-shot">
-<p class="pain-shot-title"><b>② CRM 後台</b>（沒有明細）</p>
+<p class="pain-shot-title"><b>後台 2　CRM</b>（沒有明細）</p>
 
 ![CRM 後台：Account Transfer Audit 頁面需先設定多個篩選選項才能下載](../../assets/projects/credit-card-anomaly-detection/platform-crm.png)
 
@@ -57,7 +82,7 @@ accent: violet
 </div>
 </section>
 <section class="pain-card tone-red">
-<h4 class="pain-title">🚨 人力資源飽和</h4>
+<h4 class="pain-title">人力資源飽和</h4>
 <p class="pain-label"><span>Pain</span>7×24 輪班仍有極限</p>
 <ul class="pain-note">
 <li>目前配置每日 5 組人力持續作業。</li>
@@ -81,7 +106,7 @@ accent: violet
 </div>
 </section>
 <section class="pain-card tone-yellow">
-<h4 class="pain-title">⚠️ 潛在風險失控</h4>
+<h4 class="pain-title">潛在風險失控</h4>
 <p class="pain-label"><span>Pain</span>錯誤率飆升＋比對邏輯不全</p>
 <ul class="pain-note">
 <li>大量資料導致 Excel 比對極易出錯。</li>
@@ -99,6 +124,8 @@ accent: violet
 </div>
 <figcaption>圖 1　原流程的三個痛點（依專案簡報重繪；平台截圖已裁掉網址列，並模糊登入帳號與品牌標誌；輪班表姓名以代號取代；工時為估計值）</figcaption>
 </figure>
+
+<hr data-slide="值得投入的理由">
 
 **值得投入解決的理由：**
 
@@ -138,11 +165,15 @@ accent: violet
 
 ## Selected Solution
 
+<hr data-slide="選擇理由">
+
 **選擇 D： API 逆向工程**
 
 1. **繞過「沒有下載按鈕」的限制**：資料雖然只在頁面上顯示，但頁面背後一定有 API 提供資料，直接呼叫 API，就不必模擬複製貼上。
 2. **不必等待外部資源**：B 的時程不可控，D 可以先讓偵測上線；未來若取得正式 API，只需替換擷取層。
 3. **符合當時資源**：一個人開發，以一台電腦的 crontab 排程即可執行；通知直接使用營運已在用的 Lark，非技術同仁不需要學新系統。
+
+<hr data-slide="系統架構">
 
 ![Credit Card Withdraw Workflow 架構圖](../../assets/projects/credit-card-anomaly-detection/solution-architecture.png)
 *圖 2　Credit Card Withdraw Workflow（節錄自專案簡報，點擊圖片可放大）*
@@ -165,6 +196,8 @@ flowchart TB
     B --> UP
 ```
 
+<hr data-slide="設計重點">
+
 **設計重點：**
 
 - **B 分支**會先查詢 LarkSheet 已有的案件，只追加新的異常，避免同一筆交易每小時重複通知。
@@ -173,6 +206,8 @@ flowchart TB
 - **比對規則**（Area 3：Prepare → Build Logic → Separate Types → Regularity）：規則與營運端逐條對齊。TODO：補充各步驟內容（比對欄位、金額容許誤差、排除的狀態）。
 
 ## Result
+
+<hr data-slide="一次實際執行">
 
 ### 一次實際執行的紀錄
 
@@ -216,6 +251,8 @@ flowchart TB
 </div>
 </figure>
 
+<hr data-slide="輸出格式">
+
 ### 輸出格式
 
 異常會寫入 LarkSheet，欄位與 CSV 相同。以下三列取自 3–7 月營運確認為錯誤的案件，已去除交易編號與訂單編號：
@@ -230,6 +267,8 @@ flowchart TB
 
 - `Payabl & Crm`：兩邊都有紀錄，但金額不一致。
 - `Payabl`：Payabl 已退款，但 CRM 查無對應紀錄。
+
+<hr data-slide="執行統計">
 
 ### 穩定期執行統計（2026-03-01 ~ 2026-07-31）
 
@@ -257,7 +296,7 @@ flowchart TB
 
 <figure class="ba-figure">
 <div class="ba-table">
-<div class="ba-row ba-head"><p class="ba-item">項目</p><p class="ba-before">🔴 Before：傳統人工對帳</p><p class="ba-after">🟢 After：自動化偵測 Pipeline</p></div>
+<div class="ba-row ba-head"><p class="ba-item">項目</p><p class="ba-before">Before：傳統人工對帳</p><p class="ba-after">After：自動化偵測 Pipeline</p></div>
 <div class="ba-row"><p class="ba-item">人力</p><p class="ba-before">每日 5 輪 × 約 45 分鐘 ≈ 每日 3.75 小時</p><p class="ba-after">偵測 0 人工；被標記的案件由營運複核<small>依據：3–7 月約節省 574 小時（年化約 1,369 小時）；工時為估計值</small></p></div>
 <div class="ba-row"><p class="ba-item">監控頻率</p><p class="ba-before">每日 5 次</p><p class="ba-after">排程每小時 1 次；3–7 月實際平均每日 20.7 次（約 4.1 倍）<small>依據：輪班表 5 個時段；CSV 3,162 次 ÷ 153 天，每日中位數 23 次</small></p></div>
 <div class="ba-row"><p class="ba-item">偵測時效</p><p class="ba-before">最長約 5 小時（兩輪人工比對的間隔）</p><p class="ba-after">資料可取得後 1 小時內<small>依據：每小時排程；CSV 執行間隔中位數 1.00 小時</small></p></div>

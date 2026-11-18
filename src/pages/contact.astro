@@ -1,0 +1,71 @@
+---
+import Base from "../layouts/Base.astro";
+import ProfilePhoto from "../components/ProfilePhoto.astro";
+import { profile } from "../data/profile";
+
+const { github, linkedin, email } = profile.contact;
+
+// Empty values in profile.ts render as TODO instead of a broken link.
+const cards = [
+  { label: "GitHub",   href: github,                          text: github.replace(/^https?:\/\//, ""),                 external: true },
+  { label: "LinkedIn", href: linkedin,                        text: linkedin.replace(/^https?:\/\/(www\.)?/, ""),       external: true },
+  { label: "Email",    href: email ? `mailto:${email}` : "",  text: email,                                              external: false },
+];
+---
+
+<Base title="Contact" description={profile.contact_invite}>
+  <section class="hero hero-split contact-hero">
+    <div class="hero-text">
+      <p class="eyebrow mono">Contact</p>
+      <h1>Let's talk</h1>
+      <p class="lead">{profile.contact_invite}</p>
+    </div>
+    <ProfilePhoto />
+  </section>
+
+  <section class="section">
+    <h2 class="section-title"><span class="mono">01</span> Reach me</h2>
+    <ul class="contact-cards">
+      {cards.map((c) => (
+        <li class="contact-card">
+          <span class="contact-card-label mono">{c.label}</span>
+          {c.href
+            ? <a class="contact-card-link" href={c.href} target={c.external ? "_blank" : undefined} rel="noopener">{c.text}</a>
+            : <span class="todo">TODO</span>}
+          {c.label === "Email" && c.text && (
+            <button type="button" class="copy-email mono" data-email={c.text}>複製</button>
+          )}
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <section class="section">
+    <h2 class="section-title"><span class="mono">02</span> 可以找我聊</h2>
+    <div class="principle-list">
+      {profile.talk_topics.map((t) => (
+        <div class="principle">
+          <h3>{t.title}</h3>
+          <p>{t.body}</p>
+        </div>
+      ))}
+    </div>
+  </section>
+</Base>
+
+<script>
+  // Copy-email button: avoids forcing visitors through a mailto handler they may not use.
+  for (const btn of document.querySelectorAll<HTMLButtonElement>(".copy-email")) {
+    btn.addEventListener("click", async () => {
+      const original = btn.textContent;
+      try {
+        await navigator.clipboard.writeText(btn.dataset.email ?? "");
+        btn.textContent = "已複製";
+      } catch (err) {
+        console.warn("Copy email failed", err);
+        btn.textContent = "請手動複製";
+      }
+      setTimeout(() => { btn.textContent = original; }, 1800);
+    });
+  }
+</script>

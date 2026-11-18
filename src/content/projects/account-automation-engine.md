@@ -11,6 +11,7 @@ metrics:
   - { value: "≈4,770 hr", label: "累計節省人工查詢工時（估計）" }
   - { value: "≈NT$1.91M", label: "折合人力成本（估計）" }
 tags: ["System Architecture", "Automation", "Product Thinking"]
+categories: ["Automation"]
 featured: true
 order: 3
 accent: ocean
@@ -18,24 +19,32 @@ accent: ocean
 
 ## Problem Assessment
 
+<hr data-slide="背景與名詞">
+
 - 帳戶關閉、高風險客戶清退、轉歸屬之前，OP 都要先確認名單上每個客戶的帳戶狀態：userId、Balance、Margin、Profit、Account Server 等。
 - IT 可以提供待處理的 UID 名單，但不提供這些欄位。OP 只能在多個 CRM 後台之間反覆切換 regulator，逐筆查詢、逐筆確認。
 - 需求來自不同團隊，而且常常是整批出現，逐筆查詢的作業模式撐不住批量案件。
 
-**名詞說明：**
+<details class="glossary-details">
+<summary>名詞說明<span class="mono">10 個名詞 · 點擊展開</span></summary>
+<table>
+<thead><tr><th>名詞</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td>OP</td><td>營運部門（Operations）同仁，負責客戶帳戶的日常處理</td></tr>
+<tr><td>CRM 後台</td><td>管理客戶與交易帳戶的內部系統；每個 regulator 各有一套</td></tr>
+<tr><td>regulator</td><td>客戶所屬的金融監管機構（例如 VFSC）</td></tr>
+<tr><td>UID／userId</td><td>客戶在 CRM 的唯一編號；一個客戶可以有多個交易帳戶</td></tr>
+<tr><td>Account</td><td>MT4／MT5 交易帳號</td></tr>
+<tr><td>Account Server</td><td>交易帳戶所在的交易伺服器（例如 MT5_AU7）</td></tr>
+<tr><td>Trading Account／Rebate Account</td><td>客戶交易用的帳戶／IB（介紹經紀商）收取返佣的帳戶</td></tr>
+<tr><td>Balance／Equity／Margin／Profit／Credit</td><td>餘額／淨值／已用保證金／浮動損益／贈金或信用額度</td></tr>
+<tr><td>清退</td><td>關閉高風險客戶的帳戶並結清</td></tr>
+<tr><td>轉歸屬</td><td>把客戶轉到另一個 IB 或業務名下</td></tr>
+</tbody>
+</table>
+</details>
 
-| 名詞 | 說明 |
-|---|---|
-| OP | 營運部門（Operations）同仁，負責客戶帳戶的日常處理 |
-| CRM 後台 | 管理客戶與交易帳戶的內部系統；每個 regulator 各有一套 |
-| regulator | 客戶所屬的金融監管機構（例如 VFSC） |
-| UID／userId | 客戶在 CRM 的唯一編號；一個客戶可以有多個交易帳戶 |
-| Account | MT4／MT5 交易帳號 |
-| Account Server | 交易帳戶所在的交易伺服器（例如 MT5_AU7） |
-| Trading Account／Rebate Account | 客戶交易用的帳戶／IB（介紹經紀商）收取返佣的帳戶 |
-| Balance／Equity／Margin／Profit／Credit | 餘額／淨值／已用保證金／浮動損益／贈金或信用額度 |
-| 清退 | 關閉高風險客戶的帳戶並結清 |
-| 轉歸屬 | 把客戶轉到另一個 IB 或業務名下 |
+<hr data-slide="痛點與證據">
 
 <figure class="pain-figure">
 <div class="pain-grid">
@@ -93,6 +102,8 @@ accent: ocean
 <figcaption>圖 1　原流程的三個痛點（人工步驟依 OP 作業整理；每帳戶 45 秒為估計值；批量數據取自引擎的 Record 工作表，2026-06-09 ~ 2026-11-16）</figcaption>
 </figure>
 
+<hr data-slide="值得投入的理由">
+
 **值得投入解決的理由：**
 
 1. **需求量是真的**：上線 5 個月內有 531 次成功的批量查詢，累計 381,629 個帳戶；以每個帳戶 45 秒估計，人工需要約 4,770 小時。
@@ -133,11 +144,15 @@ accent: ocean
 
 ## Selected Solution
 
+<hr data-slide="選擇理由">
+
 **選擇 C：通用批量查詢引擎**
 
 1. **解決 A 的線性人力問題**：查詢交給引擎，人工只剩填名單與審查結果，案件量增加不需要加人。
 2. **解決 B 的工程師依賴**：OP 在 LarkSheet 填完參數就會被排程撿走，不需要找工程師。
 3. **先找通則，再寫工具**：約 80% 的需求共用同一組輸入（userId／Account）與同一組輸出欄位，值得做成一個工具；剩下的特殊需求不硬塞進同一套流程。
+
+<hr data-slide="引擎流程">
 
 TODO：補上引擎架構圖原圖（目前只有下方的文字版流程）。
 
@@ -157,6 +172,8 @@ flowchart TB
     OUT --> CLR
 ```
 
+<hr data-slide="設計重點">
+
 **設計重點：**
 
 - **先驗證再查詢，失敗也留紀錄**：驗證不通過時不進入查詢，直接在 Record 寫入失敗原因（例如缺少 Requestor），申請人看紀錄就知道要補什麼。上線期間共攔截 32 次不完整的申請。
@@ -168,6 +185,8 @@ flowchart TB
 
 ## Result
 
+<hr data-slide="操作畫面">
+
 ### 操作畫面：人工查詢 vs 引擎執行
 
 同一類查詢，左邊是在 CRM 後台人工操作，右邊是引擎批量執行：
@@ -175,16 +194,18 @@ flowchart TB
 <figure class="video-figure">
 <div class="video-grid">
 <div class="video-item">
-<p class="video-label">Before：人工查詢（57 秒）</p>
+<p class="video-label">Before：人工查詢</p>
 <video controls muted playsinline preload="metadata" src="../../media/account-automation-engine/crm_manual.mp4"></video>
 </div>
 <div class="video-item">
-<p class="video-label">After：引擎執行（68 秒）</p>
+<p class="video-label">After：引擎執行</p>
 <video controls muted playsinline preload="metadata" src="../../media/account-automation-engine/crm_system.mp4"></video>
 </div>
 </div>
 <figcaption>圖 3　實際操作錄影（點擊播放）</figcaption>
 </figure>
+
+<hr data-slide="一次實際執行">
 
 ### 一次實際執行的紀錄
 
@@ -223,6 +244,8 @@ flowchart TB
 </div>
 </figure>
 
+<hr data-slide="輸出格式">
+
 ### 輸出格式
 
 Output 每個帳戶一列，共 23 個欄位。以下兩列取自 2026-11-16 的實際輸出，已移除 user_id、帳號、客戶與 IB 姓名、帳戶群組：
@@ -233,6 +256,8 @@ Output 每個帳戶一列，共 23 個欄位。以下兩列取自 2026-11-16 的
 | MT5_AU4 | Hedge STP | India | USD | 0.0 | 0.0 | （空白） | （空白） | Archive | VFSC | 2026-03-11 06:19:18 | 2026-11-07 04:27:45 |
 
 其他欄位：`Requestor`、`user_id`、`ownerAlias`、`owner`、`mt4_account`、`group`、`profit`、`marginLevel`、`credit`、`enableReadonly`、`comparisionTime`（欄位名稱沿用系統原樣）。
+
+<hr data-slide="執行統計">
 
 ### 執行統計（2026-06-09 ~ 2026-11-16）
 
@@ -268,6 +293,8 @@ Output 每個帳戶一列，共 23 個欄位。以下兩列取自 2026-11-16 的
 
 ## Impact
 
+<hr data-slide="已驗證的成果">
+
 ### 已驗證的成果
 
 <figure class="ba-figure">
@@ -282,6 +309,8 @@ Output 每個帳戶一列，共 23 個欄位。以下兩列取自 2026-11-16 的
 </div>
 <figcaption>圖 4　Before / After 對照（工時與成本為估計值，計算基準見下方）</figcaption>
 </figure>
+
+<hr data-slide="尚未量化的部分">
 
 ### 尚未量化或需要說明的部分
 

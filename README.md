@@ -27,13 +27,14 @@ npm run preview   # 預覽 build 結果
 ├─ src/
 │  ├─ content/projects/      # 每個專案一份 .md（唯一的專案內容來源）
 │  ├─ content.config.ts      # 專案 frontmatter schema；欄位錯誤時 build 失敗
-│  ├─ data/profile.ts        # 個人資訊 SSOT：定位、介紹、能力、經歷、聯絡方式
-│  ├─ components/            # ProjectCard、ContactLinks
+│  ├─ data/profile.ts        # 個人資訊 SSOT：定位、介紹、能力、經歷、聯絡方式與 Contact 頁文案
+│  ├─ data/project-categories.ts  # Projects 頁篩選用的技術類型清單
+│  ├─ components/            # ProjectCard、ContactLinks（頁尾）、ProfilePhoto（首頁與 Contact 共用照片）
 │  ├─ layouts/Base.astro     # 共用 header / footer
-│  ├─ pages/                 # /、/about/、/projects/、/projects/<slug>/
+│  ├─ pages/                 # /、/about/、/projects/、/projects/<slug>/、/contact/
 │  ├─ lib/url.ts             # 加上 GitHub Pages base path
-│  └─ styles/global.css      # 全站唯一 CSS（含 dark mode、手機版）
-├─ public/                   # favicon、data/（去識別 CSV）
+│  └─ styles/global.css      # 全站唯一 CSS（含深淺色切換、手機版）
+├─ public/                   # favicon、data/（去識別 CSV）、media/（照片、錄影）
 ├─ scripts/ · tests/          # 去識別腳本與 pytest
 ├─ docs/source-notes.md      # 每個數字的來源對照與 TODO 清單
 ├─ docs/case-study-framework.md  # 專案頁六段式框架（新增專案時照做）
@@ -44,7 +45,7 @@ npm run preview   # 預覽 build 結果
 
 ### Step 1 — 修改個人資訊
 
-只改 `src/data/profile.ts`。首頁、About、footer 都從這裡讀取，不要在頁面裡另外寫一份。
+只改 `src/data/profile.ts`。首頁、About、Contact、footer 都從這裡讀取，不要在頁面裡另外寫一份。
 
 聯絡方式留空字串時，網站會顯示 `TODO`：
 
@@ -72,6 +73,7 @@ stack: ["Python", "Asyncio"]
 metrics:                     # 選填，最多 3 個，數字要能對回 docs/source-notes.md
   - { value: "95%", label: "人工工作量減少" }
 tags: ["Automation"]
+categories: ["Automation"]   # 必填，Projects 頁篩選用；可選值見 src/data/project-categories.ts
 featured: true               # true = 顯示在首頁
 order: 4                     # 排序，小的在前
 ---

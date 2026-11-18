@@ -2,8 +2,14 @@
 import { getCollection } from "astro:content";
 import Base from "../../layouts/Base.astro";
 import ProjectCard from "../../components/ProjectCard.astro";
+import { project_categories } from "../../data/project-categories";
 
 const projects = (await getCollection("projects")).sort((a, b) => a.data.order - b.data.order);
+
+// Only categories that at least one project uses get a button, so a filter never shows an empty list.
+const category_counts = project_categories
+  .map((name) => ({ name, count: projects.filter((p) => p.data.categories.includes(name)).length }))
+  .filter((c) => c.count > 0);
 ---
 
 <Base title="Projects" description="Engineering case studies: business problem, architecture, solution and impact.">
@@ -13,7 +19,35 @@ const projects = (await getCollection("projects")).sort((a, b) => a.data.order -
     <p class="lead">每個專案都包含業務問題、技術挑戰、個人貢獻、系統架構與實際成果。</p>
   </section>
 
+  <div class="category-filter" role="group" aria-label="依技術類型篩選專案">
+    <button type="button" class="category-chip mono" data-category="" aria-pressed="true">
+      All <span>{projects.length}</span>
+    </button>
+    {category_counts.map((c) => (
+      <button type="button" class="category-chip mono" data-category={c.name} aria-pressed="false">
+        {c.name} <span>{c.count}</span>
+      </button>
+    ))}
+  </div>
+
   <div class="project-grid">
     {projects.map((project, i) => <ProjectCard project={project} index={i} />)}
   </div>
 </Base>
+
+<script>
+  // Client-side filter: show only cards whose data-categories contains the chosen category ("" = all).
+  const chips = Array.from(document.querySelectorAll<HTMLButtonElement>(".category-chip"));
+  const cards = Array.from(document.querySelectorAll<HTMLElement>(".project-grid .project-card"));
+
+  for (const chip of chips) {
+    chip.addEventListener("click", () => {
+      const selected = chip.dataset.category ?? "";
+      for (const c of chips) c.setAttribute("aria-pressed", String(c === chip));
+      for (const card of cards) {
+        const categories: string[] = JSON.parse(card.dataset.categories ?? "[]");
+        card.hidden = selected !== "" && !categories.includes(selected);
+      }
+    });
+  }
+</script>

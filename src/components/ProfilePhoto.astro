@@ -1,0 +1,11 @@
+---
+// Photo framed in an organic blob with dots; used on Home and Contact.
+import { profile } from "../data/profile";
+import { url } from "../lib/url";
+---
+
+<div class="hero-photo">
+  <span class="hero-blob" aria-hidden="true"></span>
+  <img src={url("media/peter-photo.jpg")} alt={`${profile.name} 的照片`} width="560" height="716" />
+  <span class="hero-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+</div>

@@ -81,6 +81,117 @@ const { Content } = await render(project);
       return { section, title: h2.textContent ?? "" };
     });
 
+    // ---------- Slides inside a chapter ----------
+    // `<hr data-slide="title">` in Markdown starts a new slide. Chapters without markers stay one page.
+    // Without JS the markers are plain divider lines, so the article still reads top to bottom.
+    type Deck = { count: number; current: () => number; show: (s: number, opts?: { scroll?: boolean }) => void };
+
+    function buildSlides(section: HTMLElement, ci: number): Deck | null {
+      const h2 = section.querySelector<HTMLElement>(":scope > h2");
+      if (!h2 || !section.querySelector(":scope > hr[data-slide]")) return null;
+
+      const slides: { el: HTMLElement; title: string }[] = [];
+      const open_slide = (title: string) => {
+        const el = document.createElement("div");
+        // No id on purpose: a #ch-N-S hash must not make the browser jump past the chapter heading and slide bar.
+        el.className = "slide";
+        el.setAttribute("role", "group");
+        el.setAttribute("aria-roledescription", "slide");
+        slides.push({ el, title });
+        return el;
+      };
+
+      let slide: HTMLElement | null = null;
+      let node: ChildNode | null    = h2.nextSibling;
+      while (node) {
+        const next: ChildNode | null = node.nextSibling;
+        if (node instanceof HTMLHRElement && node.dataset.slide !== undefined) {
+          slide = open_slide(node.dataset.slide || `Part ${slides.length + 1}`);
+          node.remove();
+        } else if (!slide && node.nodeType === Node.TEXT_NODE && !node.textContent?.trim()) {
+          node.remove();
+        } else {
+          // Content before the first marker becomes an "概覽" slide so nothing is dropped.
+          (slide ??= open_slide("概覽")).appendChild(node);
+        }
+        node = next;
+      }
+
+      // Slide title bar (clickable) above, pager (prev / dots / next) below.
+      const bar = document.createElement("div");
+      bar.className = "slide-tabs";
+      const titles = slides.map((s, i) => {
+        const b = document.createElement("button");
+        b.type      = "button";
+        b.className = "slide-tab";
+        b.innerHTML = `<span class="slide-tab-num mono"></span><span></span>`;
+        b.firstElementChild!.textContent = String(i + 1);
+        b.lastElementChild!.textContent  = s.title;
+        b.addEventListener("click", () => show(i));
+        bar.appendChild(b);
+        return b;
+      });
+
+      const pager = document.createElement("div");
+      pager.className = "slide-pager";
+      const prev = document.createElement("button");
+      const next = document.createElement("button");
+      prev.type = next.type = "button";
+      prev.className = "slide-turn mono";
+      next.className = "slide-turn mono";
+      prev.textContent = "← 上一張";
+      next.textContent = "下一張 →";
+      const dots = document.createElement("span");
+      dots.className = "slide-dots";
+      const dot_els = slides.map((s, i) => {
+        const d = document.createElement("button");
+        d.type      = "button";
+        d.className = "slide-dot";
+        d.setAttribute("aria-label", `第 ${i + 1} 張：${s.title}`);
+        d.addEventListener("click", () => show(i));
+        dots.appendChild(d);
+        return d;
+      });
+      const folio = document.createElement("span");
+      folio.className = "slide-folio mono";
+      pager.append(prev, dots, folio, next);
+
+      h2.after(bar, ...slides.map((s) => s.el), pager);
+
+      let at = -1;
+      function show(s: number, opts: { scroll?: boolean } = {}): void {
+        if (s < 0 || s >= slides.length) return;
+        const changed = at !== -1 && s !== at;
+        slides.forEach((sl, i) => {
+          sl.el.hidden = i !== s;
+          sl.el.classList.remove("slide-in");
+          titles[i].setAttribute("aria-current", String(i === s));
+          dot_els[i].setAttribute("aria-current", String(i === s));
+        });
+        if (changed && !reduce) {
+          void slides[s].el.offsetWidth; // restart animation
+          slides[s].el.classList.add("slide-in");
+        }
+        prev.disabled     = s === 0;
+        next.disabled     = s === slides.length - 1;
+        folio.textContent = `${s + 1} / ${slides.length}`;
+        // The chapter pager (next chapter) only appears once the reader reaches the last slide.
+        section.querySelector<HTMLElement>(":scope > .chapter-pager")?.toggleAttribute("hidden", s !== slides.length - 1);
+        at = s;
+        if (changed) {
+          sync_hash();
+          if (opts.scroll !== false) scroll_to_chapter(ci, true);
+        }
+      }
+      prev.addEventListener("click", () => show(at - 1));
+      next.addEventListener("click", () => show(at + 1));
+
+      return { count: slides.length, current: () => at, show };
+    }
+
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const decks  = chapters.map((ch, ci) => buildSlides(ch.section, ci));
+
     // Tab bar
     const nav = document.createElement("nav");
     nav.className = "chapter-tabs";
@@ -140,9 +251,25 @@ const { Content } = await render(project);
     prose.before(nav);
 
     let current = -1;
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
 
-    function go(i: number, opts: { scroll?: boolean } = {}): void {
+    // Hash = #ch-N, or #ch-N-S when the reader is past the first slide, so a slide can be shared.
+    function sync_hash(): void {
+      const deck  = decks[current];
+      const slide = deck && deck.current() > 0 ? `-${deck.current() + 1}` : "";
+      history.replaceState(null, "", `#ch-${current + 1}${slide}`);
+    }
+
+    // Jump to the chapter's heading, just below the sticky header (56px) + sticky tab bar.
+    // The tab bar's own position cannot be the target: being sticky, it always reads "already here".
+    // only_up: when turning slides, scroll back only if the heading is above the viewport (reader scrolled down).
+    function scroll_to_chapter(i: number, only_up = false): void {
+      const offset = 56 + nav.offsetHeight + 8;
+      const top    = chapters[i].section.getBoundingClientRect().top + window.scrollY - offset;
+      if (only_up && top >= window.scrollY) return;
+      window.scrollTo({ top, behavior: reduce ? "auto" : "smooth" });
+    }
+
+    function go(i: number, opts: { scroll?: boolean; slide?: number | "last" } = {}): void {
       if (i === current || i < 0 || i >= total) return;
       const forward = i > current;
       chapters.forEach((ch, j) => {
@@ -159,27 +286,36 @@ const { Content } = await render(project);
       // Keep the active tab visible inside the (horizontally scrollable) tab list without moving the window.
       const listBox = list.getBoundingClientRect(), tabBox = tabs[i].getBoundingClientRect();
       list.scrollTo({ left: list.scrollLeft + tabBox.left - listBox.left - (listBox.width - tabBox.width) / 2 });
-      // Keep a clean URL on first load; once the reader turns a page, the hash makes the chapter shareable.
-      if (current !== -1 || location.hash) history.replaceState(null, "", `#${chapters[i].section.id}`);
-      // Jump to the new chapter's heading, just below the sticky header (56px) + sticky tab bar.
-      // The tab bar's own position cannot be the target: being sticky, it always reads "already here".
-      if (opts.scroll !== false && current !== -1) {
-        const offset = 56 + nav.offsetHeight + 8;
-        const top    = chapters[i].section.getBoundingClientRect().top + window.scrollY - offset;
-        window.scrollTo({ top, behavior: reduce ? "auto" : "smooth" });
-      }
+      const first_load = current === -1;
       current = i;
+      const deck = decks[i];
+      if (deck) deck.show(opts.slide === "last" ? deck.count - 1 : (opts.slide ?? 0), { scroll: false });
+      // Keep a clean URL on first load; once the reader turns a page, the hash makes the chapter shareable.
+      if (!first_load || location.hash) sync_hash();
+      if (opts.scroll !== false && !first_load) scroll_to_chapter(i);
     }
 
+    // Arrow keys turn slides first, then chapters; going back into a chapter lands on its last slide.
     document.addEventListener("keydown", (e) => {
       if (e.altKey || e.ctrlKey || e.metaKey) return;
       if (e.target instanceof Element && e.target.closest("input, textarea, select")) return;
-      if (e.key === "ArrowRight") go(current + 1);
-      if (e.key === "ArrowLeft")  go(current - 1);
+      const deck = decks[current];
+      if (e.key === "ArrowRight") {
+        if (deck && deck.current() < deck.count - 1) deck.show(deck.current() + 1);
+        else go(current + 1);
+      }
+      if (e.key === "ArrowLeft") {
+        if (deck && deck.current() > 0) deck.show(deck.current() - 1);
+        else go(current - 1, { slide: "last" });
+      }
     });
 
-    const fromHash = /^#ch-(\d+)$/.exec(location.hash);
-    go(fromHash ? Math.min(Math.max(Number(fromHash[1]) - 1, 0), total - 1) : 0, { scroll: false });
+    const from_hash = /^#ch-(\d+)(?:-(\d+))?$/.exec(location.hash);
+    const start_ch  = from_hash ? Math.min(Math.max(Number(from_hash[1]) - 1, 0), total - 1) : 0;
+    const start_sl  = from_hash?.[2] ? Number(from_hash[2]) - 1 : 0;
+    go(start_ch, { scroll: false, slide: Math.min(Math.max(start_sl, 0), (decks[start_ch]?.count ?? 1) - 1) });
+    // A slide link (#ch-N-S) has no matching element, so bring the chapter heading and slide bar into view ourselves.
+    if (from_hash?.[2]) scroll_to_chapter(start_ch);
   }
 
   buildChapters();
@@ -247,20 +383,32 @@ const { Content } = await render(project);
   // mermaid.render() measures text in its own temporary element, so diagrams inside hidden chapters still size correctly.
   const blocks = Array.from(document.querySelectorAll<HTMLElement>("pre > code.language-mermaid"));
   if (blocks.length > 0) {
-    const dark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "neutral", securityLevel: "strict" });
-
-    for (const [i, code] of blocks.entries()) {
+    // Keep each diagram's source so it can be re-rendered when the header theme toggle fires "themechange".
+    const diagrams = blocks.map((code) => {
       const div     = document.createElement("div");
       div.className = "mermaid";
       code.parentElement!.replaceWith(div);
-      try {
-        const { svg } = await mermaid.render(`mermaid-${i}`, code.textContent ?? "");
-        div.innerHTML = svg;
-      } catch (err) {
-        console.error("Mermaid render failed", { index: i, err });
-        div.textContent = code.textContent ?? "";
+      return { div, source: code.textContent ?? "" };
+    });
+
+    let render_count = 0;
+    const render_diagrams = async () => {
+      const dark = document.documentElement.dataset.theme === "dark";
+      render_count += 1;
+      mermaid.initialize({ startOnLoad: false, theme: dark ? "dark" : "neutral", securityLevel: "strict" });
+      for (const [i, d] of diagrams.entries()) {
+        try {
+          // Fresh id per render so a re-render never collides with the SVG already in the page
+          const { svg } = await mermaid.render(`mermaid-${render_count}-${i}`, d.source);
+          d.div.innerHTML = svg;
+        } catch (err) {
+          console.error("Mermaid render failed", { index: i, err });
+          d.div.textContent = d.source;
+        }
       }
-    }
+    };
+
+    await render_diagrams();
+    window.addEventListener("themechange", render_diagrams);
   }
 </script>

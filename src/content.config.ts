@@ -1,6 +1,7 @@
 import { defineCollection } from "astro:content";
 import { glob } from "astro/loaders";
 import { z } from "astro/zod";
+import { project_categories } from "./data/project-categories";
 
 // Schema for every file in src/content/projects/*.md.
 // A missing or mistyped field fails the build, so a broken project page never ships.
@@ -17,6 +18,8 @@ const projects = defineCollection({
     // Headline numbers shown on cards; each value must trace back to docs/source-notes.md.
     metrics:   z.array(z.object({ value: z.string(), label: z.string() })).default([]),
     tags:      z.array(z.string()).default([]),
+    // Technology-type categories for the Projects page filter (at least one; values from data/project-categories.ts).
+    categories: z.array(z.enum(project_categories)).min(1),
     featured:  z.boolean().default(false),
     // Per-project accent so case studies don't all look alike; semantic badge colours stay fixed.
     accent:    z.enum(["forest", "violet", "ocean"]).default("forest"),

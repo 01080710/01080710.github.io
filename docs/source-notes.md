@@ -87,6 +87,10 @@ CSV 為對帳管線的輸出紀錄：每列 `Comparison` = 一次執行時間；
 - Problem Assessment 名詞說明（OP、CRM 後台、regulator、UID、Account、Account Server、Trading／Rebate Account、Balance 等欄位、清退、轉歸屬）的定義由 Claude 草擬，Peter 確認全部正確。
 - 影片 `crm_manual.mp4`（57 秒，人工查詢）與 `crm_system.mp4`（68 秒，引擎執行）屬於本專案，Peter 確認畫面可直接公開，未做裁切或模糊；原樣複製到 `public/media/account-automation-engine/`。
 
+**名詞說明（2026-11-18）**
+- 三個專案頁的名詞說明改為收合頁籤（`glossary-details`）。定義由 Claude 草擬，Peter 確認全部正確（Credit Card：入金／出金、PSP、Payabl、CRM、Refund、Parent／Child Ticket、QC、對帳、T ~ T-4、Mismatch；Infra：CRM、PSP、DB 權限、API 逆向工程、資料孤島、增量同步、ETL、統一資料視圖）。
+- CPS = 內部渠道支付平台（Peter 說明，2026-11-18）。
+
 **公開資料處理**：`scripts/deidentify_account_record.py` 產生 `public/data/account-engine-record-2026-06-11.csv`。刪除 requestor、`total_users_list`／`total_missing_list`（客戶 ID）、`total_balance`／`total_equity`／`total_credit`（客戶資金總額）與 3 個空欄；輸出後掃描姓名與 6 位數以上 ID。Output 範例列移除 user_id、帳號、客戶與 IB 姓名、group（含品牌代碼）。品牌代碼 VIG／VTJ 不出現在頁面上。圖 2 只裁切 `rule.png` 的中文區塊（浮水印為 Peter 本人姓名，保留）。
 
 ## Key Numbers (關鍵數字)

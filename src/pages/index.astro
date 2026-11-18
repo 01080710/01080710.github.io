@@ -2,7 +2,7 @@
 import { getCollection } from "astro:content";
 import Base from "../layouts/Base.astro";
 import ProjectCard from "../components/ProjectCard.astro";
-import ContactLinks from "../components/ContactLinks.astro";
+import ProfilePhoto from "../components/ProfilePhoto.astro";
 import { profile } from "../data/profile";
 import { url } from "../lib/url";
 
@@ -11,14 +11,17 @@ const featured = (await getCollection("projects", ({ data }) => data.featured))
 ---
 
 <Base>
-  <section class="hero">
-    <p class="eyebrow mono">{profile.name_zh} · {profile.name}</p>
-    <h1>{profile.title}</h1>
-    <p class="lead">{profile.tagline}</p>
-    <div class="hero-actions">
-      <a class="btn primary" href={url("projects/")}>View Projects</a>
-      <a class="btn" href={url("about/")}>About Me</a>
+  <section class="hero hero-split">
+    <div class="hero-text">
+      <p class="eyebrow mono">{profile.name_zh} · {profile.name}</p>
+      <h1>{profile.title}</h1>
+      <p class="lead">{profile.tagline}</p>
+      <div class="hero-actions">
+        <a class="btn primary" href={url("projects/")}>View Projects</a>
+        <a class="btn" href={url("about/")}>About Me</a>
+      </div>
     </div>
+    <ProfilePhoto />
   </section>
 
   <section class="section">
@@ -48,8 +51,8 @@ const featured = (await getCollection("projects", ({ data }) => data.featured))
     </ul>
   </section>
 
-  <section class="section" id="contact">
+  <section class="section">
     <h2 class="section-title"><span class="mono">04</span> Contact</h2>
-    <ContactLinks />
+    <p class="contact-cta">{profile.contact_invite} <a href={url("contact/")}>前往 Contact →</a></p>
   </section>
 </Base>

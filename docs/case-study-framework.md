@@ -22,7 +22,8 @@
 ### 01 Problem Assessment
 
 - 開頭一段：用業務語言說明問題，不是技術語言。
-- **痛點卡片**（`pain-grid`）：每個痛點一張卡，依序是 標題 → Pain → Note → 證據。
+- **名詞說明**（`glossary-details`）：接在開頭說明之後、痛點卡片之前，收錄外部讀者（面試官）看不懂的業務與技術名詞，預設收合。定義由 Claude 草擬、Peter 確認後才放上頁面，確認紀錄寫進 source-notes；不確定的名詞先問，不猜。
+- **痛點卡片**（`pain-grid`）：每個痛點一張卡，依序是 標題 → Pain → Note → 證據。標題只用文字，不加 emoji。
   - 先放最能讓讀者「有共感」的痛點，並設為 `pain-wide` 整列寬。
   - 證據要具體：平台截圖（去識別後）、輪班表（姓名改代號）、流程步驟、資料量。
   - 量化人工成本：每輪耗時 × 每日次數 = 每日工時，並標明「估計」。
@@ -30,7 +31,7 @@
 
 ### 02 Solution Design
 
-- 表格：`痛點 | 解決方向 | 對應`；「對應」欄放架構圖的分區截圖（非重點區塊模糊化，點擊可放大）。
+- 表格：`痛點 | 解決方向 | 對應`；「對應」欄放架構圖的分區截圖（非重點區塊模糊化，點擊可放大），或指向表格上方的整張規則圖（圖在上、表在下）。
 - `**設計時必須面對的限制：**` 清單。
 
 ### 03 Alternative Solutions
@@ -47,6 +48,7 @@
 
 ### 05 Result
 
+- 有操作錄影時放在開頭：`video-figure`，人工（Before）與系統（After）並排；畫面須經 Peter 確認可公開。
 - 一次實際執行的 log（轉錄、去識別），接著用清單說明「從這段紀錄可以看到」什麼。
 - Tech Label 卡片（`tech-labels`）。
 - 輸出格式範例表：範例列取自資料期間內、已確認的真實案例。
@@ -59,6 +61,13 @@
   - 數字用實際資料（例如實際平均每日次數），不用設計值；倍數依實際值計算。
   - Before 沒有紀錄就寫「無紀錄」或「筆數未紀錄」，不要留 `—` 或編造。
 - `### 尚未量化或需要說明的部分`：起算點、準確度口徑、財務效益（寫明「涉及金額 ≠ 避免的損失」）、專案性質（例如過渡方案）。
+
+## Visual Style (視覺風格)
+
+- **頁面不放 emoji**：痛點標題、Before / After 表頭、截圖標題、表格內容一律不用 emoji 或圓圈數字（①②）；順序改寫成文字，例如「後台 1」「步驟 1–4」或 `<ol>`。
+- 語意顏色交給既有元件表達：章節徽章（Problem／Analysis／Result…）、`tone-red`／`tone-yellow`／`tone-grey`、`ba-before`／`ba-after` 底色，不另外加符號。
+- `→`、`←`、`≈` 等排版符號可以使用。
+- 此規則只適用網站頁面；README 與 docs 依 readme-template 的〈色彩語意〉保留 🔴🟡🟢。
 
 ## Data Rules (數據規則)
 
@@ -88,13 +97,18 @@ Markdown 中直接寫 HTML；樣式都在 [global.css](../src/styles/global.css)
 
 | 元件 | class | 用在 |
 |---|---|---|
+| 名詞說明 | `<details class="glossary-details">` 內放 HTML `<table>`（名詞／說明兩欄），summary 寫「名詞說明」與名詞數 | 01（或專案第一章） |
 | 痛點卡片 | `pain-figure` > `pain-grid` > `pain-card tone-red / tone-grey / tone-yellow`（`pain-wide` 整列寬） | 01 |
 | 平台截圖並排 | `pain-shots` > `pain-shot` | 01 |
 | 耗時長條 | `pain-timebar`，各段用 `style="flex: <分鐘>"` | 01 |
 | 表格內縮圖 | 表格儲存格內直接放 `![]()`，點擊可放大 | 02 |
 | Tech Label | `tech-figure` > `tech-labels` > `tech-label` | 05 |
 | CSV 表格 | `<details class="csv-details">` 內放 `<div class="csv-viewer" data-src="../../data/<file>.csv">`（附下載連結） | 05 |
+| 操作錄影 | `video-figure` > `video-grid` > `video-item`（`video-label` + `<video controls muted playsinline preload="metadata">`）；檔案放 `public/media/<slug>/` | 05 |
 | Before / After | `ba-figure` > `ba-table` > `ba-row`（`ba-item` / `ba-before` / `ba-after`） | 06 |
+| 章內投影片 | 單獨一行 `<hr data-slide="小標">`（前後空行），從這裡開始新的一張；第一個記號緊接在 `##` 之後才能命名第一張，否則第一張叫「概覽」；沒有記號的章維持單頁 | 任何超過約一個螢幕的章 |
+
+**投影片切法**：一張約一個螢幕、只講一件事；小標 2–6 個字；說明文字和它說明的圖、表放同一張（例如「以下是圖 2 的文字版流程」和 Mermaid 同一張）；有 `###` 的章在每個 `###` 前切。網址 `#ch-<章>-<張>` 可以直接分享到某一張。
 
 圖片放 `src/assets/projects/<slug>/`，用相對路徑引用；圖說寫在圖片下一行的 `*…*`，或 `<figcaption>`，並說明節錄來源與去識別方式。
 
@@ -102,8 +116,8 @@ Markdown 中直接寫 HTML；樣式都在 [global.css](../src/styles/global.css)
 
 1. **收集來源**：簡報圖片、資料 CSV、log；放 `canva-export/`。
 2. **核對資料**：讀完所有欄位，定口徑，算出統計；與簡報數字不一致的地方列出來問 Peter。
-3. **寫骨架**：六個 `##` 章節＋frontmatter（`metrics` 最多 3 個，都要能對回 source-notes；`accent` 選一個與其他專案不同的強調色：`forest`／`violet`／`ocean`，只改強調色，紅黃綠語意徽章不變）。
-4. **補元件**：痛點卡片 → Area 對應截圖 → Tech Label → CSV → Before / After。
+3. **寫骨架**：六個 `##` 章節＋frontmatter（`metrics` 最多 3 個，都要能對回 source-notes；`accent` 選一個與其他專案不同的強調色：`forest`／`violet`／`ocean`，只改強調色，紅黃綠語意徽章不變；`categories` 至少選一個技術類型，可選值見 `src/data/project-categories.ts`，新類型先加進該檔）。
+4. **補元件**：痛點卡片 → Area 對應截圖 → Tech Label → CSV → Before / After；最後依〈投影片切法〉在長章節插入 `<hr data-slide>`。
 5. **去識別**：圖片裁切／模糊、CSV 跑腳本、掃描殘留。
 6. **驗證**：`npm run build`、`python -m pytest tests`、桌機與 375px 截圖（無水平溢出）、頁標 01–06 點擊會捲到章節開頭。
 7. **同步文件**：source-notes（來源、口徑、Peter 確認事項）、README（若新增腳本或流程）。

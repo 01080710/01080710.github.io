@@ -11,6 +11,7 @@ metrics:
   - { value: "100%", label: "自動化資料攝入" }
   - { value: "Hourly", label: "增量同步" }
 tags: ["Reverse Engineering", "0-to-1", "Data Engineering"]
+categories: ["Data Pipeline", "Crawler"]
 featured: true
 order: 1
 ---
@@ -18,6 +19,24 @@ order: 1
 ## Project Overview
 
 營運資料散落在多個封閉平台（CRM、PSP、CPS 等），公司內部沒有可以直接查詢的資料庫。這個專案從 0 開始建立營運資料底層，後續的[信用卡異常出金偵測](../credit-card-anomaly-detection/)與[營運帳務自動化引擎](../account-automation-engine/)都建立在這層之上。
+
+<details class="glossary-details">
+<summary>名詞說明<span class="mono">9 個名詞 · 點擊展開</span></summary>
+<table>
+<thead><tr><th>名詞</th><th>說明</th></tr></thead>
+<tbody>
+<tr><td>CRM</td><td>內部管理客戶與交易帳戶的系統</td></tr>
+<tr><td>PSP</td><td>Payment Service Provider，外部支付服務商</td></tr>
+<tr><td>CPS</td><td>內部渠道支付平台</td></tr>
+<tr><td>DB 權限</td><td>直接查詢資料庫的權限</td></tr>
+<tr><td>API 逆向工程</td><td>分析網頁背後呼叫的 API，改由程式直接取得資料</td></tr>
+<tr><td>資料孤島（Data Silos）</td><td>資料分散在彼此不互通的系統</td></tr>
+<tr><td>增量同步</td><td>每次只抓上次之後新增或變動的資料</td></tr>
+<tr><td>ETL</td><td>Extract、Transform、Load：擷取、轉換、載入</td></tr>
+<tr><td>統一資料視圖</td><td>多平台資料整理成同一格式後的集中查詢入口</td></tr>
+</tbody>
+</table>
+</details>
 
 ## Business Problem
 
