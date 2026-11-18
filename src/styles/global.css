@@ -16,6 +16,10 @@
   --red:       #b42318;  --red-bg:    #fdecea;
   --yellow:    #8a5a00;  --yellow-bg: #fff3d1;
   --green:     #0b6e4f;  --green-bg:  #e3f2ea;
+  /* Project page zones: background opacity, 0 = transparent, 1 = solid (tune here). */
+  --zone-tech-alpha:   0.6;
+  --zone-brief-alpha:  1;
+  --zone-detail-alpha: 0.4;
   --radius:    6px;
   --max:       980px;
   --sans: "Inter", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
@@ -40,6 +44,9 @@
   --red:       #f97066;  --red-bg:    #3a1714;
   --yellow:    #e3b341;  --yellow-bg: #33280c;
   --green:     #52c79a;  --green-bg:  #15261f;
+  --zone-tech-alpha:   0.5;
+  --zone-brief-alpha:  0.9;
+  --zone-detail-alpha: 0.35;
   color-scheme: dark;
 }
 [data-theme="dark"] :is(.astro-code, .astro-code span) {
@@ -151,9 +158,11 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 [data-accent="forest"] { --accent: #0b6e4f; --accent-bg: #e8f3ee; }
 [data-accent="violet"] { --accent: #6d3fc0; --accent-bg: #f1ecfb; }
 [data-accent="ocean"]  { --accent: #1d64b0; --accent-bg: #e8f0fa; }
+[data-accent="slate"]  { --accent: #4a5d73; --accent-bg: #eef1f5; }
 [data-theme="dark"] [data-accent="forest"] { --accent: #52c79a; --accent-bg: #15261f; }
 [data-theme="dark"] [data-accent="violet"] { --accent: #b79cf2; --accent-bg: #241a3a; }
 [data-theme="dark"] [data-accent="ocean"]  { --accent: #7cb4f0; --accent-bg: #14223a; }
+[data-theme="dark"] [data-accent="slate"]  { --accent: #a9b8cc; --accent-bg: #1c222b; }
 .case-study .page-head::before {
   content: ""; display: block; width: 48px; height: 4px; margin-bottom: 20px;
   border-radius: 2px; background: var(--accent);
@@ -265,6 +274,8 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .case-meta dt { color: var(--muted); font-size: 0.8rem; }
 .case-meta dd { margin: 0; }
 .case-meta .tags { margin: 0; }
+/* Focus: the project's 1-2 signature techniques, solid accent so they stand out from the shared tool list. */
+.tags-focus li { background: var(--accent); color: var(--surface); font-weight: 600; }
 
 /* Markdown body: each ## becomes a numbered section (01 Project Overview ...) */
 .prose { counter-reset: section; max-width: 780px; }
@@ -540,6 +551,77 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .ba-after small { display: block; margin-top: 2px; color: var(--muted); font: 400 0.75rem/1.5 var(--sans); }
 .ba-head p { font-weight: 700; color: var(--fg); }
 
+/* ---------- Project page zones: tech choices / 30-second read / details ---------- */
+/* Each zone tints its own background; opacity comes from the --zone-*-alpha tokens above. */
+.case-zone {
+  --zone-bg: var(--surface); --zone-alpha: 0.5;
+  margin: 20px 0; padding: 18px 24px 22px;
+  border: 1px solid var(--line); border-radius: calc(var(--radius) * 2);
+  background: color-mix(in srgb, var(--zone-bg) calc(var(--zone-alpha) * 100%), transparent);
+}
+.zone-tech   { --zone-alpha: var(--zone-tech-alpha); }
+.zone-brief  { --zone-bg: var(--accent-bg); --zone-alpha: var(--zone-brief-alpha); }
+.zone-detail { --zone-alpha: var(--zone-detail-alpha); }
+.zone-label { margin: 0 0 12px; color: var(--muted); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.case-zone .case-meta { padding: 0; border: 0; }
+.case-zone .tldr { margin-top: 0; }
+.case-zone .metrics-lg { margin: 20px 0 0; }
+/* Sticky tabs need an opaque background: the zone colour pre-mixed onto --bg looks identical but hides scrolling content. */
+.zone-detail .chapter-tabs { margin-top: 0; background: color-mix(in srgb, var(--zone-bg) calc(var(--zone-alpha) * 100%), var(--bg)); }
+
+/* ---------- TL;DR (page head, from frontmatter `tldr`) ---------- */
+/* Problem / Approach / Result reuse the chapter badge semantics: red = Problem, yellow = Analysis, green = Result. */
+.tldr { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 20px 0 0; }
+.tldr > div { --tone: var(--yellow); border-top: 3px solid var(--tone); background: var(--surface); border-radius: 0 0 var(--radius) var(--radius); padding: 10px 14px 12px; }
+.tldr .tldr-problem { --tone: var(--red); }
+.tldr .tldr-result  { --tone: var(--green); }
+.tldr dt { color: var(--tone); font-size: 0.72rem; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; }
+.tldr dd { margin: 4px 0 0; font-size: 0.95rem; line-height: 1.6; }
+
+/* ---------- System map (components/SystemMap.astro) ---------- */
+/* Colours come from tokens so the map follows light / dark. The focused area keeps full opacity and accent strokes. */
+/* Bottom margin instead of ".system-map + .tldr": the component emits a <script> after the figure, which breaks sibling selectors. */
+.system-map { margin: 0 0 20px; }
+.system-map-scroll { overflow-x: auto; border-radius: var(--radius); background: var(--surface); padding: 8px; }
+.system-map svg { display: block; width: 100%; min-width: 640px; height: auto; font-family: var(--sans); }
+.system-map text { fill: var(--fg); font-size: 13px; text-anchor: middle; }
+.system-map text.strong { font-weight: 700; }
+.system-map text.small { fill: var(--muted); font-size: 11px; }
+.system-map text.tiny { fill: var(--muted); font-size: 10px; }
+.system-map .node { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+.system-map .node-core { fill: var(--accent-bg); }
+.system-map .node-layer { fill: var(--bg); stroke-dasharray: 6 4; }
+.system-map .flow { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 6 5; animation: map-flow 1.4s linear infinite; }
+.system-map .arrow { fill: var(--muted); stroke: none; }
+.system-map[data-focus="drop-order"] .area[data-area="drop-order"] .arrow { fill: var(--accent); }
+.system-map .area { opacity: 0.35; transition: opacity 0.2s; }
+.system-map[data-focus="infra"]       .area[data-area="infra"],
+.system-map[data-focus="credit-card"] .area[data-area="credit-card"],
+.system-map[data-focus="drop-order"]  .area[data-area="drop-order"],
+.system-map[data-focus="account"]     .area[data-area="account"] { opacity: 1; }
+.system-map[data-focus="infra"]       .area[data-area="infra"] :is(.node, .flow),
+.system-map[data-focus="credit-card"] .area[data-area="credit-card"] :is(.node, .flow),
+.system-map[data-focus="drop-order"]  .area[data-area="drop-order"] :is(.node, .flow),
+.system-map[data-focus="account"]     .area[data-area="account"] :is(.node, .flow) { stroke: var(--accent); stroke-width: 2.5; }
+/* "本專案負責" sits on the map frame's top-right corner (outside the SVG, so it never covers the channel boxes). */
+.system-map-focus { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 0.85rem; font-weight: 600; color: var(--accent); text-align: right; }
+.system-map figcaption { margin-top: 6px; font-size: 0.75rem; color: var(--muted); }
+.system-map-key { width: 18px; height: 0; border-top: 3px solid var(--accent); flex: none; }
+@keyframes map-flow { to { stroke-dashoffset: -22; } }
+@media (prefers-reduced-motion: reduce) { .system-map .flow { animation: none; } }
+
+/* ---------- Distribution bars (replaces distribution tables) ---------- */
+/* Each <li style="--v: 72%">: label, bar, value. Width is relative to the largest row; the value text carries the data. */
+.bar-figure { margin: 24px 0; }
+.bar-figure figcaption { margin-top: 10px; font-size: 0.85rem; color: var(--muted); font-style: italic; }
+.prose .bar-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.prose .bar-list li { display: grid; grid-template-columns: minmax(7em, 12em) minmax(0, 1fr) 4.5em; align-items: center; gap: 12px; margin: 0; font-size: 0.9rem; }
+.bar-list .bar { height: 12px; border-radius: 6px; background: var(--line); overflow: hidden; }
+.bar-list .bar::before { content: ""; display: block; height: 100%; width: var(--v, 0%); background: var(--accent); border-radius: 6px; }
+.bar-list .is-peak .bar::before { background: var(--accent-2); }
+.bar-list .is-peak .bar-value { color: var(--accent-2); font-weight: 700; }
+.bar-list .bar-value { font-family: var(--mono); text-align: right; }
+
 /* ---------- CSV viewer (rendered by JS in [slug].astro) ---------- */
 :is(.csv-details, .glossary-details) { margin: 24px 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
 :is(.csv-details, .glossary-details) > summary {
@@ -584,6 +666,10 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
   .pain-timebar { flex-direction: column; }
   .ba-row { grid-template-columns: 1fr 1fr; }
   .ba-item { grid-column: 1 / -1; padding-bottom: 0 !important; }
+  .tldr { grid-template-columns: 1fr; gap: 8px; }
+  .case-zone { padding: 14px 12px 16px; }
+  .prose .bar-list li { grid-template-columns: minmax(0, 1fr) 4.5em; gap: 4px 12px; }
+  .bar-list .bar-label { grid-column: 1 / -1; }
   .timeline li, .approach li { grid-template-columns: 1fr; gap: 4px; }
   .metrics { gap: 8px; }
   .metrics dt { font-size: 1rem; }

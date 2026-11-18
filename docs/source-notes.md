@@ -14,6 +14,7 @@
 | 「與營運端對齊偵測邏輯」 | Peter 口頭說明（2026-11-16） |
 | 「約 80% 業務場景可通則化」 | Peter 口頭說明（2026-11-16） |
 | Credit Card 頁（六段式框架） | `canva-export/images/Payabl QC new Template - New Data.csv` + `Credit Card Anomaly Detection_1~4.png`（皆不進 repo） |
+| Drop-Order Monitor 頁 | `canva-export/drop-order/<品牌> Task (CRM - CPS Report).xlsx`、`README_DE.md`、`README_OP.md`（皆不進 repo）＋ 原專案程式與 `logs/20261118.log` + Peter 說明（2026-11-18） |
 
 ## Credit Card Anomaly Detection (資料分析)
 
@@ -93,6 +94,88 @@ CSV 為對帳管線的輸出紀錄：每列 `Comparison` = 一次執行時間；
 
 **公開資料處理**：`scripts/deidentify_account_record.py` 產生 `public/data/account-engine-record-2026-06-11.csv`。刪除 requestor、`total_users_list`／`total_missing_list`（客戶 ID）、`total_balance`／`total_equity`／`total_credit`（客戶資金總額）與 3 個空欄；輸出後掃描姓名與 6 位數以上 ID。Output 範例列移除 user_id、帳號、客戶與 IB 姓名、group（含品牌代碼）。品牌代碼 VIG／VTJ 不出現在頁面上。圖 2 只裁切 `rule.png` 的中文區塊（浮水印為 Peter 本人姓名，保留）。
 
+## Deposit & Withdrawal Drop-Order Monitor (資料分析)
+
+來源：LarkSheet 案件表匯出的 `<品牌> Task (CRM - CPS Report).xlsx`（10 個工作表）。依 Peter 指示只追蹤 5 個：Deposit、Withdraw - LBT、Withdraw - Crypto&Wallet、Withdraw - CreditCard、Withdraw - IBT（2026-11-18）。其餘（BT.Wallet.Crypto 優化中、CC Archived、Manual sync from CPS、公式用、11-06 issue orders）不納入。
+
+口徑：
+- 期間：Deposit 2026-03-30 起、Withdrawal 2026-09-09 起（Peter 確認上線日，2026-11-18），皆至 2026-11-17（不含 11-18 的不完整日）。CreditCard 第一筆 Comparison Time 為 09-10。
+- 案件：Tx ≠ `-` 的列；心跳列（除 Comparison Time 外全為 `-`）= 該次執行沒有新案件。
+- CreditCard 計數單位：管線去重單位「Merchant Order + Deposit Order Number」，1,027 件；不重複出金單 590 張（Peter 選用前者，2026-11-18）。
+- 執行次數：不重複 Comparison Time。日均分母：Deposit 233 天、Withdrawal 70 天（CreditCard 69 天）。
+- 揭露時間「1 小時」= 排程每小時一次的檢查顆粒（Peter 說明，2026-11-18），不是端到端時效。
+- 統計全部可由 `public/data/drop-order-cases-2026.csv` 重算。
+
+| 數字 | 值 |
+|---|---|
+| 案件 | Deposit 6,495、LBT 6,833、Crypto&Wallet 992、CreditCard 1,027、IBT 46，合計 15,393（Withdrawal 8,898） |
+| 日均 | Deposit 27.9（每日中位數 23）、LBT 97.6、Crypto&Wallet 14.2、CreditCard 14.9、IBT 0.7 |
+| 執行次數 | Deposit 4,808（平均每日 20.6）、Withdrawal 1,466（平均每日 20.9）；間隔中位數 1.00 h、P90 1.03 h |
+| 心跳列 | 6,314 |
+| 2026-11-06 | Deposit 951 件，其中 10:00–11:59 兩次執行 933 件，85 種渠道、61 國；CRM 狀態 930 件為 Submit to third party |
+| Deposit 處理狀態 | done 5,540、空白 942（其中 930 為 11-06）、pending 8、system issue 4、rejected 1 |
+| 出金原因類別 | 客户问题 6,649、渠道问题 669、商户问题 102、银行问题 27、CPS 问题 4、内部疏失 3、空白 1,444；子類別 33 種 |
+| 範圍 | 181 種渠道類型、136 國、64 種幣別 |
+| 一次執行（2026-11-18 03:00 log） | 約 11 分鐘；CPS 入金 195,438 筆、出金 1,037 筆；CRM 出入金 322,159 筆；Reason Table 7,078 筆 |
+| 節省工時（估計） | 每次約 1 小時（兩份報表下載 30–35 分 + Excel 運算、整理、搬移）× 每日 2 次，Deposit、Withdrawal 各自計算（Peter 確認，2026-11-18）：233 × 2 = 466、70 × 2 = 140，合計 606 小時。起訖算法沿用 Peter 原稿（03/30 → 10/01 = 185 天 → 370 小時），延長至 11/18 |
+
+**Peter 說明（2026-11-18）**
+- 專案定位：系統端的掉單資料管線；與 Credit Card 頁（單一 PSP 的退款金額對帳）區隔，本頁主軸是 CRM × CPS 的訂單狀態不同步。
+- 第一階段：跨系統掉單管線（現況）；第二階段：運行穩定約 3–6 個月後做自動點擊。
+- Alternative Solutions：直接查 DB（指 CRM DB，沒有權限）、請 CPS 加主動通知、共同表單通知（owner 不是我們，難以控管）。
+- 11-06 案例可公開：上游系統問題導致客戶大量卡單。
+- 「進線降低」「溝通次數 ≥ 50%」「渠道定位 ≤ 1 小時」沒有資料，放「尚未量化」。
+- README_OP「涵蓋 90% 以上異常」沒有來源，不使用。部署位置不揭露。
+- Handler 依案件到 CRM 補登；Checker = 營運人員複盤。
+
+**權限範圍（依原專案程式碼整理）**
+- CRM：營運帳號 + 密碼 + TOTP（`pyotp`），呼叫報表 API 觸發產生後下載，只讀不寫。
+- CPS：MySQL 連線只執行 SELECT（Deposit／Withdraw 兩段查詢，近 7 天）。
+- Lark：自建 App，寫入案件表（append）與 Drive 備份資料夾。
+- CRM／CPS 帳密從唯讀掛載的 `credentials.env` 讀取。Lark App 憑證寫在原專案 `config.py`，且出現在原 repo 的 git 歷史中（已告知 Peter，建議輪替），頁面不宣稱 Lark 憑證的存放方式。
+
+**頁面上的 log 轉錄**：取自 `logs/20261118.log` 03:00 那次執行（uid 開頭 `3bd9043c`）。保留時間、stage、訊息；省略重複下載紀錄；`Davinci` 改為 `CRM`；移除 sheet_id、Lark Base table id、folder／file token、檔名前綴（品牌代碼）與網址。
+
+**待 Peter 確認**
+- 名詞說明 12 個定義（Claude 草擬）：特別是 LBT = Local Bank Transfer、CPS 的描述、Reverse 的定義。
+- Deposit `Correct?` 欄：Peter 說明 1 = 有案件須做標籤、0 = 該小時偵測無掉單；但資料中 `Correct?` = 0 的 423 列都有訂單資料（不是心跳列），其中 419 列在 11 月、主要是 11-06 事件。頁面不使用此欄。
+- Deposit 處理狀態空白 942 件中 930 件為 11-06 事件：是否為批次處理、未逐筆標記？
+- 平均每日約 21 次而非 24 次：原專案 crontab 有一行已註解的舊排程 `30 0-7,10-14,17-23`（註記 cooperate with QC department，每日 21 次）；頁面只寫「部分整點沒有執行紀錄」。
+- 帳號使用的核准者（頁面 TODO）。
+
+**閱讀節奏改版（2026-11-18，示範頁）**
+- 招牌視覺：圖 2 為 11/6 單次執行揭露筆數長條（10:00 450、11:00 483；其他日子單次執行最多 75，發生於 2026-09-22 00:13；11/6 其餘 22 次執行合計 18）。
+- 01 理由改用「有掉單的天數」：Deposit 233 天中 220 天、Withdrawal 70 天中 67 天，避免與 05 的日均重複。
+- 05 移除每月案件表；出金原因改為長條（圖 4）。06 移除「揭露案件」「突發事件」兩列（已在 05、01）。
+
+**公開資料處理**：`scripts/deidentify_drop_order.py` 產生 `public/data/drop-order-cases-2026.csv`（21,707 列，含 6,314 列心跳）。輸出只保留分類欄位：Case Type、Comparison Time、Tx（訂單編號改 `TX-00001` 流水號，信用卡以 Merchant Order 編號）、Channel Type、CRM／CPS 狀態、幣別、金額、國家、原因類別、子類別、處理狀態。刪除 User ID、Account、所有訂單編號、Handler／Checker／Sales／Operator 姓名、錢包地址／卡號、渠道名稱（含品牌代碼）、Regulator／Server、自由文字（Comment、CRM Reverse Reason、交易叙述）。腳本最後一步檢查輸出不含任何原始 ID、完整人員姓名與品牌字；另外手動掃描 6 位數以上數字、Email（0 筆）。
+
+## Reading Rhythm 改版（2026-11-18，四頁統一）
+
+依 Peter 指示，把 Drop-Order 的閱讀節奏套用到其他三頁。只重排與刪除重複，沒有新增未經來源支持的數字；新增的數字如下。
+
+- **Account Engine**
+  - TL;DR 新增。01 理由改為「上線 24 週，每一週都有成功的批量申請」（由公開 CSV 計算：2026-06-09 ~ 11-16 共 24 個週次，每週都有 `Success` 列）。
+  - 移除重複：531（01 痛點卡片、理由）、381,629／4,770（01 理由）、17,416／218 小時（03、05、06）、179／40／4／48（05、06）、32（04、06）、207（06）。
+  - 每月使用量由表格改為長條（圖 4）。
+- **Credit Card**
+  - TL;DR 新增。01 理由 3（2.1 萬／2.2 萬筆）併入痛點卡片，改為指向 Result 的 log。
+  - 05 新增「複核結果」長條（523 → 29 → 28，圖 3），原統計表只保留執行次數、間隔、無新異常的執行。
+  - 06 不再重抄 29／28、5.5 分鐘、2.1 萬筆，改寫「見 Result」。
+  - Peter 先前註解掉的〈尚未量化〉段落維持註解。
+- **Infra**
+  - 由舊的 8 章改為六段式，內容沿用原頁面與 PDF。主題色改為新增的 `slate`（原本未設定，預設 forest 與 Drop-Order 重複）。
+  - 03 的方案 A（維持人工調取）、B（等待 DB 權限或官方 API）依原頁面「取代人工調取」「不等 DB 權限或官方 API 開放」整理，待 Peter 確認是否為當時實際評估的方案。
+  - 招牌視覺、05 的 log 與統計、權限範圍、排程與儲存工具、其餘 3 個平台皆為 TODO。
+
+## Focus 與系統地圖（2026-11-18）
+
+- Stack 差異化採方案 B（Peter 選擇）：新增 `focus`。各頁取自已有內容：Infra = Incremental Sync、Schema Alignment（原 My Contribution 的增量同步與清洗對齊規範）；Credit Card = Amount Reconciliation、Parent / Child Ticket Matching（01 痛點與名詞）；Account Engine = Batch Query Engine、Exclusive Queue Lock（Tech Label）；Drop-Order = Status Reconciliation、Heartbeat Monitoring（判定規則與設計重點）。
+- Focus 改為 104／LinkedIn 搜尋關鍵字（Peter 指示，2026-11-18），意思不變：Infra = Data Integration（多平台整合）、Data Standardization（原 Schema Alignment）；Credit Card = Financial Reconciliation（原 Amount Reconciliation）、Anomaly Detection（專案名稱）；Account Engine = Batch Processing（原 Batch Query Engine）、Process Automation（取代人工逐筆查詢）；Drop-Order = Data Reconciliation（原 Status Reconciliation）、Data Quality Monitoring（每小時偵測不一致與心跳列）。
+- 系統地圖來源：Peter 提供的 `structure.png`（已移到 `canva-export/`，含品牌名稱，不進 repo），以 SVG 重畫並簡化（省略 FUNDS 圖示，「<品牌> Web/APP」改為「Client Portal（Web / APP）」，新增 Infra 的 Operation Data Layer 區塊）。
+- 專案 ↔ 區塊對應經 Peter 確認：Infra = 資料層；Credit Card = 信用卡 PSP ↔ Bridger ↔ CRM；Drop-Order = CRM ↔ CPS ↔ 各渠道；Account Engine = CRM ↔ MetaTrader。
+- 呈現方式：2D SVG + 流動虛線動畫（`prefers-reduced-motion` 時停止），不做 3D（Peter 選擇）。放在每頁 Quick Read，Projects 頁不放（避免未來多家公司時混淆）。
+
 ## Key Numbers (關鍵數字)
 
 | 數字 | 專案 | 來源 | 狀態 |
@@ -102,11 +185,12 @@ CSV 為對帳管線的輸出紀錄：每列 `Comparison` = 一次執行時間；
 | 每日 5 → 20.7 次（實際平均）、最長 5 小時 → 1 小時內、95%+ | Credit Card | PDF + CSV + Peter 確認 | PDF 原寫 4 次、>24 小時，已更正；95% 計算基礎待補 |
 | 每輪人工約 45 分鐘（平台 35 + Excel 10）、每日 5 輪 ≈ 3.75 小時；3–7 月 153 天 ≈ 574 小時；年化 × 365 ≈ 1,369 小時 | Credit Card | Peter 口頭說明（2026-11-16） | 估計值 |
 | 45 秒/帳戶、381,629 帳戶、≈4,770 小時、≈NT$1.91M | Automation Engine | Record 工作表 + Peter 估計（45 秒、NT$400） | 已取代 PDF 的 75,340+／956+／382K+ |
+| 1 hr 揭露顆粒、≈606 小時、15,393 件 | Drop-Order Monitor | 排程設定 + Peter 估計（每次 1 小時 × 每日 2 次 × 各自）+ CSV | 工時為估計值；Peter 原稿 414 小時（至 10/01）已延長至 11/17 |
 
 ## Redaction (去識別化)
 
 - 不公開：手機、市話、住址、年齡、駕照、PDF 上的 Email。
-- 第三方支付商名稱以「PSP 支付端」代稱。
+- 第三方支付商名稱：系統地圖與專案頁可保留 PSP 與渠道名稱（Worldpay、Checkout、Payabl、Bridger、Xpay、Zota 等），公司品牌名稱不出現（Peter 確認，2026-11-18；取代先前「以 PSP 支付端代稱」的規則）。
 - 公司名稱：依 Peter 指示公開（2026-11-16）。
 
 ## TODO
@@ -119,3 +203,4 @@ CSV 為對帳管線的輸出紀錄：每列 `Comparison` = 一次執行時間；
 - [ ] Infrastructure 排程與儲存層實際工具（是否用 Airflow / Superset）
 - [ ] 信用卡偵測的告警通知管道
 - [ ] 信用卡偵測 Area 3 比對規則（Prepare／Build Logic／Separate Types／Regularity）
+- [ ] Drop-Order Monitor：名詞說明定義確認、帳號核准者、進線量與溝通次數的前後統計

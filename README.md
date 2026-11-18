@@ -123,6 +123,14 @@ python -m pytest tests            # 去識別規則的測試（只需 Python 3.1
 
 腳本只保留 2026-03 ~ 2026-07 的資料、交易編號改為 `TX-0001` 流水號、刪除訂單編號與複核人員欄位、備註中的人名改為 `<name>`；若輸出仍殘留人名會直接失敗，不會寫出檔案。頁面上的表格由 `[slug].astro` 讀取這份 CSV 渲染。
 
+Drop-Order Monitor 頁的 CSV 來自 LarkSheet 匯出的 `.xlsx`（放在 `canva-export/drop-order/`，不進 repo），讀檔需要 `openpyxl`：
+
+```bash
+python scripts/deidentify_drop_order.py "<raw.xlsx>" public/data/drop-order-cases-2026.csv
+```
+
+腳本只讀 5 個工作表（Deposit 與 4 類 Withdraw），依上線日篩選到 2026-11-17、訂單編號改為 `TX-00001` 流水號，只保留分類欄位（狀態、渠道類型、幣別、金額、國家、原因）；輸出若仍含原始 ID、人員姓名或品牌字會直接失敗。
+
 ## Deployment (部署)
 
 1. 在 GitHub 建立 repo，推送到 `main`。

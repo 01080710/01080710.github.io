@@ -6,10 +6,16 @@ company: "海科科技有限公司"
 period: "2026/5 – 2026/7（開發）· 2026/6 上線"
 role: "從 OP 痛點歸納出共通查詢流程，獨立設計並實作批量查詢引擎"
 stack: ["Python", "Asyncio", "LarkSheet API", "Input Validation", "Data Normalization", "Audit Log"]
+focus: ["Batch Processing", "Process Automation"]
+system_map: { map: "hytech", area: "account" }
 metrics:
   - { value: "381,629", label: "累計驗證帳戶（2026-06-09 ~ 11-16）" }
   - { value: "≈4,770 hr", label: "累計節省人工查詢工時（估計）" }
   - { value: "≈NT$1.91M", label: "折合人力成本（估計）" }
+tldr:
+  problem: "OP 確認客戶帳戶狀態時，要在多個 CRM 後台之間切換 regulator、逐筆查詢；整批案件出現時，人力撐不住。"
+  approach: "把共通的查詢流程做成以 LarkSheet 為入口的批量引擎：先驗證輸入，再由排程自動查詢，成功與失敗都留紀錄。"
+  result: "OP 填完名單就能自行送件，查詢不再佔用人力；每一次申請都可以追溯。"
 tags: ["System Architecture", "Automation", "Product Thinking"]
 categories: ["Automation"]
 featured: true
@@ -79,7 +85,6 @@ accent: ocean
 <ul class="pain-flow">
 <li>單批最多 <b>17,416</b> 個帳戶，逐筆查詢約需 <b>218 小時</b>。</li>
 <li>超過 2,000 個帳戶的批次有 <b>65</b> 次。</li>
-<li>5 個月共 <b>531</b> 次成功的批量查詢。</li>
 </ul>
 </div>
 </section>
@@ -106,8 +111,8 @@ accent: ocean
 
 **值得投入解決的理由：**
 
-1. **需求量是真的**：上線 5 個月內有 531 次成功的批量查詢，累計 381,629 個帳戶；以每個帳戶 45 秒估計，人工需要約 4,770 小時。
-2. **單批量級已經超過人工能力**：最大的一批有 17,416 個帳戶，人工逐筆查詢約 218 小時，大約是一個人 27 個工作天。
+1. **需求量是真的**：上線 24 週，每一週都有成功的批量申請（每月使用量見 Result）。
+2. **單批量級已經超過人工能力**：最大的一批（圖 1）人工逐筆查詢，大約要一個人 27 個工作天。
 3. **流程高度重複，適合通則化**：不同團隊的需求表面不同，但都是「給一份 userId／Account 名單，回傳同一組帳戶欄位」。OP 日常的帳戶查詢需求中，約 80% 可以用同一套流程涵蓋。
 
 ## Solution Design
@@ -136,7 +141,7 @@ accent: ocean
 
 | 方案 | 做法 | 優點 | 缺點 |
 |---|---|---|---|
-| A. 維持人工逐筆查詢 | 依 IT 提供的 UID 名單，在各 CRM 後台逐筆查 | 不需開發 | 每帳戶約 45 秒；單批 17,416 個帳戶需約 218 小時；人力隨案件量線性增加 |
+| A. 維持人工逐筆查詢 | 依 IT 提供的 UID 名單，在各 CRM 後台逐筆查 | 不需開發 | 人力隨案件量線性增加（耗時見 Problem） |
 | B. 每個需求寫一次性腳本 | 收到需求後，針對該次名單寫查詢腳本 | 單次交付快 | 每次都要工程師介入；OP 無法自行使用；邏輯分散，難以稽核 |
 | **C. 通用批量查詢引擎（採用）** | 歸納共通流程，做成以 LarkSheet 為入口、排程自動執行的工具 | OP 可自行送件；一次涵蓋約 80% 的日常查詢；每次執行都有紀錄 | 需要前期設計共通欄位與驗證規則；剩下約 20% 的特殊需求仍需個別處理 |
 
@@ -176,7 +181,7 @@ flowchart TB
 
 **設計重點：**
 
-- **先驗證再查詢，失敗也留紀錄**：驗證不通過時不進入查詢，直接在 Record 寫入失敗原因（例如缺少 Requestor），申請人看紀錄就知道要補什麼。上線期間共攔截 32 次不完整的申請。
+- **先驗證再查詢，失敗也留紀錄**：驗證不通過時不進入查詢，直接在 Record 寫入失敗原因（例如缺少 Requestor），申請人看紀錄就知道要補什麼（攔截次數見 Result）。
 - **查無資料不丟棄**：查不到的帳戶收集在 Record 的 `total_missing_list`，與成功的結果一起呈現。
 - **排隊獨佔**：Input 有資料時其他人不能覆蓋；Record 與 Output 都寫入成功後才清空 Input，避免申請被吃掉。
 - **單次上限**：規則上每次最多 2,000 筆，避免單一申請長時間佔住入口。
@@ -257,6 +262,24 @@ Output 每個帳戶一列，共 23 個欄位。以下兩列取自 2026-11-16 的
 
 其他欄位：`Requestor`、`user_id`、`ownerAlias`、`owner`、`mt4_account`、`group`、`profit`、`marginLevel`、`credit`、`enableReadonly`、`comparisionTime`（欄位名稱沿用系統原樣）。
 
+<hr data-slide="每月使用量">
+
+### 每月使用量
+
+各月成功執行的批次與驗證帳戶數，10 月是使用量最高的月份：
+
+<figure class="bar-figure">
+<ul class="bar-list">
+<li style="--v: 51.7%"><span class="bar-label">2026-06（6/9 起，39 次）</span><span class="bar"></span><span class="bar-value">58,805</span></li>
+<li style="--v: 56.4%"><span class="bar-label">2026-07（95 次）</span><span class="bar"></span><span class="bar-value">64,060</span></li>
+<li style="--v: 19.1%"><span class="bar-label">2026-08（83 次）</span><span class="bar"></span><span class="bar-value">21,757</span></li>
+<li style="--v: 81.7%"><span class="bar-label">2026-09（69 次）</span><span class="bar"></span><span class="bar-value">92,890</span></li>
+<li class="is-peak" style="--v: 100%"><span class="bar-label">2026-10（207 次）</span><span class="bar"></span><span class="bar-value">113,659</span></li>
+<li style="--v: 26.8%"><span class="bar-label">2026-11（至 11/16，38 次）</span><span class="bar"></span><span class="bar-value">30,458</span></li>
+</ul>
+<figcaption>圖 4　每月驗證帳戶數（括號內為成功執行次數；取自 Record 工作表）</figcaption>
+</figure>
+
 <hr data-slide="執行統計">
 
 ### 執行統計（2026-06-09 ~ 2026-11-16）
@@ -269,20 +292,8 @@ Output 每個帳戶一列，共 23 個欄位。以下兩列取自 2026-11-16 的
 | 成功執行 | 531 次（94.3%） |
 | 驗證攔截 | 32 次（缺 Requestor 23、缺 Account／UserId 9） |
 | 累計驗證帳戶 | 381,629 個 |
-| 單批帳戶數 | 中位數 89、平均 719、最多 17,416 |
-| 單批最大涵蓋 | 179 個國家、40 個 Server、4 個 regulator、48 種帳戶類型 |
+| 單批帳戶數 | 中位數 89、平均 719（最大一批見 Problem） |
 | 有使用的天數 | 112 天 |
-
-每月使用量：
-
-| 月份 | 成功執行 | 驗證帳戶 |
-|---|---|---|
-| 2026-06（6/9 起） | 39 | 58,805 |
-| 2026-07 | 95 | 64,060 |
-| 2026-08 | 83 | 21,757 |
-| 2026-09 | 69 | 92,890 |
-| 2026-10 | 207 | 113,659 |
-| 2026-11（至 11/16） | 38 | 30,458 |
 
 <details class="csv-details">
 <summary>完整資料（已去識別化）<span class="mono">563 列 · 點擊展開</span></summary>
@@ -300,22 +311,21 @@ Output 每個帳戶一列，共 23 個欄位。以下兩列取自 2026-11-16 的
 <figure class="ba-figure">
 <div class="ba-table">
 <div class="ba-row ba-head"><p class="ba-item">項目</p><p class="ba-before">Before：逐筆人工查詢</p><p class="ba-after">After：批量查詢引擎</p></div>
-<div class="ba-row"><p class="ba-item">查詢方式</p><p class="ba-before">每個帳戶切換對應 regulator 的 CRM 後台，逐筆查</p><p class="ba-after">一次輸入整份名單，跨 regulator、跨 Server 批量查回<small>依據：Rule 工作表；單批最多涵蓋 4 個 regulator、40 個 Server</small></p></div>
-<div class="ba-row"><p class="ba-item">處理規模</p><p class="ba-before">筆數未紀錄</p><p class="ba-after">單批最多 17,416 個帳戶；累計 381,629 個<small>依據：Record，531 次成功執行</small></p></div>
-<div class="ba-row"><p class="ba-item">人工工時</p><p class="ba-before">每帳戶約 45 秒；1,000 個帳戶 ≈ 12.5 小時</p><p class="ba-after">累計約 4,770 小時改由引擎處理<small>依據：381,629 × 45 秒 ÷ 3,600；45 秒為估計值</small></p></div>
+<div class="ba-row"><p class="ba-item">查詢方式</p><p class="ba-before">每個帳戶切換對應 regulator 的 CRM 後台，逐筆查</p><p class="ba-after">一次輸入整份名單，跨 regulator、跨 Server 批量查回<small>依據：Rule 工作表；單批涵蓋範圍見 Problem</small></p></div>
+<div class="ba-row"><p class="ba-item">人工工時</p><p class="ba-before">每帳戶約 45 秒</p><p class="ba-after">累計約 4,770 小時改由引擎處理<small>依據：累計驗證帳戶（見 Result）× 45 秒 ÷ 3,600；45 秒為估計值</small></p></div>
 <div class="ba-row"><p class="ba-item">人力成本</p><p class="ba-before">無紀錄</p><p class="ba-after">累計約 NT$1.91M<small>依據：4,770 小時 × NT$400／小時（成本基準為估計值）</small></p></div>
-<div class="ba-row"><p class="ba-item">使用方式</p><p class="ba-before">需要 OP 親自操作每一個後台</p><p class="ba-after">各團隊自行填表送件，排程每 5 分鐘自動執行<small>依據：Rule 工作表；10 月單月 207 次成功執行</small></p></div>
-<div class="ba-row"><p class="ba-item">錯誤輸入</p><p class="ba-before">無紀錄</p><p class="ba-after">32 次不完整申請在查詢前被攔下，並說明缺少的欄位<small>依據：Record 的 return_msg</small></p></div>
+<div class="ba-row"><p class="ba-item">使用方式</p><p class="ba-before">需要 OP 親自操作每一個後台</p><p class="ba-after">各團隊自行填表送件，排程每 5 分鐘自動執行<small>依據：Rule 工作表；每月使用量見 Result</small></p></div>
+<div class="ba-row"><p class="ba-item">錯誤輸入</p><p class="ba-before">無紀錄</p><p class="ba-after">不完整的申請在查詢前被攔下，並說明缺少的欄位<small>依據：Record 的 return_msg；攔截次數見 Result</small></p></div>
 </div>
-<figcaption>圖 4　Before / After 對照（工時與成本為估計值，計算基準見下方）</figcaption>
+<figcaption>圖 5　Before / After 對照（工時與成本為估計值，計算基準見下方）</figcaption>
 </figure>
 
 <hr data-slide="尚未量化的部分">
 
 ### 尚未量化或需要說明的部分
 
-- **計算基準**：人工查詢每帳戶 45 秒、人力成本 NT$400／小時，皆為估計值。只計算成功執行的批次，排除 32 次驗證失敗的申請。
-- **帳戶數會重複計算**：381,629 是各批次帳戶數的加總；同一個帳戶在不同批次被查詢，會各算一次，因為每次查詢都對應一次人工作業。
+- **計算基準**：人工查詢每帳戶 45 秒、人力成本 NT$400／小時，皆為估計值。只計算成功執行的批次，排除驗證失敗的申請。
+- **帳戶數會重複計算**：累計驗證帳戶是各批次帳戶數的加總；同一個帳戶在不同批次被查詢，會各算一次，因為每次查詢都對應一次人工作業。
 - **80% 涵蓋率**：指 OP 日常帳戶查詢需求中可以用這套流程處理的比例，是依需求類型歸納的估計，沒有逐件統計。
 - **引擎執行時間**：Record 沒有記錄每批的執行耗時，因此本頁不寫「從 X 小時縮短到 Y 分鐘」。
 - **單次上限**：規則上每次最多 2,000 筆，但 Record 中有 65 批超過 2,000 個帳戶。TODO：確認 2,000 筆的計算單位（申請列數或 userId 數）。

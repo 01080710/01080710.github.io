@@ -1,6 +1,7 @@
 ---
 import { getCollection, render } from "astro:content";
 import Base from "../../layouts/Base.astro";
+import SystemMap from "../../components/SystemMap.astro";
 import { url } from "../../lib/url";
 
 export async function getStaticPaths() {
@@ -21,25 +22,47 @@ const { Content } = await render(project);
       <p class="eyebrow mono">{p.company} · {p.period}</p>
       <h1>{p.title}</h1>
       <p class="project-subtitle">{p.subtitle}</p>
-      <p class="lead">{p.summary}</p>
+      {!p.tldr && <p class="lead">{p.summary}</p>}
     </header>
 
-    <dl class="case-meta">
-      <div><dt class="mono">Role</dt><dd>{p.role}</dd></div>
-      <div><dt class="mono">Stack</dt><dd><ul class="tags">{p.stack.map((s) => <li>{s}</li>)}</ul></dd></div>
-    </dl>
-
-    {p.metrics.length > 0 && (
-      <dl class="metrics metrics-lg">
-        {p.metrics.map((m) => (
-          <div><dt>{m.value}</dt><dd>{m.label}</dd></div>
-        ))}
+    <section class="case-zone zone-tech" aria-label="技術選材">
+      <p class="zone-label mono">Tech Choices</p>
+      <dl class="case-meta">
+        <div><dt class="mono">Role</dt><dd>{p.role}</dd></div>
+        {p.focus && (
+          <div><dt class="mono">Focus</dt><dd><ul class="tags tags-focus">{p.focus.map((f) => <li>{f}</li>)}</ul></dd></div>
+        )}
+        <div><dt class="mono">Stack</dt><dd><ul class="tags">{p.stack.map((s) => <li>{s}</li>)}</ul></dd></div>
       </dl>
+    </section>
+
+    {(p.system_map || p.tldr || p.metrics.length > 0) && (
+      <section class="case-zone zone-brief" aria-label="30 秒速讀">
+        <p class="zone-label mono">Quick Read</p>
+        {p.system_map && <SystemMap map={p.system_map.map} area={p.system_map.area} />}
+        {p.tldr && (
+          <dl class="tldr">
+            <div class="tldr-problem"><dt class="mono">Problem</dt><dd>{p.tldr.problem}</dd></div>
+            <div class="tldr-approach"><dt class="mono">Approach</dt><dd>{p.tldr.approach}</dd></div>
+            <div class="tldr-result"><dt class="mono">Result</dt><dd>{p.tldr.result}</dd></div>
+          </dl>
+        )}
+        {p.metrics.length > 0 && (
+          <dl class="metrics metrics-lg">
+            {p.metrics.map((m) => (
+              <div><dt>{m.value}</dt><dd>{m.label}</dd></div>
+            ))}
+          </dl>
+        )}
+      </section>
     )}
 
-    <div class="prose">
-      <Content />
-    </div>
+    <section class="case-zone zone-detail" aria-label="詳細內容">
+      <p class="zone-label mono">Deep Dive</p>
+      <div class="prose">
+        <Content />
+      </div>
+    </section>
   </article>
 </Base>
 

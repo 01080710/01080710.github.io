@@ -6,10 +6,16 @@ company: "海科科技有限公司"
 period: "2026/1 – 2026/2（開發）· 2026/2 – 2026/8 上線"
 role: "與營運端對齊偵測邏輯，負責管線設計與實作"
 stack: ["Python", "API Reverse Engineering", "crontab", "Lark Bot", "LarkSheet API", "JSON Structured Logging"]
+focus: ["Financial Reconciliation", "Anomaly Detection"]
+system_map: { map: "hytech", area: "credit-card" }
 metrics:
   - { value: "1 hr", label: "資料可取得後的偵測時效（原最長約 5 小時）" }
   - { value: "≈574 hr", label: "3–7 月節省的人工比對工時（估計）" }
   - { value: "3,162", label: "3–7 月自動對帳執行次數" }
+tldr:
+  problem: "信用卡出金時，Payabl 實際退款與 CRM 記帳可能對不上；人工 Excel 比對靠輪班，頻率與準確度都到了極限。"
+  approach: "以 API 逆向工程自動擷取兩邊報表，每小時全量對帳，只把不一致的交易寫入 LarkSheet 交給營運複核。"
+  result: "錯誤退款在下一輪執行就被標記，交由營運撤銷；比對不再需要輪班人力。"
 tags: ["Reverse Engineering", "Automation", "Risk Control"]
 categories: ["Data Pipeline", "Automation"]
 featured: true
@@ -117,7 +123,7 @@ accent: violet
 <ul class="pain-flow">
 <li><b>Payabl</b> 只有 Child Ticket，有具體交易明細；人工對回 CRM 時容易配錯 Parent Ticket。</li>
 <li><b>CRM</b> 有 Parent 與 Child Ticket，但沒有明細，無法單靠 CRM 驗證是否異常。</li>
-<li>一次要對的量：Payabl 約 2.1 萬筆、CRM 約 2.2 萬筆（見 Result 的 log）。</li>
+<li>一次要對的量是兩邊各數萬筆交易（見 Result 的 log）。</li>
 </ul>
 </div>
 </section>
@@ -129,9 +135,8 @@ accent: violet
 
 **值得投入解決的理由：**
 
-1. **損失是直接的現金流出**：上線後 3–7 月確認了 29 筆錯誤退款，例如 Payabl 退款 60 USD、CRM 只記 30 USD 的退錯金額，以及同一筆 350 EUR 被退了兩次的重複退款；兩筆都在偵測後由營運撤銷。
-2. **人工方案已經無法擴充**：每輪人工比對約 45 分鐘，5 組輪班每日 5 輪就要約 3.75 小時，要再提高頻率只能再加人。
-3. **資料量超過人工能力**：一次執行就要比對約 2.1 萬筆 Payabl 交易與 2.2 萬筆 CRM 紀錄（見 Result 的 log）。
+1. **損失是直接的現金流出**：上線後確認的錯誤退款中，有 Payabl 退款 60 USD、CRM 只記 30 USD 的退錯金額，也有同一筆 350 EUR 被退了兩次的重複退款；兩筆都在偵測後由營運撤銷（件數見 Result）。
+2. **人工方案已經無法擴充**：每輪人工比對的耗時固定（圖 1），5 組輪班已是上限，要再提高頻率只能再加人。
 
 ## Solution Design
 
@@ -268,20 +273,35 @@ flowchart TB
 - `Payabl & Crm`：兩邊都有紀錄，但金額不一致。
 - `Payabl`：Payabl 已退款，但 CRM 查無對應紀錄。
 
+<hr data-slide="複核結果">
+
+### 複核結果（2026-03-01 ~ 2026-07-31）
+
+管線寧可多標、交給營運複核。「確認為錯誤」指營運複核標為 error，或營運備註寫明退錯金額、重複退款、退錯訂單的交易：
+
+<figure class="bar-figure">
+<ul class="bar-list">
+<li style="--v: 100%"><span class="bar-label">被標記待複核</span><span class="bar"></span><span class="bar-value">523</span></li>
+<li class="is-peak" style="--v: 5.5%"><span class="bar-label">確認為錯誤退款</span><span class="bar"></span><span class="bar-value">29</span></li>
+<li class="is-peak" style="--v: 5.4%"><span class="bar-label">偵測後撤銷或要求取消</span><span class="bar"></span><span class="bar-value">28</span></li>
+</ul>
+<figcaption>圖 3　從標記到撤銷的筆數（不重複交易；取自本頁公開 CSV）</figcaption>
+</figure>
+
+- **被標記的 523 筆**：金額不一致 307 筆、CRM 查無紀錄 216 筆。
+- **確認為錯誤的 29 筆**：退錯金額 19、重複退款 9、退錯訂單 1。
+
 <hr data-slide="執行統計">
 
 ### 穩定期執行統計（2026-03-01 ~ 2026-07-31）
 
-資料來源：管線輸出的完整紀錄 CSV（`Payabl QC new Template - New Data.csv`）。「確認為錯誤」指營運複核標為 error，或營運備註寫明退錯金額、重複退款、退錯訂單的交易。
+資料來源：管線輸出的完整紀錄 CSV（`Payabl QC new Template - New Data.csv`）。
 
 | 指標 | 數值 |
 |---|---|
 | 自動對帳執行次數 | 3,162 次 |
 | 執行間隔 | 中位數 1.00 小時、P90 1.02 小時 |
 | 沒有新異常的執行 | 3,042 次（96.2%） |
-| 被標記待複核的交易 | 523 筆（金額不一致 307 筆、CRM 查無紀錄 216 筆） |
-| 確認為錯誤退款 | 29 筆（退錯金額 19、重複退款 9、退錯訂單 1） |
-| 偵測後由營運撤銷或要求 Payabl 取消 | 28 筆 |
 
 <details class="csv-details">
 <summary>完整資料（已去識別化）<span class="mono">3,612 列 · 點擊展開</span></summary>
@@ -297,12 +317,12 @@ flowchart TB
 <figure class="ba-figure">
 <div class="ba-table">
 <div class="ba-row ba-head"><p class="ba-item">項目</p><p class="ba-before">Before：傳統人工對帳</p><p class="ba-after">After：自動化偵測 Pipeline</p></div>
-<div class="ba-row"><p class="ba-item">人力</p><p class="ba-before">每日 5 輪 × 約 45 分鐘 ≈ 每日 3.75 小時</p><p class="ba-after">偵測 0 人工；被標記的案件由營運複核<small>依據：3–7 月約節省 574 小時（年化約 1,369 小時）；工時為估計值</small></p></div>
-<div class="ba-row"><p class="ba-item">監控頻率</p><p class="ba-before">每日 5 次</p><p class="ba-after">排程每小時 1 次；3–7 月實際平均每日 20.7 次（約 4.1 倍）<small>依據：輪班表 5 個時段；CSV 3,162 次 ÷ 153 天，每日中位數 23 次</small></p></div>
-<div class="ba-row"><p class="ba-item">偵測時效</p><p class="ba-before">最長約 5 小時（兩輪人工比對的間隔）</p><p class="ba-after">資料可取得後 1 小時內<small>依據：每小時排程；CSV 執行間隔中位數 1.00 小時</small></p></div>
-<div class="ba-row"><p class="ba-item">資料取得</p><p class="ba-before">手動下載、複製貼上，每輪約 45 分鐘</p><p class="ba-after">API 逆向工程自動擷取，一次約 5.5 分鐘<small>依據：人工工時為估計值；2026-03-16 執行 log</small></p></div>
-<div class="ba-row"><p class="ba-item">比對範圍</p><p class="ba-before">人工 Excel 比對，筆數未紀錄</p><p class="ba-after">每次全量比對：Payabl 約 2.1 萬筆、CRM 約 2.2 萬筆<small>依據：2026-03-16 執行 log</small></p></div>
-<div class="ba-row"><p class="ba-item">實際攔截</p><p class="ba-before">無紀錄</p><p class="ba-after">3–7 月確認 29 筆錯誤退款，其中 28 筆在偵測後撤銷或要求取消<small>依據：CSV 複核欄與營運備註</small></p></div>
+<div class="ba-row"><p class="ba-item">人力</p><p class="ba-before">每日約 3.75 小時</p><p class="ba-after">偵測 0 人工；被標記的案件由營運複核<small>依據：每輪約 45 分鐘 × 每日 5 輪（見 Problem）；3–7 月約節省 574 小時（年化約 1,369 小時），估計值</small></p></div>
+<div class="ba-row"><p class="ba-item">監控頻率</p><p class="ba-before">每日 5 次</p><p class="ba-after">排程每小時 1 次；3–7 月實際平均每日 20.7 次（約 4.1 倍）<small>依據：輪班表 5 個時段；執行次數（見 Result）÷ 153 天，每日中位數 23 次</small></p></div>
+<div class="ba-row"><p class="ba-item">偵測時效</p><p class="ba-before">最長約 5 小時（兩輪人工比對的間隔）</p><p class="ba-after">資料可取得後 1 小時內<small>依據：每小時排程；執行間隔見 Result</small></p></div>
+<div class="ba-row"><p class="ba-item">資料取得</p><p class="ba-before">手動下載、複製貼上，每輪約 45 分鐘</p><p class="ba-after">API 逆向工程自動擷取，一次執行只需幾分鐘<small>依據：Result 的執行 log；人工工時為估計值</small></p></div>
+<div class="ba-row"><p class="ba-item">比對範圍</p><p class="ba-before">人工 Excel 比對，筆數未紀錄</p><p class="ba-after">每次全量比對兩邊所有交易<small>依據：Result 的執行 log</small></p></div>
+<div class="ba-row"><p class="ba-item">實際攔截</p><p class="ba-before">無紀錄</p><p class="ba-after">確認的錯誤退款幾乎全部在偵測後撤銷或要求取消<small>依據：CSV 複核欄與營運備註；筆數見 Result 圖 3</small></p></div>
 </div>
 <figcaption>圖 4　Before / After 對照（依專案簡報重繪）。更正：原圖標示每日 4 次、↑600%、>24 小時；實際排班為每日 5 輪（間隔約 5 小時），自動化後 3–7 月實際平均每日 20.7 次，約 4.1 倍。原圖「準確程度」一列未納入，原因見下方說明。</figcaption>
 </figure>

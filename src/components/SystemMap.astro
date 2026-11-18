@@ -1,0 +1,130 @@
+---
+// Company system map: where each project sits in the money flow.
+// Redrawn from Peter's internal diagram (canva-export/structure.png) with the brand name removed.
+// `area` highlights one project's part of the map; the rest is dimmed.
+// To add a company later: add its map name to the schema enum and a new branch below.
+interface Props {
+  map: "hytech";
+  area: "infra" | "credit-card" | "drop-order" | "account";
+}
+const { map, area } = Astro.props;
+
+const area_label = {
+  "infra":       "營運資料底層：從 CRM、PSP、CPS 擷取資料",
+  "credit-card": "信用卡 PSP ↔ CRM 的退款金額",
+  "drop-order":  "CRM ↔ CPS 的出入金狀態與各渠道",
+  "account":     "CRM 帳戶 ↔ MetaTrader 的帳戶狀態",
+}[area];
+---
+
+{map === "hytech" && (
+  <figure class="system-map" data-focus={area}>
+    <p class="system-map-focus"><span class="system-map-key"></span>本專案負責：{area_label}</p>
+    <div class="system-map-scroll">
+      <svg viewBox="0 0 960 440" role="img" aria-labelledby="sysmap-title sysmap-desc">
+        <title id="sysmap-title">海科科技的資金流與系統地圖</title>
+        <desc id="sysmap-desc">客戶經 Client Portal 進入 CRM；入金與出金經 CPS 連到各支付渠道；信用卡款項經 Bridger 連到信用卡 PSP；CRM 帳戶對應 MetaTrader 交易帳戶。本專案負責：{area_label}。</desc>
+
+        <!-- Base flow: always visible -->
+        <g class="map-base">
+          <path class="flow" d="M480 46 V64" />
+          <path class="flow" d="M480 104 V142" />
+          <path class="arrow" d="M480 150 L475 141 H485 Z" />
+          <rect class="node" x="430" y="10" width="100" height="36" rx="18" />
+          <text x="480" y="33">Client</text>
+          <rect class="node" x="400" y="64" width="160" height="40" rx="6" />
+          <text x="480" y="89">Client Portal（Web / APP）</text>
+          <rect class="node node-core" x="400" y="150" width="160" height="56" rx="6" />
+          <text class="strong" x="480" y="173">CRM</text>
+          <text class="small" x="480" y="192">Deposit / WD Audit</text>
+        </g>
+
+        <!-- Credit Card Anomaly Detection: card PSP <-> Bridger <-> CRM -->
+        <g class="area" data-area="credit-card">
+          <path class="flow" d="M210 178 H250" />
+          <path class="flow" d="M360 178 H400" />
+          <rect class="node" x="40" y="128" width="170" height="100" rx="6" />
+          <text class="strong" x="125" y="150">Credit Card PSP</text>
+          <text class="small" x="125" y="172">Worldpay</text>
+          <text class="small" x="125" y="190">Checkout</text>
+          <text class="small" x="125" y="208">Innatech (Payabl)</text>
+          <rect class="node node-core" x="250" y="150" width="110" height="56" rx="28" />
+          <text class="strong" x="305" y="173">Bridger</text>
+          <text class="small" x="305" y="192">PSP trx ID</text>
+        </g>
+
+        <!-- Deposit & Withdrawal Drop-Order Monitor: CRM <-> CPS -> channels -->
+        <g class="area" data-area="drop-order">
+          <path class="flow" d="M560 84 H680 V142" />
+          <path class="arrow" d="M680 150 L675 141 H685 Z" />
+          <path class="flow" d="M620 170 H568" />
+          <path class="arrow" d="M560 170 L569 165 V175 Z" />
+          <path class="flow" d="M560 188 H612" />
+          <path class="arrow" d="M620 188 L611 183 V193 Z" />
+          <text class="tiny" x="590" y="163">Deposit</text>
+          <text class="tiny" x="590" y="203">Withdraw</text>
+          <rect class="node node-core" x="620" y="150" width="120" height="56" rx="28" />
+          <text class="strong" x="680" y="173">CPS</text>
+          <text class="small" x="680" y="192">流水號</text>
+          <path class="flow" d="M740 178 L790 34" />
+          <path class="flow" d="M740 178 L790 92" />
+          <path class="flow" d="M740 178 L790 150" />
+          <path class="flow" d="M740 178 L790 208" />
+          <path class="flow" d="M740 178 L790 266" />
+          <path class="flow" d="M740 178 L790 324" />
+          <rect class="node" x="790" y="10" width="160" height="48" rx="6" />
+          <text class="strong" x="870" y="30">Credit Card</text>
+          <text class="small" x="870" y="48">Googlepay</text>
+          <rect class="node" x="790" y="68" width="160" height="48" rx="6" />
+          <text class="strong" x="870" y="88">Local Bank</text>
+          <text class="small" x="870" y="106">Offline · Xpay · Zota</text>
+          <rect class="node" x="790" y="126" width="160" height="48" rx="6" />
+          <text class="strong" x="870" y="146">E-wallet</text>
+          <text class="small" x="870" y="164">Skrill · Neteller · Paypal</text>
+          <rect class="node" x="790" y="184" width="160" height="48" rx="6" />
+          <text class="strong" x="870" y="204">Cryptocurrency</text>
+          <text class="small" x="870" y="222">USDT · USDC · ETH</text>
+          <rect class="node" x="790" y="242" width="160" height="48" rx="6" />
+          <text class="strong" x="870" y="271">International Bank</text>
+          <rect class="node" x="790" y="300" width="160" height="48" rx="6" />
+          <text class="strong" x="870" y="320">Payabl PSP</text>
+          <text class="small" x="870" y="338">Applepay · EU Netbanking</text>
+        </g>
+
+        <!-- Account Operation Automation Engine: CRM account <-> MetaTrader -->
+        <g class="area" data-area="account">
+          <path class="flow" d="M480 206 V246" />
+          <path class="flow" d="M480 286 V316" />
+          <rect class="node" x="420" y="246" width="120" height="40" rx="6" />
+          <text class="strong" x="480" y="271">MetaTrader</text>
+          <rect class="node node-core" x="400" y="316" width="160" height="40" rx="6" />
+          <text class="small" x="480" y="341">CRM Trading History · Ticket</text>
+        </g>
+
+        <!-- Operation Data Infrastructure: data layer under every system -->
+        <g class="area" data-area="infra">
+          <path class="flow flow-data" d="M125 228 V388" />
+          <path class="flow flow-data" d="M400 330 H300 V388" />
+          <path class="flow flow-data" d="M680 206 V388" />
+          <rect class="node node-layer" x="40" y="388" width="720" height="42" rx="6" />
+          <text class="strong" x="400" y="414">Operation Data Layer · 每小時增量同步到統一資料視圖</text>
+        </g>
+      </svg>
+    </div>
+  </figure>
+)}
+
+<script>
+  // On narrow screens the map scrolls sideways; start with the highlighted area in view.
+  // Without JS the map is still complete and can be scrolled by hand.
+  for (const fig of document.querySelectorAll<HTMLElement>(".system-map[data-focus]")) {
+    const scroller = fig.querySelector<HTMLElement>(".system-map-scroll");
+    const area     = fig.querySelector<SVGGraphicsElement>(`.area[data-area="${fig.dataset.focus}"]`);
+    const svg      = fig.querySelector<SVGSVGElement>("svg");
+    if (!scroller || !area || !svg || scroller.scrollWidth <= scroller.clientWidth) continue;
+    const box    = area.getBBox();
+    const scale  = svg.getBoundingClientRect().width / svg.viewBox.baseVal.width;
+    const center = (box.x + box.width / 2) * scale;
+    scroller.scrollLeft = Math.max(0, center - scroller.clientWidth / 2);
+  }
+</script>

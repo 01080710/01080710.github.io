@@ -17,6 +17,47 @@
 
 固定的 `###` 小標：Impact 底下用 `### 已驗證的成果`（🟢 Verified）與 `### 尚未量化或需要說明的部分`（🟡 Pending）。其他小標自由命名，不會有 Badge。
 
+## Reading Rhythm (閱讀節奏)
+
+六章結構固定，是為了讓讀者知道去哪裡找答案；但每頁的**表現手法**要有變化，避免讀起來像同一份文件換數字（Peter 確認方向，2026-11-18：TL;DR 與數字單一出處為主、招牌視覺為輔；疲勞主要來自表格與卡片的格式重複）。
+
+### TL;DR（頁首三行）
+
+- frontmatter 填 `tldr: { problem, approach, result }`，頁面依 Role → Stack → TL;DR → Metrics 的順序顯示，並取代頁首的 `summary` 段落（`summary` 仍用在 Projects 卡片與 meta description）。
+- 每行一句、約 40 字以內，只寫定性的結論；**不放數字**，數字交給下方的 `metrics`。
+- 讀者只看頁首 30 秒，也能說出「什麼問題、怎麼解、結果如何」。
+
+### 頁面分區
+
+- 專案頁由模板自動分成三個區塊（不必在 Markdown 裡寫）：**Tech Choices**（Role、Stack）→ **Quick Read**（TL;DR、metrics）→ **Deep Dive**（六章內容）。標題、公司與期間留在區塊外，作為頁面識別。
+- 各區塊底色透明度在 `global.css` 的 `--zone-tech-alpha`、`--zone-brief-alpha`、`--zone-detail-alpha` 調整（0 = 透明、1 = 不透明），淺色與深色模式各有一組。Quick Read 以頁面強調色（`--accent-bg`）為底，其餘以 `--surface` 為底。
+
+### Focus 與系統地圖
+
+- **Focus**：frontmatter 填 `focus`（1–2 個），寫這個專案的招牌技術，顯示在 Stack 上方並用強調色標示。Stack 維持工具清單，不必為了差異化刪減。Focus 用 104／LinkedIn 常見的搜尋關鍵字（通用職能詞，例如 Data Integration、Financial Reconciliation），意思須與該頁的 Tech Label 或設計重點一致，不寫頁面上沒有的宣稱，也不用暗示特定工具的詞（例如 CDC、RPA）。
+- **系統地圖**：frontmatter 填 `system_map: { map, area }`，Quick Read 最上方（Problem／Approach／Result 之上）會顯示公司的資金流與系統地圖，並高亮本專案負責的區塊。地圖屬於公司，畫在 `src/components/SystemMap.astro`；換公司時新增一張地圖與一個 `map` 名稱，不要把不同公司的專案畫在同一張圖上。
+- Projects 頁目前不放地圖；出現第二家公司時，改為依公司分組並在每組上方放該公司的地圖（未來擴充）。
+
+### 數字單一出處
+
+- 每個數字只有一個「家」：在證明它的那一章完整出現一次（含口徑與依據）。
+- `metrics` 可以引用；其他章需要時寫「（見 Result）」，不重寫數字與算法。
+- 分工：01 放證明問題存在的數字；05 放執行結果與統計；06 只放 Before / After 的對照，不重抄 05 的案件數、事件數。
+- 06 `### 尚未量化…` 只寫限制與未知，不重述已在上方表格依據中寫過的算法。
+
+### 元件預算
+
+- 一張投影片只有一個主元件（表格、卡片、長條、Mermaid、log、Before / After、錄影擇一；Tech Label、名詞說明與 CSV 收合區是附屬元件，不計入）；相鄰兩張投影片的主元件盡量不同。
+- 每章 Markdown 表格最多 2 張。只有「三欄以上、需要橫向對照」的內容才用表格。
+- **分布型資料**（類別件數、時段、月份）用長條（`bar-list`），不用表格。
+- **兩欄的對應**（例如「痛點 → 解決方向」）用清單，不用表格。
+- 痛點卡片只用在 01。
+
+### 招牌視覺
+
+- 每個專案指定一個只有它才有的主視覺，放在 01 或 02，讓讀者記得「這是哪個專案」。各專案的招牌視覺記在 source-notes，類型不要重複。
+- 現有：Credit Card = 兩邊 Ticket 對不起來的平台截圖（01）；Account Engine = 人工與系統並排錄影（05 開頭，錄影類可例外放在 Result）；Drop-Order = 11/6 上游故障的時段長條（01）；Infra = TODO（待 Peter 提供可公開的統一資料視圖畫面或其他素材）。
+
 ## Section Checklist (各章必備內容)
 
 ### 01 Problem Assessment
@@ -31,7 +72,7 @@
 
 ### 02 Solution Design
 
-- 表格：`痛點 | 解決方向 | 對應`；「對應」欄放架構圖的分區截圖（非重點區塊模糊化，點擊可放大），或指向表格上方的整張規則圖（圖在上、表在下）。
+- 表格：`痛點 | 解決方向 | 對應`；「對應」欄放架構圖的分區截圖（非重點區塊模糊化，點擊可放大），或指向表格上方的整張規則圖（圖在上、表在下）。沒有截圖可放時，改用清單「痛點 → 解決方向」（見〈元件預算〉）。
 - `**設計時必須面對的限制：**` 清單。
 
 ### 03 Alternative Solutions
@@ -101,6 +142,7 @@ Markdown 中直接寫 HTML；樣式都在 [global.css](../src/styles/global.css)
 | 痛點卡片 | `pain-figure` > `pain-grid` > `pain-card tone-red / tone-grey / tone-yellow`（`pain-wide` 整列寬） | 01 |
 | 平台截圖並排 | `pain-shots` > `pain-shot` | 01 |
 | 耗時長條 | `pain-timebar`，各段用 `style="flex: <分鐘>"` | 01 |
+| 分布長條 | `bar-figure` > `ul.bar-list` > `li`（`style="--v: <百分比>%"`；內含 `bar-label`、`bar`、`bar-value`）；要強調的列加 `is-peak`。百分比 = 該列 ÷ 最大值 | 01、05（取代分布型表格） |
 | 表格內縮圖 | 表格儲存格內直接放 `![]()`，點擊可放大 | 02 |
 | Tech Label | `tech-figure` > `tech-labels` > `tech-label` | 05 |
 | CSV 表格 | `<details class="csv-details">` 內放 `<div class="csv-viewer" data-src="../../data/<file>.csv">`（附下載連結） | 05 |
@@ -116,7 +158,7 @@ Markdown 中直接寫 HTML；樣式都在 [global.css](../src/styles/global.css)
 
 1. **收集來源**：簡報圖片、資料 CSV、log；放 `canva-export/`。
 2. **核對資料**：讀完所有欄位，定口徑，算出統計；與簡報數字不一致的地方列出來問 Peter。
-3. **寫骨架**：六個 `##` 章節＋frontmatter（`metrics` 最多 3 個，都要能對回 source-notes；`accent` 選一個與其他專案不同的強調色：`forest`／`violet`／`ocean`，只改強調色，紅黃綠語意徽章不變；`categories` 至少選一個技術類型，可選值見 `src/data/project-categories.ts`，新類型先加進該檔）。
+3. **寫骨架**：六個 `##` 章節＋frontmatter（`metrics` 最多 3 個，都要能對回 source-notes；`accent` 選一個與其他專案不同的強調色：`forest`／`violet`／`ocean`／`slate`（目前依序為 Drop-Order／Credit Card／Account Engine／Infra；新專案需要新色時，在 schema 與 `global.css` 淺色、深色各加一組），只改強調色，紅黃綠語意徽章不變；`categories` 至少選一個技術類型，可選值見 `src/data/project-categories.ts`，新類型先加進該檔）。
 4. **補元件**：痛點卡片 → Area 對應截圖 → Tech Label → CSV → Before / After；最後依〈投影片切法〉在長章節插入 `<hr data-slide>`。
 5. **去識別**：圖片裁切／模糊、CSV 跑腳本、掃描殘留。
 6. **驗證**：`npm run build`、`python -m pytest tests`、桌機與 375px 截圖（無水平溢出）、頁標 01–06 點擊會捲到章節開頭。
