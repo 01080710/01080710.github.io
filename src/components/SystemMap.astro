@@ -3,27 +3,47 @@
 // Redrawn from Peter's internal diagram (canva-export/structure.png) with the brand name removed.
 // `area` highlights one project's part of the map; the rest is dimmed.
 // To add a company later: add its map name to the schema enum and a new branch below.
+import { use_translations, type Lang } from "../i18n/ui";
+
 interface Props {
   map: "hytech";
   area: "infra" | "credit-card" | "drop-order" | "account";
+  lang?: Lang;
 }
-const { map, area } = Astro.props;
+const { map, area, lang = "zh" } = Astro.props;
+const t = use_translations(lang);
 
-const area_label = {
-  "infra":       "營運資料底層：從 CRM、PSP、CPS 擷取資料",
-  "credit-card": "信用卡 PSP ↔ CRM 的退款金額",
-  "drop-order":  "CRM ↔ CPS 的出入金狀態與各渠道",
-  "account":     "CRM 帳戶 ↔ MetaTrader 的帳戶狀態",
-}[area];
+const area_labels = {
+  zh: {
+    "infra":       "營運資料底層：從 CRM、PSP、CPS 擷取資料",
+    "credit-card": "信用卡 PSP ↔ CRM 的退款金額",
+    "drop-order":  "CRM ↔ CPS 的出入金狀態與各渠道",
+    "account":     "CRM 帳戶 ↔ MetaTrader 的帳戶狀態",
+  },
+  en: {
+    "infra":       "Operations data foundation: extracting data from CRM, PSP and CPS",
+    "credit-card": "Refund amounts between the credit card PSP and CRM",
+    "drop-order":  "Deposit and withdrawal statuses between CRM, CPS and each channel",
+    "account":     "Account statuses between CRM accounts and MetaTrader",
+  },
+};
+const area_label = area_labels[lang][area];
+const svg_text = lang === "en"
+  ? { title: "Money flow and system map",
+      desc:  "Clients enter the CRM through the Client Portal; deposits and withdrawals go through CPS to each payment channel; credit card payments go through Bridger to the credit card PSP; CRM accounts map to MetaTrader trading accounts.",
+      serial: "Serial no.", layer: "Operation Data Layer · hourly incremental sync to a unified data view" }
+  : { title: "海科科技的資金流與系統地圖",
+      desc:  "客戶經 Client Portal 進入 CRM；入金與出金經 CPS 連到各支付渠道；信用卡款項經 Bridger 連到信用卡 PSP；CRM 帳戶對應 MetaTrader 交易帳戶。",
+      serial: "流水號", layer: "Operation Data Layer · 每小時增量同步到統一資料視圖" };
 ---
 
 {map === "hytech" && (
   <figure class="system-map" data-focus={area}>
-    <p class="system-map-focus"><span class="system-map-key"></span>本專案負責：{area_label}</p>
+    <p class="system-map-focus"><span class="system-map-key"></span>{t("map.focus")}{area_label}</p>
     <div class="system-map-scroll">
       <svg viewBox="0 0 960 440" role="img" aria-labelledby="sysmap-title sysmap-desc">
-        <title id="sysmap-title">海科科技的資金流與系統地圖</title>
-        <desc id="sysmap-desc">客戶經 Client Portal 進入 CRM；入金與出金經 CPS 連到各支付渠道；信用卡款項經 Bridger 連到信用卡 PSP；CRM 帳戶對應 MetaTrader 交易帳戶。本專案負責：{area_label}。</desc>
+        <title id="sysmap-title">{svg_text.title}</title>
+        <desc id="sysmap-desc">{svg_text.desc} {t("map.focus")}{area_label}</desc>
 
         <!-- Base flow: always visible -->
         <g class="map-base">
@@ -65,7 +85,7 @@ const area_label = {
           <text class="tiny" x="590" y="203">Withdraw</text>
           <rect class="node node-core" x="620" y="150" width="120" height="56" rx="28" />
           <text class="strong" x="680" y="173">CPS</text>
-          <text class="small" x="680" y="192">流水號</text>
+          <text class="small" x="680" y="192">{svg_text.serial}</text>
           <path class="flow" d="M740 178 L790 34" />
           <path class="flow" d="M740 178 L790 92" />
           <path class="flow" d="M740 178 L790 150" />
@@ -107,7 +127,7 @@ const area_label = {
           <path class="flow flow-data" d="M400 330 H300 V388" />
           <path class="flow flow-data" d="M680 206 V388" />
           <rect class="node node-layer" x="40" y="388" width="720" height="42" rx="6" />
-          <text class="strong" x="400" y="414">Operation Data Layer · 每小時增量同步到統一資料視圖</text>
+          <text class="strong" x="400" y="414">{svg_text.layer}</text>
         </g>
       </svg>
     </div>

@@ -3,7 +3,10 @@ title: "Deposit & Withdrawal Drop-Order Monitor"
 subtitle: "出入金掉單監控管線"
 summary: "每小時自動比對 CRM 與 CPS 的出入金狀態，把「客戶付了款卻沒入帳」「出金失敗卻沒退回」的掉單轉成 LarkSheet 案件；至 2026/11/17 共揭露 15,393 筆，取代 Deposit、Withdrawal 各每日 2 次的人工抽查。"
 company: "海科科技有限公司"
-period: "2026/3 – 2026/9（開發）· Deposit 2026/3、Withdrawal 2026/9 上線"
+period: "2026/03~2026/09"
+phases:
+  - { name: "入金", period: "2026/03~2026/03", launch: "2026/03~" }
+  - { name: "出金", period: "2026/04~2026/09", launch: "2026/09~" }
 role: "與營運端對齊掉單判定規則，負責管線設計與實作"
 stack: ["Python", "pandas", "SQLAlchemy / MySQL", "API Reverse Engineering", "pyotp (2FA)", "aiohttp", "cron", "LarkSheet API", "Lark Drive API", "JSON Structured Logging"]
 focus: ["Data Reconciliation", "Data Quality Monitoring"]

@@ -1,0 +1,33 @@
+---
+import type { CollectionEntry } from "astro:content";
+import { phase_name_en, use_translations, type Lang } from "../i18n/ui";
+
+// Development / launch dates for a project.
+// With `phases` (e.g. 入金 / 出金), render a phase x (開發, 上線) table; otherwise two label/date rows.
+interface Props {
+  data: CollectionEntry<"projects">["data"];
+  lang?: Lang;
+}
+
+const { data, lang = "zh" } = Astro.props;
+const t = use_translations(lang);
+const phase_name = (name: string) => (lang === "en" ? phase_name_en[name] ?? name : name);
+---
+
+{data.phases ? (
+  <table class="period-table mono muted">
+    <thead>
+      <tr><td></td><th scope="col">{t("period.built")}</th><th scope="col">{t("period.live")}</th></tr>
+    </thead>
+    <tbody>
+      {data.phases.map((ph) => (
+        <tr><th scope="row">{phase_name(ph.name)}</th><td>{ph.period}</td><td>{ph.launch ?? ""}</td></tr>
+      ))}
+    </tbody>
+  </table>
+) : (
+  <dl class="period-list mono muted">
+    <dt>{t("period.built")}</dt><dd>{data.period}</dd>
+    {data.launch && <><dt>{t("period.live")}</dt><dd>{data.launch}</dd></>}
+  </dl>
+)}

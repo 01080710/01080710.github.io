@@ -1,10 +1,17 @@
 ---
-import { getCollection } from "astro:content";
-import Base from "../../layouts/Base.astro";
-import ProjectCard from "../../components/ProjectCard.astro";
-import { project_categories } from "../../data/project-categories";
+import Base from "../../../layouts/Base.astro";
+import ProjectCard from "../../../components/ProjectCard.astro";
+import { project_categories } from "../../../data/project-categories";
+import { get_projects } from "../../../i18n/projects";
+import { lang_from_param, lang_static_paths, use_translations } from "../../../i18n/ui";
 
-const projects = (await getCollection("projects")).sort((a, b) => a.data.order - b.data.order);
+export const getStaticPaths = lang_static_paths;
+
+const lang = lang_from_param(Astro.params.lang);
+const t    = use_translations(lang);
+
+const projects = await get_projects(lang);
+
 
 // Only categories that at least one project uses get a button, so a filter never shows an empty list.
 const category_counts = project_categories
@@ -12,14 +19,14 @@ const category_counts = project_categories
   .filter((c) => c.count > 0);
 ---
 
-<Base title="Projects" description="Engineering case studies: business problem, architecture, solution and impact.">
+<Base title="Projects" description={t("projects.description")} lang={lang}>
   <section class="page-head">
     <p class="eyebrow mono">Projects</p>
     <h1>Engineering Case Studies</h1>
-    <p class="lead">每個專案都包含業務問題、技術挑戰、個人貢獻、系統架構與實際成果。</p>
+    <p class="lead">{t("projects.lead")}</p>
   </section>
 
-  <div class="category-filter" role="group" aria-label="依技術類型篩選專案">
+  <div class="category-filter" role="group" aria-label={t("projects.filter")}>
     <button type="button" class="category-chip mono" data-category="" aria-pressed="true">
       All <span>{projects.length}</span>
     </button>
@@ -31,7 +38,7 @@ const category_counts = project_categories
   </div>
 
   <div class="project-grid">
-    {projects.map((project, i) => <ProjectCard project={project} index={i} />)}
+    {projects.map((project, i) => <ProjectCard project={project} index={i} lang={lang} />)}
   </div>
 </Base>
 

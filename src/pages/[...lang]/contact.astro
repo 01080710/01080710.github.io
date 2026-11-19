@@ -1,7 +1,14 @@
 ---
-import Base from "../layouts/Base.astro";
-import ProfilePhoto from "../components/ProfilePhoto.astro";
-import { profile } from "../data/profile";
+import Base from "../../layouts/Base.astro";
+import ProfilePhoto from "../../components/ProfilePhoto.astro";
+import { get_profile } from "../../i18n/profile";
+import { lang_from_param, lang_static_paths, use_translations } from "../../i18n/ui";
+
+export const getStaticPaths = lang_static_paths;
+
+const lang    = lang_from_param(Astro.params.lang);
+const profile = get_profile(lang);
+const t       = use_translations(lang);
 
 const { github, linkedin, email } = profile.contact;
 
@@ -13,18 +20,18 @@ const cards = [
 ];
 ---
 
-<Base title="Contact" description={profile.contact_invite}>
+<Base title="Contact" description={profile.contact_invite} lang={lang}>
   <section class="hero hero-split contact-hero">
     <div class="hero-text">
       <p class="eyebrow mono">Contact</p>
-      <h1>Let's talk</h1>
+      <h1>{t("contact.title")}</h1>
       <p class="lead">{profile.contact_invite}</p>
     </div>
-    <ProfilePhoto />
+    <ProfilePhoto lang={lang} />
   </section>
 
   <section class="section">
-    <h2 class="section-title"><span class="mono">01</span> Reach me</h2>
+    <h2 class="section-title"><span class="mono">01</span> {t("contact.reach")}</h2>
     <ul class="contact-cards">
       {cards.map((c) => (
         <li class="contact-card">
@@ -33,7 +40,8 @@ const cards = [
             ? <a class="contact-card-link" href={c.href} target={c.external ? "_blank" : undefined} rel="noopener">{c.text}</a>
             : <span class="todo">TODO</span>}
           {c.label === "Email" && c.text && (
-            <button type="button" class="copy-email mono" data-email={c.text}>複製</button>
+            <button type="button" class="copy-email mono" data-email={c.text}
+                    data-copied={t("contact.copied")} data-failed={t("contact.copy_failed")}>{t("contact.copy")}</button>
           )}
         </li>
       ))}
@@ -41,12 +49,12 @@ const cards = [
   </section>
 
   <section class="section">
-    <h2 class="section-title"><span class="mono">02</span> 可以找我聊</h2>
+    <h2 class="section-title"><span class="mono">02</span> {t("contact.topics")}</h2>
     <div class="principle-list">
-      {profile.talk_topics.map((t) => (
+      {profile.talk_topics.map((topic) => (
         <div class="principle">
-          <h3>{t.title}</h3>
-          <p>{t.body}</p>
+          <h3>{topic.title}</h3>
+          <p>{topic.body}</p>
         </div>
       ))}
     </div>
@@ -55,15 +63,16 @@ const cards = [
 
 <script>
   // Copy-email button: avoids forcing visitors through a mailto handler they may not use.
+  // Feedback text comes from data-* attributes so both languages share this script.
   for (const btn of document.querySelectorAll<HTMLButtonElement>(".copy-email")) {
     btn.addEventListener("click", async () => {
       const original = btn.textContent;
       try {
         await navigator.clipboard.writeText(btn.dataset.email ?? "");
-        btn.textContent = "已複製";
+        btn.textContent = btn.dataset.copied ?? "";
       } catch (err) {
         console.warn("Copy email failed", err);
-        btn.textContent = "請手動複製";
+        btn.textContent = btn.dataset.failed ?? "";
       }
       setTimeout(() => { btn.textContent = original; }, 1800);
     });

@@ -1,0 +1,100 @@
+---
+import Base from "../../layouts/Base.astro";
+import CareerBar from "../../components/CareerBar.astro";
+import { get_profile } from "../../i18n/profile";
+import { lang_from_param, lang_static_paths, use_translations } from "../../i18n/ui";
+import { format_duration } from "../../lib/career-period";
+
+export const getStaticPaths = lang_static_paths;
+
+const lang    = lang_from_param(Astro.params.lang);
+const profile = get_profile(lang);
+const t       = use_translations(lang);
+---
+
+<Base title="About" lang={lang}>
+  <section class="page-head">
+    <p class="eyebrow mono">About</p>
+    <h1>{profile.name}</h1>
+    <p class="lead">{profile.tagline}</p>
+  </section>
+
+  <section class="section">
+    <h2 class="section-title"><span class="mono">01</span> Background</h2>
+    <div class="prose-block">
+      {profile.intro.map((p) => <p>{p}</p>)}
+    </div>
+    <CareerBar experience={profile.experience} label={profile.career_label} lang={lang} />
+    <ol class="timeline">
+      {profile.experience.map((e) => (
+        <li class={e.end ? "" : "is-current"}>
+          <div class="timeline-when">
+            <span class="mono">{e.start} – {e.end || t("about.present")}</span>
+            <span class="muted small">{format_duration(e.start, e.end, lang)}</span>
+          </div>
+          <div class="timeline-body">
+            <div class="timeline-head">
+              <h3>{e.company}</h3>
+              <span class="timeline-role">{e.role}</span>
+              {!e.end && <span class="timeline-current">{t("about.current")}</span>}
+            </div>
+            <p>{e.note}</p>
+            <ul class="timeline-tags">
+              {e.tags.map((tag) => <li>{tag}</li>)}
+            </ul>
+          </div>
+        </li>
+      ))}
+      <li class="is-education">
+        <div class="timeline-when">
+          <span class="mono">{profile.education.period}</span>
+          <span class="muted small mono">EDUCATION</span>
+        </div>
+        <div class="timeline-body">
+          <h3>{profile.education.school}</h3>
+          <p class="muted">{profile.education.note}</p>
+        </div>
+      </li>
+    </ol>
+  </section>
+
+  <section class="section">
+    <h2 class="section-title"><span class="mono">02</span> Core Capabilities</h2>
+    <ul class="capability-grid">
+      {profile.capabilities.map((c) => (
+        <li>
+          <h3 class="mono">{c.name}</h3>
+          <p>{c.desc}</p>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <section class="section">
+    <h2 class="section-title"><span class="mono">03</span> Engineering Philosophy</h2>
+    <div class="principle-list">
+      {profile.philosophy.map((item) => (
+        <div class="principle">
+          <h3>{item.title}</h3>
+          <p>{item.body}</p>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <section class="section">
+    <h2 class="section-title"><span class="mono">04</span> Problem-solving Approach</h2>
+    <ol class="approach">
+      {profile.approach.map((a, i) => (
+        <li>
+          <span class="approach-step mono">{String(i + 1).padStart(2, "0")} {a.step}</span>
+          <div>
+            <h3>{a.title}</h3>
+            <p>{a.body}</p>
+            <p class="muted small">{t("about.example")}{a.example}</p>
+          </div>
+        </li>
+      ))}
+    </ol>
+  </section>
+</Base>

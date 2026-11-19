@@ -1,31 +1,42 @@
 ---
-import { getCollection, render } from "astro:content";
-import Base from "../../layouts/Base.astro";
-import SystemMap from "../../components/SystemMap.astro";
-import { url } from "../../lib/url";
+import { render } from "astro:content";
+import Base from "../../../layouts/Base.astro";
+import SystemMap from "../../../components/SystemMap.astro";
+import ProjectPeriod from "../../../components/ProjectPeriod.astro";
+import { get_projects } from "../../../i18n/projects";
+import { lang_from_param, lang_path, lang_static_paths, use_translations } from "../../../i18n/ui";
 
+// One page per project per language: /projects/<slug>/ and /en/projects/<slug>/.
 export async function getStaticPaths() {
-  const projects = await getCollection("projects");
-  return projects.map((project) => ({ params: { slug: project.id }, props: { project } }));
+  const paths = [];
+  for (const { params } of lang_static_paths()) {
+    for (const project of await get_projects(lang_from_param(params.lang))) {
+      paths.push({ params: { lang: params.lang, slug: project.id }, props: { project } });
+    }
+  }
+  return paths;
 }
 
 const { project } = Astro.props;
+const lang        = lang_from_param(Astro.params.lang);
+const t           = use_translations(lang);
 const p           = project.data;
-const { Content } = await render(project);
+const { Content } = await render(project.body);
 ---
 
-<Base title={p.title} description={p.summary}>
+<Base title={p.title} description={p.summary} lang={lang}>
   <article class="case-study" data-accent={p.accent}>
-    <a class="back mono" href={url("projects/")}>← All projects</a>
+    <a class="back mono" href={lang_path("projects/", lang)}>← All projects</a>
 
     <header class="page-head">
-      <p class="eyebrow mono">{p.company} · {p.period}</p>
+      <p class="eyebrow mono">{p.company}</p>
+      <ProjectPeriod data={p} lang={lang} />
       <h1>{p.title}</h1>
-      <p class="project-subtitle">{p.subtitle}</p>
+      {p.subtitle && <p class="project-subtitle">{p.subtitle}</p>}
       {!p.tldr && <p class="lead">{p.summary}</p>}
     </header>
 
-    <section class="case-zone zone-tech" aria-label="技術選材">
+    <section class="case-zone zone-tech" aria-label={t("case.zone_tech")}>
       <p class="zone-label mono">Tech Choices</p>
       <dl class="case-meta">
         <div><dt class="mono">Role</dt><dd>{p.role}</dd></div>
@@ -37,9 +48,9 @@ const { Content } = await render(project);
     </section>
 
     {(p.system_map || p.tldr || p.metrics.length > 0) && (
-      <section class="case-zone zone-brief" aria-label="30 秒速讀">
+      <section class="case-zone zone-brief" aria-label={t("case.zone_brief")}>
         <p class="zone-label mono">Quick Read</p>
-        {p.system_map && <SystemMap map={p.system_map.map} area={p.system_map.area} />}
+        {p.system_map && <SystemMap map={p.system_map.map} area={p.system_map.area} lang={lang} />}
         {p.tldr && (
           <dl class="tldr">
             <div class="tldr-problem"><dt class="mono">Problem</dt><dd>{p.tldr.problem}</dd></div>
@@ -57,7 +68,7 @@ const { Content } = await render(project);
       </section>
     )}
 
-    <section class="case-zone zone-detail" aria-label="詳細內容">
+    <section class="case-zone zone-detail" aria-label={t("case.zone_detail")}>
       <p class="zone-label mono">Deep Dive</p>
       <div class="prose">
         <Content />
@@ -69,6 +80,14 @@ const { Content } = await render(project);
 <script>
   // Render ```mermaid code blocks. Loaded only on project pages; Astro bundles the npm package.
   import mermaid from "mermaid";
+
+  // Labels for the script-built chapter / slide / CSV controls, picked by <html lang>.
+  const en = document.documentElement.lang === "en";
+  const L = en
+    ? { overview: "Overview", prev_slide: "← Previous", next_slide: "Next →", slide: (n: number, t: string) => `Slide ${n}: ${t}`,
+        prev_ch: "← Previous chapter", next_ch: "Next chapter →", csv_scroll: "scroll in any direction" }
+    : { overview: "概覽", prev_slide: "← 上一張", next_slide: "下一張 →", slide: (n: number, t: string) => `第 ${n} 張：${t}`,
+        prev_ch: "← 上一章", next_ch: "下一章 →", csv_scroll: "可上下左右捲動" };
 
   // Evidence images keep their full resolution; click opens the original so small text stays readable.
   document.querySelectorAll<HTMLImageElement>(".prose p > img, .prose td img").forEach((img) => {
@@ -135,7 +154,7 @@ const { Content } = await render(project);
           node.remove();
         } else {
           // Content before the first marker becomes an "概覽" slide so nothing is dropped.
-          (slide ??= open_slide("概覽")).appendChild(node);
+          (slide ??= open_slide(L.overview)).appendChild(node);
         }
         node = next;
       }
@@ -162,15 +181,15 @@ const { Content } = await render(project);
       prev.type = next.type = "button";
       prev.className = "slide-turn mono";
       next.className = "slide-turn mono";
-      prev.textContent = "← 上一張";
-      next.textContent = "下一張 →";
+      prev.textContent = L.prev_slide;
+      next.textContent = L.next_slide;
       const dots = document.createElement("span");
       dots.className = "slide-dots";
       const dot_els = slides.map((s, i) => {
         const d = document.createElement("button");
         d.type      = "button";
         d.className = "slide-dot";
-        d.setAttribute("aria-label", `第 ${i + 1} 張：${s.title}`);
+        d.setAttribute("aria-label", L.slide(i + 1, s.title));
         d.addEventListener("click", () => show(i));
         dots.appendChild(d);
         return d;
@@ -258,7 +277,7 @@ const { Content } = await render(project);
         b.type      = "button";
         b.className = `chapter-turn ${dir}`;
         b.innerHTML = `<span class="chapter-turn-dir mono"></span><span class="chapter-turn-title"></span>`;
-        b.querySelector(".chapter-turn-dir")!.textContent   = dir === "prev" ? "← 上一章" : "下一章 →";
+        b.querySelector(".chapter-turn-dir")!.textContent   = dir === "prev" ? L.prev_ch : L.next_ch;
         b.querySelector(".chapter-turn-title")!.textContent = `${pad(idx + 1)} ${chapters[idx].title}`;
         b.addEventListener("click", () => go(idx));
         return b;
@@ -394,7 +413,7 @@ const { Content } = await render(project);
       wrap.innerHTML = `<table class="csv-table"><thead><tr>${header.map((h) => `<th>${escapeHtml(h)}</th>`).join("")}</tr></thead><tbody>${body}</tbody></table>`;
       const meta = document.createElement("p");
       meta.className   = "csv-meta mono";
-      meta.textContent = `${rows.length.toLocaleString()} rows · 可上下左右捲動`;
+      meta.textContent = `${rows.length.toLocaleString()} rows · ${L.csv_scroll}`;
       viewer.prepend(meta, wrap);
     } catch (err) {
       console.error("CSV viewer failed", { src, err });

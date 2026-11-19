@@ -1,0 +1,72 @@
+---
+// Proportional career bar: segment width = months at each job; one bracket spans the whole career
+// and shows total tenure (sum of each job's months, so gaps between jobs are not counted).
+// Pure SVG computed at build time; the timeline below it carries the full text, so the bar is a visual summary.
+import { to_months, now_ym, months_between, format_months } from "../lib/career-period";
+import { use_translations, type Lang } from "../i18n/ui";
+
+interface Job { company: string; role: string; start: string; end: string; }
+interface Props { experience: Job[]; label: string; lang?: Lang; }
+
+const { experience, label, lang = "zh" } = Astro.props;
+const t = use_translations(lang);
+
+const W = 600, X0 = 20, X1 = 580;
+const BAR_Y = 44, BAR_H = 28, AXIS_Y = 86;
+const CHAR_W = 13;          // approx. width of one CJK glyph at font-size 13, used to decide if a label fits
+const SEG_GAP = 1.5;        // inset on each side so adjacent segments read as separate jobs
+
+const jobs = [...experience].sort((a, b) => to_months(a.start) - to_months(b.start));
+const first_year = Number(jobs[0].start.slice(0, 4));
+const now_year = Number(now_ym.slice(0, 4));
+const axis_start = first_year * 12, axis_end = (now_year + 1) * 12;
+const x_of = (ym: string) => X0 + ((to_months(ym) - axis_start) / (axis_end - axis_start)) * (X1 - X0);
+
+const short_name = (company: string) => company.replace(/(股份)?有限公司$/, "");
+
+const segments = jobs.map((job) => {
+  const x1 = x_of(job.start) + SEG_GAP, x2 = x_of(job.end || now_ym) - SEG_GAP;
+  const name = short_name(job.company);
+  return { x: x1, w: x2 - x1, name, show_name: name.length * CHAR_W + 12 <= x2 - x1 };
+});
+
+const total_months = jobs.reduce((sum, job) => sum + months_between(job.start, job.end), 0);
+const bracket_x1 = x_of(jobs[0].start) + SEG_GAP;
+const bracket_x2 = x_of(jobs[jobs.length - 1].end || now_ym) - SEG_GAP;
+const bracket_text = `${label} · ${format_months(total_months, lang)}`;
+
+const years = Array.from({ length: now_year - first_year + 1 }, (_, i) => first_year + i);
+const now_x = x_of(now_ym);
+---
+
+<figure class="career-bar">
+  <svg viewBox={`0 0 ${W} 112`} role="img" aria-label={`${t("about.career_aria")}: ${bracket_text}`}>
+    <g class="cb-bracket">
+      <path d={`M${bracket_x1} 38 V31 H${bracket_x2} V38`} />
+      <text x={(bracket_x1 + bracket_x2) / 2} y="23" text-anchor="middle">{bracket_text}</text>
+    </g>
+
+    {segments.map((s) => (
+      <g class="cb-seg">
+        <rect x={s.x} y={BAR_Y} width={s.w} height={BAR_H} rx="3" />
+        {s.show_name && <text x={s.x + s.w / 2} y={BAR_Y + 19} text-anchor="middle">{s.name}</text>}
+      </g>
+    ))}
+    <line class="cb-continue" x1={now_x + 2} y1={BAR_Y + BAR_H / 2} x2={X1} y2={BAR_Y + BAR_H / 2} />
+
+    <line class="cb-axis" x1={X0} y1={AXIS_Y} x2={X1} y2={AXIS_Y} />
+    {years.map((y) => {
+      const x = X0 + ((y * 12 - axis_start) / (axis_end - axis_start)) * (X1 - X0);
+      return (
+        <g class="cb-tick">
+          <line x1={x} y1={AXIS_Y - 4} x2={x} y2={AXIS_Y + 4} />
+          {Math.abs(x - now_x) > 30 && <text x={x} y={AXIS_Y + 20} text-anchor="middle">{y}</text>}
+        </g>
+      );
+    })}
+    <g class="cb-now">
+      <path d={`M${now_x} ${AXIS_Y - 3} l-4 -8 h8 z`} />
+      <text x={now_x} y={AXIS_Y + 20} text-anchor="middle">{t("about.present")}</text>
+    </g>
+  </svg>
+</figure>

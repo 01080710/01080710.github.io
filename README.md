@@ -25,13 +25,16 @@ npm run preview   # 預覽 build 結果
 ```text
 .
 ├─ src/
-│  ├─ content/projects/      # 每個專案一份 .md（唯一的專案內容來源）
+│  ├─ content/projects/      # 每個專案一份 .md（中文內容與日期、數字等共用資料的唯一來源）
+│  ├─ content/projects-en/   # 專案頁英文版（同檔名，只放翻譯文字）
 │  ├─ content.config.ts      # 專案 frontmatter schema；欄位錯誤時 build 失敗
 │  ├─ data/profile.ts        # 個人資訊 SSOT：定位、介紹、能力、經歷、聯絡方式與 Contact 頁文案
+│  ├─ data/profile.en.ts     # 英文版文案（只覆寫文字；日期、標籤、連結沿用 profile.ts）
+│  ├─ i18n/                  # ui.ts（介面字串、語言路徑）、profile.ts（依語言取文案）
 │  ├─ data/project-categories.ts  # Projects 頁篩選用的技術類型清單
 │  ├─ components/            # ProjectCard、ContactLinks（頁尾）、ProfilePhoto（首頁與 Contact 共用照片）
 │  ├─ layouts/Base.astro     # 共用 header / footer
-│  ├─ pages/                 # /、/about/、/projects/、/projects/<slug>/、/contact/
+│  ├─ pages/[...lang]/       # 所有頁面（含 projects/[slug]）；同一份模板輸出中文 / 與英文 /en/
 │  ├─ lib/url.ts             # 加上 GitHub Pages base path
 │  └─ styles/global.css      # 全站唯一 CSS（含深淺色切換、手機版）
 ├─ public/                   # favicon、data/（去識別 CSV）、media/（照片、錄影）
@@ -46,6 +49,8 @@ npm run preview   # 預覽 build 結果
 ### Step 1 — 修改個人資訊
 
 只改 `src/data/profile.ts`。首頁、About、Contact、footer 都從這裡讀取，不要在頁面裡另外寫一份。
+
+英文版（`/en/`）的文字在 `src/data/profile.en.ts`，改中文文案時同步改英文；日期、標籤與聯絡方式只寫在 `profile.ts`。專案頁的英文版寫在 `src/content/projects-en/<同檔名>.md`，只放文字（summary、role、metric_labels、tldr 與內文）；改中文專案頁時同步改英文檔。
 
 聯絡方式留空字串時，網站會顯示 `TODO`：
 

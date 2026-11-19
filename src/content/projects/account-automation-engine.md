@@ -3,7 +3,8 @@ title: "Account Operation Automation Engine"
 subtitle: "營運帳務自動化引擎"
 summary: "把 OP 在多個 CRM 後台之間切換監管、逐筆查帳戶的作業，做成以 LarkSheet 為入口的批量查詢引擎；2026/6 上線至 11/16 成功執行 531 次，累計驗證 381,629 個帳戶。"
 company: "海科科技有限公司"
-period: "2026/5 – 2026/7（開發）· 2026/6 上線"
+period: "2026/05~2026/06"
+launch: "2026/06~"
 role: "從 OP 痛點歸納出共通查詢流程，獨立設計並實作批量查詢引擎"
 stack: ["Python", "Asyncio", "LarkSheet API", "Input Validation", "Data Normalization", "Audit Log"]
 focus: ["Batch Processing", "Process Automation"]

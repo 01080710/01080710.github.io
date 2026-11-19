@@ -45,16 +45,27 @@ export const profile = {
     { step: "Deliver",     title: "交付與量化",   body: "包裝成非技術同仁可直接使用的工具，並用數字回報成效。", example: "LarkSheet 批量查詢引擎；累計節省約 4,770 小時（估計）。" },
   ],
 
+  // Label above the About career bar; total tenure (sum of all jobs) is appended automatically.
+  career_label: "資料領域年資",
+
+  // start / end use YYYY/MM; end = "" means current job (shown as 現在, duration counted to build date).
   experience: [
-    { company: "海科科技有限公司",     role: "資料工程師 (Data Specialist)", period: "2025/12 – 現在",
-      note: "營運資料基礎設施、風控對帳管線、營運帳務自動化。" },
-    { company: "維碩科技股份有限公司", role: "資料工程師",                   period: "2025/2 – 2025/12",
-      note: "設備管理平台 RESTful API（PostgreSQL、ORM、Swagger）；參與智慧監控儀表板。" },
-    { company: "三興資訊股份有限公司", role: "資料分析師",                   period: "2023/4 – 2025/2",
-      note: "車型資料爬蟲、車身碼查詢系統（Django）、出險平台 OCR + NLP 模組、GCP VM/VPN 管理。" },
+    { company: "海科科技有限公司",     role: "資料工程師 (Data Specialist)", start: "2025/12", end: "",
+      note: "營運資料基礎設施、風控對帳管線、營運帳務自動化。",
+      tags: ["Data Pipeline", "Reconciliation", "Automation"] },
+    { company: "維碩科技股份有限公司", role: "資料工程師",                   start: "2025/02", end: "2025/12",
+      note: "設備管理平台 RESTful API；參與智慧監控儀表板。",
+      tags: ["PostgreSQL", "ORM", "Swagger", "RESTful API"] },
+    { company: "三興資訊股份有限公司", role: "資料分析師",                   start: "2023/04", end: "2025/02",
+      note: "車型資料爬蟲、車身碼查詢系統、出險平台 OCR + NLP 模組、GCP VM/VPN 管理。",
+      tags: ["Django", "OCR", "NLP", "GCP", "Crawler"] },
   ],
 
-  education: "銘傳大學 生物科技學系（2017–2021）；國立陽明交通大學 食品安全及風險評估研究所（碩士肄業）",
+  education: {
+    period: "2017 – 2021",
+    school: "銘傳大學 生物科技學系",
+    note:   "國立陽明交通大學 食品安全及風險評估研究所（碩士肄業）",
+  },
 
   // Contact page: one-line invitation (also used as the Home CTA) and topics drawn from the projects above.
   contact_invite: "資料管線、營運自動化或系統整合相關的合作與職缺，都歡迎來信聊聊。",

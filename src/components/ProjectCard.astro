@@ -1,24 +1,28 @@
 ---
-import type { CollectionEntry } from "astro:content";
-import { url } from "../lib/url";
+import ProjectPeriod from "./ProjectPeriod.astro";
+import type { LocalizedProject } from "../i18n/projects";
+import { lang_path, use_translations, type Lang } from "../i18n/ui";
 
 interface Props {
-  project: CollectionEntry<"projects">;
+  project: LocalizedProject;   // already in the page language (see i18n/projects.ts)
   index:   number;
+  lang?:   Lang;
 }
 
-const { project, index } = Astro.props;
+const { project, index, lang = "zh" } = Astro.props;
 const p = project.data;
+const t = use_translations(lang);
 ---
 
 <article class="project-card" data-accent={p.accent} data-categories={JSON.stringify(p.categories)}>
-  <a href={url(`projects/${project.id}/`)} class="project-card-link">
+  <a href={lang_path(`projects/${project.id}/`, lang)} class="project-card-link">
     <div class="project-card-head">
-      <span class="mono muted">{String(index + 1).padStart(2, "0")} · {p.period}</span>
+      <span class="mono muted">{String(index + 1).padStart(2, "0")}</span>
       <span class="mono muted">{p.company}</span>
     </div>
+    <ProjectPeriod data={p} lang={lang} />
     <h3>{p.title}</h3>
-    <p class="project-subtitle">{p.subtitle}</p>
+    {p.subtitle && <p class="project-subtitle">{p.subtitle}</p>}
     <p>{p.summary}</p>
     {p.metrics.length > 0 && (
       <dl class="metrics">
@@ -31,8 +35,8 @@ const p = project.data;
       </dl>
     )}
     <ul class="tags">
-      {p.tags.map((t) => <li>{t}</li>)}
+      {p.tags.map((tag) => <li>{tag}</li>)}
     </ul>
-    <span class="read-more mono">Read case study →</span>
+    <span class="read-more mono">{t("card.read_more")}</span>
   </a>
 </article>

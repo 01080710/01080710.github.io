@@ -1,28 +1,38 @@
 ---
 import "../styles/global.css";
 import ContactLinks from "../components/ContactLinks.astro";
-import { profile } from "../data/profile";
+import { get_profile } from "../i18n/profile";
+import { html_lang, lang_path, use_translations, type Lang } from "../i18n/ui";
 import { url } from "../lib/url";
 
 interface Props {
   title?: string;
   description?: string;
+  lang?: Lang;
+  // Path (without deploy base) of this page in the other language; defaults to the same path with/without "/en".
+  // Pages that exist in one language only (zh case studies) point it at the closest page, e.g. "/en/projects/".
+  alt_path?: string;
 }
 
+const { lang = "zh", alt_path } = Astro.props;
+const profile    = get_profile(lang);
+const t          = use_translations(lang);
 const { title, description = profile.tagline } = Astro.props;
 const page_title = title ? `${title} — ${profile.name}` : `${profile.name} | ${profile.title}`;
-const path       = Astro.url.pathname.replace(import.meta.env.BASE_URL.replace(/\/$/, ""), "") || "/";
+const full_path  = Astro.url.pathname.replace(import.meta.env.BASE_URL.replace(/\/$/, ""), "") || "/";
+const path       = full_path.replace(/^\/en(\/|$)/, "/");   // same path in both languages, e.g. "/about/"
+const other_path = alt_path ?? (lang === "en" ? path : `/en${path}`);
 
 const nav = [
-  { href: url("/"),          label: "Home",     active: path === "/" },
-  { href: url("about/"),     label: "About",    active: path.startsWith("/about") },
-  { href: url("projects/"),  label: "Projects", active: path.startsWith("/projects") },
-  { href: url("contact/"),   label: "Contact",  active: path.startsWith("/contact") },
+  { href: lang_path("/", lang),          label: "Home",     active: path === "/" },
+  { href: lang_path("about/", lang),     label: "About",    active: path.startsWith("/about") },
+  { href: lang_path("projects/", lang),  label: "Projects", active: path.startsWith("/projects") },
+  { href: lang_path("contact/", lang),   label: "Contact",  active: path.startsWith("/contact") },
 ];
 ---
 
 <!doctype html>
-<html lang="zh-Hant">
+<html lang={html_lang[lang]}>
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -50,7 +60,7 @@ const nav = [
   <body>
     <header class="site-header">
       <div class="wrap header-inner">
-        <a class="brand" href={url("/")}>
+        <a class="brand" href={lang_path("/", lang)}>
           <span class="brand-mark">PC</span>
           <span class="brand-name">{profile.name}</span>
         </a>
@@ -60,7 +70,9 @@ const nav = [
               <a href={item.href} aria-current={item.active ? "page" : undefined}>{item.label}</a>
             ))}
           </nav>
-          <button class="theme-toggle" type="button" aria-label="切換深色／淺色模式" title="切換深色／淺色模式">
+          <a class="lang-switch mono" href={url(other_path)} hreflang={html_lang[lang === "en" ? "zh" : "en"]}
+             aria-label={t("lang.switch_label")} title={t("lang.switch_label")}>{t("lang.switch")}</a>
+          <button class="theme-toggle" type="button" aria-label={t("theme.toggle")} title={t("theme.toggle")}>
             <svg class="icon-moon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z" /></svg>
             <svg class="icon-sun" viewBox="0 0 24 24" aria-hidden="true">
               <circle cx="12" cy="12" r="4" />

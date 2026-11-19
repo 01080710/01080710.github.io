@@ -13,6 +13,11 @@ const projects = defineCollection({
     summary:   z.string(),
     company:   z.string(),
     period:    z.string(),
+    // Dates only, e.g. "2026/3~2026/9"; templates add the「開發 :」/「上線 :」labels.
+    // `launch` is optional and open-ended launches end with "~" (e.g. "2026/6~").
+    launch:    z.string().optional(),
+    // Optional per-phase dates (e.g. 入金 / 出金); when set, replaces the period/launch rows with a phase table.
+    phases:    z.array(z.object({ name: z.string(), period: z.string(), launch: z.string().optional() })).min(1).optional(),
     role:      z.string(),
     stack:     z.array(z.string()),
     // 1-2 signature techniques shown above Stack, so projects sharing the same tools still look different.
@@ -36,4 +41,17 @@ const projects = defineCollection({
   }),
 });
 
-export const collections = { projects };
+// English case studies: src/content/projects-en/<same id>.md (draft translation, pending Peter's review).
+// Only text lives here; dates, stack, categories, metric values and the system map come from the zh file,
+// so every number keeps a single source. metric_labels follow the zh `metrics` order.
+const projects_en = defineCollection({
+  loader: glob({ pattern: "**/*.md", base: "./src/content/projects-en" }),
+  schema: z.object({
+    summary:       z.string(),
+    role:          z.string(),
+    metric_labels: z.array(z.string()),
+    tldr:          z.object({ problem: z.string(), approach: z.string(), result: z.string() }).optional(),
+  }),
+});
+
+export const collections = { projects, projects_en };

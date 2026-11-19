@@ -3,7 +3,7 @@ title: "0-to-1 Operation Data Infrastructure"
 subtitle: "營運數據基礎設施從 0 到 1"
 summary: "在沒有 DB 權限、沒有標準化 API 文件的環境下，以 API 逆向工程整合 6 個封閉平台，建立每小時增量同步的資料攝入管線與統一資料視圖。"
 company: "海科科技有限公司"
-period: "2026/2 – 2026/3"
+period: "2026/02~2026/03"
 role: "主導規劃與建置（0-to-1）"
 stack: ["Python", "API Reverse Engineering", "ETL Pipeline", "Automated Scheduling", "Data Normalization"]
 focus: ["Data Integration", "Data Standardization"]

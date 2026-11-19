@@ -1,0 +1,63 @@
+---
+import Base from "../../layouts/Base.astro";
+import ProjectCard from "../../components/ProjectCard.astro";
+import ProfilePhoto from "../../components/ProfilePhoto.astro";
+import { get_profile } from "../../i18n/profile";
+import { get_projects } from "../../i18n/projects";
+import { lang_from_param, lang_path, lang_static_paths, use_translations } from "../../i18n/ui";
+
+export const getStaticPaths = lang_static_paths;
+
+const lang    = lang_from_param(Astro.params.lang);
+const profile = get_profile(lang);
+const t       = use_translations(lang);
+
+const featured = (await get_projects(lang)).filter((p) => p.data.featured);
+---
+
+<Base lang={lang}>
+  <section class="hero hero-split">
+    <div class="hero-text">
+      <p class="eyebrow mono">{profile.name_zh} · {profile.name}</p>
+      <h1>{profile.title}</h1>
+      <p class="lead">{profile.tagline}</p>
+      <div class="hero-actions">
+        <a class="btn primary" href={lang_path("projects/", lang)}>{t("home.view_projects")}</a>
+        <a class="btn" href={lang_path("about/", lang)}>{t("home.about_me")}</a>
+      </div>
+    </div>
+    <ProfilePhoto lang={lang} />
+  </section>
+
+  <section class="section">
+    <h2 class="section-title"><span class="mono">01</span> Introduction</h2>
+    <div class="prose-block">
+      {profile.intro.map((p) => <p>{p}</p>)}
+    </div>
+  </section>
+
+  <section class="section">
+    <h2 class="section-title"><span class="mono">02</span> Selected Projects</h2>
+    <p class="muted section-note">{t("home.projects_note")}</p>
+    <div class="project-grid">
+      {featured.map((project, i) => <ProjectCard project={project} index={i} lang={lang} />)}
+    </div>
+  </section>
+
+  <section class="section">
+    <h2 class="section-title"><span class="mono">03</span> Core Capabilities</h2>
+    <ul class="capability-grid">
+      {profile.capabilities.map((c) => (
+        <li>
+          <h3 class="mono">{c.name}</h3>
+          <p>{c.desc}</p>
+        </li>
+      ))}
+    </ul>
+  </section>
+
+  <section class="section">
+    <h2 class="section-title"><span class="mono">04</span> Contact</h2>
+    <p class="contact-cta">{profile.contact_invite} <a href={lang_path("contact/", lang)}>{t("home.contact_link")}</a></p>
+  </section>
+</Base>

@@ -100,6 +100,7 @@ CSV 為對帳管線的輸出紀錄：每列 `Comparison` = 一次執行時間；
 
 口徑：
 - 期間：Deposit 2026-03-30 起、Withdrawal 2026-09-09 起（Peter 確認上線日，2026-11-18），皆至 2026-11-17（不含 11-18 的不完整日）。CreditCard 第一筆 Comparison Time 為 09-10。
+- 開發期間（frontmatter `phases`，月份顆粒）：入金 2026/03~2026/03、出金 2026/04~2026/09（Peter 確認，2026-11-19）；上線月份同上一行（入金 2026/03~、出金 2026/09~）。整體 `period` 2026/03~2026/09 為兩者合併。
 - 案件：Tx ≠ `-` 的列；心跳列（除 Comparison Time 外全為 `-`）= 該次執行沒有新案件。
 - CreditCard 計數單位：管線去重單位「Merchant Order + Deposit Order Number」，1,027 件；不重複出金單 590 張（Peter 選用前者，2026-11-18）。
 - 執行次數：不重複 Comparison Time。日均分母：Deposit 233 天、Withdrawal 70 天（CreditCard 69 天）。
@@ -176,6 +177,17 @@ CSV 為對帳管線的輸出紀錄：每列 `Comparison` = 一次執行時間；
 - 專案 ↔ 區塊對應經 Peter 確認：Infra = 資料層；Credit Card = 信用卡 PSP ↔ Bridger ↔ CRM；Drop-Order = CRM ↔ CPS ↔ 各渠道；Account Engine = CRM ↔ MetaTrader。
 - 呈現方式：2D SVG + 流動虛線動畫（`prefers-reduced-motion` 時停止），不做 3D（Peter 選擇）。放在每頁 Quick Read，Projects 頁不放（避免未來多家公司時混淆）。
 
+## Project Periods (專案期間)
+
+frontmatter `period`（開發）／`launch`（上線）／`phases`（分線）的值與來源，月份顆粒，格式規則見 CLAUDE.md。2026-11-19 改為「開發／上線」分列並統一為 `YYYY/MM~YYYY/MM`（月份補零由 Peter 直接修改 .md）。
+
+| 專案 | 開發 | 上線 | 來源與佐證 |
+|---|---|---|---|
+| 0-to-1 Operation Data Infrastructure | 2026/02~2026/03 | 無（未填 `launch`） | 建站初版（2026-11-16）既有值，沿用至今。Source Mapping 對應 PDF 專案「營運數據基礎設施架構 0-to-1」，但 PDF 期間未逐字核對（本機無 PDF 工具）。 |
+| Credit Card Anomaly Detection | 2026/01~2026/02 | 2026/02~2026/08 | 建站初版既有值。上線端佐證：CSV 第一筆執行 2026-02-12；Peter 說明 2026/2 底上線、約 2026/8 隨支付平台停用退場（見 Credit Card 段落）。 |
+| Account Operation Automation Engine | 2026/05~2026/06 | 2026/06~ | 開發結束月由初版的 2026/7 改為 2026/06（Peter 直接修改 .md，2026-11-19）。上線端佐證：Record 第一筆 2026-06-09（見 Account Engine 段落）。 |
+| Deposit & Withdrawal Drop-Order Monitor | 整體 2026/03~2026/09；入金 2026/03~2026/03、出金 2026/04~2026/09 | 入金 2026/03~、出金 2026/09~ | 上線日 Deposit 2026-03-30、Withdrawal 2026-09-09（Peter 確認，2026-11-18）；分線開發期間 Peter 確認（2026-11-19）。見 Drop-Order 段落口徑。 |
+
 ## Key Numbers (關鍵數字)
 
 | 數字 | 專案 | 來源 | 狀態 |
@@ -204,3 +216,4 @@ CSV 為對帳管線的輸出紀錄：每列 `Comparison` = 一次執行時間；
 - [ ] 信用卡偵測的告警通知管道
 - [ ] 信用卡偵測 Area 3 比對規則（Prepare／Build Logic／Separate Types／Regularity）
 - [ ] Drop-Order Monitor：名詞說明定義確認、帳號核准者、進線量與溝通次數的前後統計
+- [ ] 專案期間：Infra 開發 2026/02~2026/03 與 Credit Card 開發 2026/01~2026/02 尚未對照 PDF 或經 Peter 逐項確認；Infra 是否有上線期間

@@ -3,7 +3,8 @@ title: "Credit Card Anomaly Detection"
 subtitle: "信用卡異常出金偵測"
 summary: "以 API 逆向工程自動擷取 Payabl 與 CRM 的信用卡出金報表，每小時全量對帳一次，取代每日 5 組輪班的人工 Excel 比對；2026 年 3–7 月穩定執行 3,162 次。"
 company: "海科科技有限公司"
-period: "2026/1 – 2026/2（開發）· 2026/2 – 2026/8 上線"
+period: "2026/01~2026/02"
+launch: "2026/02~2026/08"
 role: "與營運端對齊偵測邏輯，負責管線設計與實作"
 stack: ["Python", "API Reverse Engineering", "crontab", "Lark Bot", "LarkSheet API", "JSON Structured Logging"]
 focus: ["Financial Reconciliation", "Anomaly Detection"]
