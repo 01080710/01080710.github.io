@@ -211,6 +211,16 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .impact-company:has(.impact-card[data-area="drop-order"]:is(:hover, :focus-within))  .area:not([data-area="drop-order"]),
 .impact-company:has(.impact-card[data-area="account"]:is(:hover, :focus-within))     .area:not([data-area="account"]) { opacity: 0.2; }
 .impact-toolbar { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
+.impact-map-company { color: var(--muted); font-weight: 600; }
+/* 2-4 companies: pill tabs. */
+.impact-tabs { flex-wrap: wrap; gap: 8px; }
+.impact-tab {
+  padding: 6px 16px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface);
+  color: var(--muted); font: 600 0.9rem var(--sans); cursor: pointer; transition: color .2s, border-color .2s, background .2s;
+}
+.impact-tab:hover { color: var(--fg); border-color: var(--fg); }
+.impact-tab[aria-selected="true"] { background: var(--fg); border-color: var(--fg); color: var(--bg); }
+.impact-tab:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .impact-toolbar label { font-size: 0.78rem; color: var(--muted); }
 .impact-select {
   appearance: none; padding: 6px 34px 6px 14px; border: 1px solid var(--line); border-radius: 999px;
@@ -866,6 +876,12 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .system-map[data-focus="drop-order"]  .area[data-area="drop-order"] :is(.node, .flow),
 .system-map[data-focus="account"]     .area[data-area="account"] :is(.node, .flow) { stroke: var(--accent); stroke-width: 2.5; }
 /* "本專案負責" sits on the map frame's top-right corner (outside the SVG, so it never covers the channel boxes). */
+/* Case study map header: "full map" link on the left, this project's area on the right. */
+.system-map-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 6px 16px; margin: 0 0 8px; }
+.system-map-bar .system-map-focus { margin: 0; }
+.system-map-full { font-size: 0.78rem; }
+/* A zoomed crop has fewer nodes, so it may shrink further before scrolling sideways. */
+.system-map svg.is-crop { min-width: 480px; max-height: 460px; }
 .system-map-focus { display: flex; justify-content: flex-end; align-items: center; gap: 8px; margin: 0 0 8px; font-size: 0.85rem; font-weight: 600; color: var(--accent); text-align: right; }
 .system-map figcaption { margin-top: 6px; font-size: 0.75rem; color: var(--muted); }
 .system-map-key { width: 18px; height: 0; border-top: 3px solid var(--accent); flex: none; }

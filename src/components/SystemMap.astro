@@ -4,7 +4,8 @@
 // `area` highlights one project's part of the map; the rest is dimmed.
 // To add a company later: add its map name to the schema enum and a new branch below.
 import { use_translations, type Lang } from "../i18n/ui";
-import { map_tags, type MapArea, type MapName } from "../data/system-maps";
+import { map_crops, map_tags, type MapArea, type MapName } from "../data/system-maps";
+import { lang_path } from "../i18n/ui";
 
 type Area = MapArea;
 interface Props {
@@ -19,6 +20,8 @@ interface Props {
 }
 const { map, area, accents = {}, building = [], lang = "zh" } = Astro.props;
 const overview = !area;
+// Case study pages show a zoomed crop of their own area; Home shows the whole map.
+const view_box = area ? map_crops[map][area] : "0 0 960 484";
 const tags = map_tags[lang];
 // Where each area's tag sits in the 960x484 viewBox (overview only).
 const tag_at: Record<Area, { x: number; y: number }> = {
@@ -56,9 +59,14 @@ const svg_text = lang === "en"
 
 {map === "hytech" && (
   <figure class="system-map" data-focus={area ?? "all"}>
-    {area && <p class="system-map-focus"><span class="system-map-key"></span>{t("map.focus")}{area_label}</p>}
+    {area && (
+      <div class="system-map-bar">
+        <a class="system-map-full mono" href={`${lang_path("/", lang)}#impact-map-title`}>{t("map.full")}</a>
+        <p class="system-map-focus"><span class="system-map-key"></span>{t("map.focus")}{area_label}</p>
+      </div>
+    )}
     <div class="system-map-scroll">
-      <svg viewBox="0 0 960 484" role="img" aria-labelledby={`${uid}-title ${uid}-desc`}>
+      <svg viewBox={view_box} class:list={{ "is-crop": !overview }} role="img" aria-labelledby={`${uid}-title ${uid}-desc`}>
         <title id={`${uid}-title`}>{svg_text.title}</title>
         <desc id={`${uid}-desc`}>{svg_text.desc}{area && ` ${t("map.focus")}${area_label}`}</desc>
 

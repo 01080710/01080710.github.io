@@ -23,25 +23,43 @@ const groups = [...new Set(projects.map((p) => p.data.system_map!.map))].map((ma
     building: items.filter((p) => !p.data.home).map((p) => p.data.system_map!.area),
   };
 });
+// Company control scales with the number of companies: 1 = none (name goes in the title),
+// 2-4 = tabs, 5+ = dropdown. Short name drops the legal suffix, e.g. "海科科技有限公司" -> "海科科技".
+const short_name = (name: string) => name.replace(/(股份)?有限公司$|,?\s*(Co\.,?\s*)?Ltd\.?$/i, "").trim();
+const picker = groups.length === 1 ? "none" : groups.length <= 4 ? "tabs" : "select";
 ---
 
 <section class="section impact-map" aria-labelledby="impact-map-title">
-  <h2 class="section-title" id="impact-map-title">{t("home.map_title")}</h2>
+  <h2 class="section-title" id="impact-map-title">
+    {t("home.map_title")}{picker === "none" && <span class="impact-map-company"> · {short_name(groups[0].company)}</span>}
+  </h2>
   <p class="muted section-note">{t("home.map_note")}</p>
 
-  <!-- Company picker: revealed by the script below. Without JS every company's map and cards are shown in turn. -->
-  <div class="impact-toolbar" hidden>
-    <label for="impact-company" class="mono">{t("home.map_company")}</label>
-    <span class="impact-select-wrap">
-      <select id="impact-company" class="impact-select">
-        {groups.map((g) => <option value={g.map}>{g.company}</option>)}
-      </select>
-    </span>
-  </div>
+  <!-- Company picker (2+ companies): revealed by the script below. Without JS every company is shown in turn. -->
+  {picker === "tabs" && (
+    <div class="impact-toolbar impact-tabs" role="tablist" aria-label={t("home.map_company")} hidden>
+      {groups.map((g) => (
+        <button type="button" role="tab" class="impact-tab" id={`impact-tab-${g.map}`}
+                aria-controls={`impact-panel-${g.map}`} data-company={g.map}>{short_name(g.company)}</button>
+      ))}
+    </div>
+  )}
+  {picker === "select" && (
+    <div class="impact-toolbar" hidden>
+      <label for="impact-company" class="mono">{t("home.map_company")}</label>
+      <span class="impact-select-wrap">
+        <select id="impact-company" class="impact-select">
+          {groups.map((g) => <option value={g.map}>{short_name(g.company)}</option>)}
+        </select>
+      </span>
+    </div>
+  )}
 
   {groups.map((g) => (
-    <div class="impact-company" data-company={g.map}>
-      <p class="impact-company-name">{g.company}</p>
+    <div class="impact-company" data-company={g.map} id={`impact-panel-${g.map}`}
+         role={picker === "tabs" ? "tabpanel" : undefined}
+         aria-labelledby={picker === "tabs" ? `impact-tab-${g.map}` : undefined}>
+      {picker !== "none" && <p class="impact-company-name">{g.company}</p>}
       <!-- Open by default (no-JS readers get the map). The script below closes it on narrow screens, where the
            wide map would only scroll sideways; the cards carry the same content. -->
       <details class="impact-map-details" open>
@@ -78,22 +96,45 @@ const groups = [...new Set(projects.map((p) => p.data.system_map!.map))].map((ma
 </section>
 
 <script>
-  // Company picker: show one company's map and cards at a time. The choice is remembered for this visitor only.
-  const KEY = "impact-company";
-  const select = document.querySelector<HTMLSelectElement>("#impact-company");
+  // Company picker (tabs for 2-4 companies, dropdown for 5+): one company's map and cards at a time.
+  // The choice is remembered for this visitor only. With a single company there is no picker at all.
+  const KEY    = "impact-company";
   const panels = [...document.querySelectorAll<HTMLElement>(".impact-company")];
-  if (select && panels.length) {
+  const tabs   = [...document.querySelectorAll<HTMLButtonElement>(".impact-tab")];
+  const select = document.querySelector<HTMLSelectElement>("#impact-company");
+  const toolbar = document.querySelector<HTMLElement>(".impact-toolbar");
+  if (toolbar && panels.length > 1) {
     const show = (map: string) => {
       for (const p of panels) p.hidden = p.dataset.company !== map;
+      for (const tab of tabs) {
+        const on = tab.dataset.company === map;
+        tab.setAttribute("aria-selected", String(on));
+        tab.tabIndex = on ? 0 : -1;
+      }
+      if (select) select.value = map;
       try { localStorage.setItem(KEY, map); } catch { /* storage blocked: the choice just isn't remembered */ }
     };
-    let saved: string | null = null;
-    try { saved = localStorage.getItem(KEY); } catch { /* ignore */ }
-    if (saved && panels.some((p) => p.dataset.company === saved)) select.value = saved;
-    select.closest<HTMLElement>(".impact-toolbar")!.hidden = false;
+    let start = panels[0].dataset.company!;
+    try {
+      const saved = localStorage.getItem(KEY);
+      if (saved && panels.some((p) => p.dataset.company === saved)) start = saved;
+    } catch { /* ignore */ }
+    toolbar.hidden = false;
     document.documentElement.classList.add("has-impact-picker");
-    show(select.value);
-    select.addEventListener("change", () => show(select.value));
+    show(start);
+    select?.addEventListener("change", () => show(select.value));
+    tabs.forEach((tab, i) => {
+      tab.addEventListener("click", () => show(tab.dataset.company!));
+      // Arrow keys move between tabs (WAI-ARIA tabs pattern).
+      tab.addEventListener("keydown", (e) => {
+        const step = e.key === "ArrowRight" ? 1 : e.key === "ArrowLeft" ? -1 : 0;
+        if (!step) return;
+        e.preventDefault();
+        const next = tabs[(i + step + tabs.length) % tabs.length];
+        next.focus();
+        show(next.dataset.company!);
+      });
+    });
   }
 
   // Narrow screens: start with the system map collapsed; wide screens: always open (the summary is hidden by CSS).

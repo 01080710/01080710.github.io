@@ -9,6 +9,17 @@ export const map_area_order: Record<MapName, MapArea[]> = {
   hytech: ["credit-card", "ticket", "account", "drop-order"],
 };
 
+// Case study pages zoom into their own area instead of repeating the full map shown on Home.
+// Each value is an SVG viewBox ("x y width height") inside the full 960x484 drawing in SystemMap.astro.
+export const map_crops: Record<MapName, Record<MapArea, string>> = {
+  hytech: {
+    "credit-card": "24 112 540 128",   // Credit Card PSP <-> Bridger <-> CRM
+    "drop-order":  "388 0 572 360",    // Client Portal / CRM <-> CPS -> channels
+    "account":     "380 138 200 226",  // CRM -> MetaTrader -> CRM trading history
+    "ticket":      "24 238 600 244",   // Freshservice -> Ticket Pipeline, OP groups, other teams
+  },
+};
+
 // Short project tags drawn on the overview map (Home), next to each area. Keep them short: they sit inside the SVG.
 export const map_tags: Record<"zh" | "en", Record<MapArea, string>> = {
   zh: { "credit-card": "信用卡異常偵測", "ticket": "工單資料管線", "account": "帳務自動化引擎", "drop-order": "掉單監控" },
