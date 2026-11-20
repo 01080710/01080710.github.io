@@ -23,14 +23,16 @@ if (experience_text.length !== profile.experience.length) {
 
 // Same order as profile.life.photos; only text is translated, src comes from profile.ts.
 const life_photo_text = [
-  { place: "Maldives",           caption: "Swimming with nurse sharks",
+  { place: "Maldives - Maafushi", caption: "Swimming with nurse sharks",
     alt:   "Aerial shot: me floating in a red life vest on turquoise water, surrounded by a dozen nurse sharks" },
-  { place: "Pattaya, Thailand",  caption: "Tandem skydive",
+  { place: "Thailand - Pattaya",  caption: "Tandem skydive",
     alt:   "Me on a tandem skydive with an instructor, just out of a red-and-white plane against a blue sky" },
-  { place: "Xiaoliuqiu, Taiwan", caption: "Diving with a sea turtle",
+  { place: "Taiwan - Xiaoliuqiu", caption: "Diving with a sea turtle",
     alt:   "Me and a dive buddy beside a coral reef while a sea turtle feeds in front of us" },
-  { place: "Bali, Indonesia",    caption: "Manta ray",
+  { place: "Indonesia - Bali",    caption: "Manta ray",
     alt:   "A manta ray gliding through blue water with its mouth open" },
+  { place: "Fiji - Kuata Island", caption: "Blacktip and whitetip reef sharks",
+    alt:   "Video: reef sharks cruising over the reef in blue water" },
 ];
 
 if (life_photo_text.length !== profile.life.photos.length) {
@@ -90,17 +92,21 @@ export const profile_en: typeof profile = {
   },
 
   life: {
-    intro:     "Off the clock, I head for the sky and the sea: I've skydived in Pattaya and met sea life in the waters of Xiaoliuqiu, Bali and the Maldives.",
+    intro:     "At work, I enjoy wrestling with technology and solving hard problems; off the clock, I head for the sky and dive deep into the sea. I've taken on a skydive in Pattaya and explored the underwater world of Xiaoliuqiu, Bali, the Maldives and Fiji, meeting sea life up close. I don't settle for routine: I love adventure and trying new things, and I always look forward to finding new scenery, and a different side of myself, in new places.",
     home_hook: "Off the clock:",
     photos:    profile.life.photos.map((photo, i) => ({ ...photo, ...life_photo_text[i] })),
   },
 
   contact_invite: "Whether it's a collaboration or a role in data pipelines, operations automation or system integration, I'd be glad to hear from you.",
+  contact_facts: {
+    seeking: "Open to new opportunities, with a strong interest in Forward Deployed Engineer (FDE), Data Engineer and AI Engineer roles, and other engineering roles that combine hands-on building with problem-solving.",
+    reply:   "Usually within a day",
+    hours:   "Any time",
+  },
   talk_topics: [
     { title: "Data pipelines from 0 to 1",               body: "From a data-source inventory and sync schedules to a unified data view: building a usable foundation first when resources are limited." },
     { title: "Turning manual work into automated services", body: "How manual reconciliation and checks become scheduled jobs and one-click tools, with the hours saved measured in numbers." },
     { title: "Integrating heterogeneous platforms",       body: "Aligning fields and metrics across many systems with inconsistent formats and missing documentation, so the data can be viewed together." },
     { title: "Tools non-technical colleagues can use",    body: "Using familiar interfaces such as spreadsheets as the entry point, with input validation and records, so operations can run the tools themselves." },
-    { title: "Skydiving, diving and travel",             body: "I've skydived in Pattaya and been in the water at Xiaoliuqiu, Bali and the Maldives; happy to swap travel or dive-spot tips." },
   ],
 };

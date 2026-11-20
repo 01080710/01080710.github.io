@@ -21,6 +21,7 @@
   --zone-brief-alpha:  1;
   --zone-detail-alpha: 0.4;
   --radius:    6px;
+  --shadow:    0 1px 2px rgb(20 24 33 / 0.06), 0 12px 32px rgb(20 24 33 / 0.10);
   --max:       980px;
   --sans: "Inter", "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", system-ui, sans-serif;
   --mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
@@ -34,6 +35,7 @@ html[lang="en"] { --sans: "Inter", system-ui, "Segoe UI", Roboto, "Helvetica Neu
 /* Dark theme: data-theme is always set by the inline script in Base.astro
    (saved choice from the header toggle, otherwise the OS preference). */
 :root[data-theme="dark"] {
+  --shadow:    0 1px 2px rgb(0 0 0 / 0.4), 0 16px 40px rgb(0 0 0 / 0.45);
   --bg:        #0f1115;
   --surface:   #161920;
   --fg:        #e6e8ec;
@@ -90,11 +92,12 @@ img, svg { max-width: 100%; }
 .header-inner { display: flex; align-items: center; justify-content: space-between; gap: 16px; height: 56px; }
 .brand { display: flex; align-items: center; gap: 10px; color: var(--fg); font-weight: 600; }
 .brand:hover { text-decoration: none; }
-.brand-mark {
-  font-family: var(--mono); font-size: 0.75rem; font-weight: 700;
-  background: var(--accent); color: var(--bg);
-  padding: 2px 6px; border-radius: 4px;
-}
+/* Same "data-flow P" as public/favicon.svg (pipeline nodes + delivered node), drawn with theme tokens. */
+.brand-mark { display: block; width: 26px; height: 26px; flex: none; }
+.brand-mark rect { fill: var(--accent); }
+.brand-mark path { fill: none; stroke: var(--bg); stroke-width: 3.2; stroke-linecap: round; stroke-linejoin: round; }
+.brand-mark circle { fill: var(--bg); }
+.brand-mark .brand-mark-hot { fill: var(--accent-2); }
 .header-right { display: flex; align-items: center; gap: 20px; }
 nav { display: flex; gap: 20px; }
 .theme-toggle {
@@ -171,6 +174,7 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .life-gallery figure { margin: 0; }
 .life-gallery img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius); border: 1px solid var(--line); }
 .life-gallery .is-wide img { aspect-ratio: 16 / 9; }
+.life-gallery video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius); border: 1px solid var(--line); background: var(--line); }
 .life-gallery figcaption { margin-top: 8px; font-size: 0.85rem; color: var(--muted); }
 .life-gallery figcaption .mono { color: var(--accent-2); margin-right: 6px; }
 .life-hook { color: var(--muted); }
@@ -255,22 +259,66 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .contact-links.compact li:has(a) .contact-label { display: none; }
 
 /* Contact page */
-.contact-hero { padding-top: 56px; }
-.contact-hero .hero-photo { width: 240px; }
-.contact-cards { list-style: none; padding: 0; margin: 0; display: grid; gap: 16px; grid-template-columns: repeat(3, minmax(0, 1fr)); }
-.contact-card {
-  display: flex; flex-direction: column; align-items: flex-start; gap: 6px;
-  padding: 20px; border: 1px solid var(--line); border-top: 3px solid var(--accent);
-  border-radius: var(--radius); background: var(--surface);
+/* Contact: header line, then the business-card key visual. No photo (Home has it). */
+.contact-head { padding: 64px 0 8px; text-align: center; }
+.contact-head .lead { max-width: 600px; margin-left: auto; margin-right: auto; }
+.contact-stage {
+  position: relative; display: flex; align-items: center; margin: 24px 0 8px; padding: 56px 0;
+  background-image: radial-gradient(var(--line) 1.2px, transparent 1.6px); background-size: 22px 22px;
+  -webkit-mask-image: radial-gradient(ellipse at center, #000 55%, transparent 85%);
+          mask-image: radial-gradient(ellipse at center, #000 55%, transparent 85%);
 }
-.contact-card-label { font-size: 0.75rem; color: var(--accent-2); text-transform: uppercase; letter-spacing: 0.06em; }
-.contact-card-link { font-weight: 600; overflow-wrap: anywhere; }
+.stage-pipe { flex: 1; align-self: stretch; min-width: 0; height: auto; overflow: visible; }
+.stage-pipe path {
+  fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke;
+  stroke-dasharray: 6 5; animation: reach-flow 1.8s linear infinite;
+}
+@keyframes reach-flow { to { stroke-dashoffset: -22; } }
+@media (prefers-reduced-motion: reduce) { .stage-pipe path { animation: none; } }
+.contact-card {
+  position: relative; flex: 0 1 560px; min-width: 0; padding: 32px 36px 28px;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow);
+}
+.stage-node {
+  position: absolute; top: 50%; width: 14px; height: 14px; margin-top: -7px; border-radius: 50%;
+  background: var(--accent-2); box-shadow: 0 0 0 4px var(--bg);
+}
+.stage-node.is-left  { left: -7px; }
+.stage-node.is-right { right: -7px; }
+.card-id { display: flex; align-items: center; gap: 16px; padding-bottom: 22px; border-bottom: 1px solid var(--line); }
+.card-mark { width: 48px; height: 48px; }
+.card-name { margin: 0; font-size: 1.35rem; font-weight: 700; line-height: 1.2; }
+.card-title { margin: 4px 0 0; font-size: 0.8rem; color: var(--muted); letter-spacing: 0.02em; }
+.card-email { display: flex; align-items: center; flex-wrap: wrap; gap: 10px 12px; padding: 22px 0 14px; }
+.card-email .social-icon { width: 24px; height: 24px; color: var(--accent-2); }
+.card-email-link { font-size: 1.25rem; font-weight: 600; overflow-wrap: anywhere; }
 .copy-email {
-  margin-top: 4px; padding: 3px 12px; border: 1px solid var(--line); border-radius: 999px;
-  background: var(--bg); color: var(--muted); font-size: 0.75rem; cursor: pointer;
+  margin-left: auto; padding: 5px 14px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--bg); color: var(--muted); font-size: 0.78rem; cursor: pointer;
 }
 .copy-email:hover { color: var(--fg); border-color: var(--fg); }
 .copy-email:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.social-icon { display: block; width: 18px; height: 18px; flex: none; }
+.card-links { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0 0 22px; border-bottom: 1px solid var(--line); }
+.card-link {
+  display: inline-flex; align-items: center; gap: 7px; padding: 5px 13px 5px 10px;
+  border: 1px solid var(--line); border-radius: 999px; color: var(--fg); font-size: 0.88rem; font-weight: 600;
+  transition: border-color .2s, color .2s;
+}
+.card-link .social-icon { color: var(--accent); }
+.card-link:hover { text-decoration: none; border-color: var(--accent); color: var(--accent); }
+.card-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* "Looking for" is a sentence, so it takes the full row; reply and best time sit side by side below it. */
+.card-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 0; margin: 0; padding-top: 18px; }
+.card-facts > div:first-child { grid-column: 1 / -1; }
+.card-facts > div:nth-child(3) { padding-left: 16px; border-left: 1px solid var(--line); }
+.card-facts dt { font-size: 0.72rem; color: var(--accent-2); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 4px; }
+.card-facts dd { margin: 0; font-size: 0.9rem; line-height: 1.5; }
+/* Talk topics: a compact list, not cards (the same points are argued in About and the projects). */
+.talk-list { list-style: none; padding: 0; margin: 0; border-top: 1px solid var(--line); }
+.talk-list li { display: grid; grid-template-columns: 240px minmax(0, 1fr); gap: 16px; padding: 14px 0; border-bottom: 1px solid var(--line); }
+.talk-list h3 { font-size: 0.98rem; margin: 0; }
+.talk-list p { margin: 0; color: var(--muted); font-size: 0.92rem; }
 .contact-cta { font-size: 1.05rem; }
 
 /* ---------- About ---------- */
@@ -800,8 +848,13 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
   .hero { padding: 56px 0 40px; }
   .hero-split { grid-template-columns: 1fr; gap: 40px; }
   .hero-photo { width: 200px; justify-self: center; grid-row: 1; margin-right: 0; }
-  .contact-hero .hero-photo { width: 180px; }
-  .contact-cards { grid-template-columns: 1fr; }
+  .contact-head { padding: 48px 0 0; }
+  .contact-stage { padding: 24px 0; -webkit-mask-image: none; mask-image: none; background-image: none; }
+  .stage-pipe, .stage-node { display: none; }
+  .contact-card { flex-basis: 100%; padding: 24px 20px; }
+  .copy-email { margin-left: 0; }
+  .card-facts { gap: 12px 0; }
+  .talk-list li { grid-template-columns: 1fr; gap: 4px; }
   .capability-grid, .principle-list { grid-template-columns: 1fr; }
   .pain-grid, .tech-labels, .pain-shots { grid-template-columns: 1fr; }
   .pain-timebar { flex-direction: column; }

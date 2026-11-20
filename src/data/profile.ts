@@ -9,7 +9,7 @@ export const profile = {
   tagline:   "從使用者的痛點出發，把分散在各系統的資料串起來，做成團隊每天都用得上、也能放心交接的自動化服務。",
   // Distilled from Peter's self-introduction draft: passion & cross-domain start -> user-first delivery -> team & future.
   intro: [
-    "您好，我是豈愷，一名對資料充滿熱忱的資料工程師，曾負責搭建營運基礎資料設施，，並在其上建立風控對帳與營運帳務自動化。",
+    "您好，我是豈愷，一名對資料充滿熱忱的資料工程師，曾負責搭建營運基礎資料設施，並在其上建立風控對帳與營運帳務自動化。",
     "習慣先站在使用者的角度確認需求是否完整，再決定投入多少架構；交付的不是一次性腳本，而是有驗證、有排程、有紀錄的服務，讓非技術同仁也能自己操作、安心使用。",
     "始終相信走得遠靠的是和團隊一起成長，所以樂於分享所學，也願意與決策層站在同一陣線，理性提出改善建議，接下來希望在資料工程與 AI 領域持續深耕，打造更智慧、更友善的系統(每個專案頁都附有實際操作錄影與說明，歡迎參考)",
   ],
@@ -71,28 +71,36 @@ export const profile = {
   // Originals live in canva-export/life/ (not committed); published copies are resized, EXIF-stripped,
   // and the companion's face in the turtle photo is blurred (no consent to publish).
   life: {
-    intro:  "工作之外，我喜歡往天空和海裡跑：在芭達雅跳過傘，也在小琉球、峇里島與馬爾地夫的海裡和海洋生物相遇。",
+    intro:  "工作上喜歡與技術交手、解決各種難題；而工作外則喜歡往天空飛、向大海深潛，曾在芭達雅挑戰高空跳傘，也曾在小琉球、峇里島、馬爾地夫與斐濟探索海底世界，與海洋生物近距離相遇。不甘於一成不變，喜歡冒險、熱愛嘗試新事物，總期待在不同的地方，遇見不一樣的風景與自己。",
     home_hook: "工作之外的我：",
     photos: [
-      { src: "media/life/nurse-sharks-maldives.jpg", place: "馬爾地夫", caption: "與護士鯊同游",
+      { src: "media/life/nurse-sharks-maldives.jpg", place: "馬爾地夫 - 馬富士", caption: "與護士鯊同游",
         alt:  "空拍畫面：我穿著紅色救生衣漂浮在藍綠色海面，周圍環繞十多隻護士鯊" },
-      { src: "media/life/skydive-pattaya.jpg",       place: "泰國 芭達雅", caption: "高空跳傘",
+      { src: "media/life/skydive-pattaya.jpg",       place: "泰國 - 芭達雅", caption: "高空跳傘",
         alt:  "我與教練雙人跳傘，剛離開紅白色小飛機，背景是藍天" },
-      { src: "media/life/turtle-xiaoliuqiu.jpg",     place: "小琉球",     caption: "潛水遇見海龜",
+      { src: "media/life/turtle-xiaoliuqiu.jpg",     place: "台灣 - 小琉球",     caption: "潛水遇見海龜",
         alt:  "我與潛伴在珊瑚礁旁潛水，一隻海龜在前方覓食" },
-      { src: "media/life/manta-bali.jpg",            place: "印尼 峇里島", caption: "鬼蝠魟",
+      { src: "media/life/manta-bali.jpg",            place: "印尼 - 峇里島", caption: "鬼蝠魟",
         alt:  "一隻鬼蝠魟張開嘴在藍色海水中游過" },
+      { src: "media/life/reef-sharks-fiji.jpg", video: "media/life/reef-sharks-fiji.mp4",
+        place: "斐濟 - 庫塔島", caption: "黑鰭礁鯊與白鰭礁鯊",
+        alt:  "影片：藍色海水中，礁鯊在珊瑚礁上方巡游" },
     ],
   },
 
   // Contact page: one-line invitation (also used as the Home CTA) and topics drawn from the projects above.
   contact_invite: "資料管線、營運自動化或系統整合相關的合作與職缺，都歡迎來信聊聊。",
+  // Contact page facts, as Peter gave them (2026/11). Labels live in ui.ts.
+  contact_facts: {
+    seeking: "持續尋找適合的職涯機會，對 FDE、Data Engineer、AI Engineer，以及其他結合技術實作與問題解決的工程職位皆抱持高度興趣。",
+    reply:   "通常一天內回信",
+    hours:   "隨時都可以",
+  },
   talk_topics: [
     { title: "資料管線從 0 到 1",       body: "從資料源盤點、同步排程到統一資料視圖，怎麼在資源有限時先建出可用的底層。" },
     { title: "把人工流程變成自動化服務", body: "人工對帳、人工查核如何改成排程與一鍵工具，並用數字量化節省的工時。" },
     { title: "異質平台的資料整合",       body: "多個系統、格式不一、文件不齊時，如何對齊欄位與指標，讓資料能放在一起看。" },
     { title: "非技術同仁也能用的工具",   body: "以試算表等熟悉的介面當入口，加上輸入驗證與紀錄，讓營運端自己操作。" },
-    { title: "跳傘、潛水與旅行",         body: "去過芭達雅跳傘，也在小琉球、峇里島、馬爾地夫下過水；交換旅行或潛點口袋名單也很歡迎。" },
   ],
 
   contact: {

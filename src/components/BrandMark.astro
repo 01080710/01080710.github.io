@@ -1,0 +1,11 @@
+---
+// The "data-flow P" mark (same drawing as public/favicon.svg), coloured by theme tokens in global.css.
+interface Props { class?: string }
+const { class: extra = "" } = Astro.props;
+---
+<svg class={`brand-mark ${extra}`.trim()} viewBox="0 0 32 32" aria-hidden="true">
+  <rect width="32" height="32" rx="7" />
+  <path d="M10 25V7.5h8a5.5 5.5 0 0 1 0 11h-2.5" />
+  <circle cx="10" cy="25" r="3" /><circle cx="10" cy="7.5" r="3" />
+  <circle class="brand-mark-hot" cx="14.5" cy="18.5" r="3.4" />
+</svg>

@@ -1,6 +1,7 @@
 ---
 import Base from "../../layouts/Base.astro";
-import ProfilePhoto from "../../components/ProfilePhoto.astro";
+import BrandMark from "../../components/BrandMark.astro";
+import SocialIcon from "../../components/SocialIcon.astro";
 import { get_profile } from "../../i18n/profile";
 import { lang_from_param, lang_static_paths, use_translations } from "../../i18n/ui";
 
@@ -13,51 +14,71 @@ const t       = use_translations(lang);
 const { github, linkedin, email } = profile.contact;
 
 // Empty values in profile.ts render as TODO instead of a broken link.
-const cards = [
-  { label: "GitHub",   href: github,                          text: github.replace(/^https?:\/\//, ""),                 external: true },
-  { label: "LinkedIn", href: linkedin,                        text: linkedin.replace(/^https?:\/\/(www\.)?/, ""),       external: true },
-  { label: "Email",    href: email ? `mailto:${email}` : "",  text: email,                                              external: false },
-];
+const sources = [
+  { label: "GitHub",   href: github,   icon: "github" },
+  { label: "LinkedIn", href: linkedin, icon: "linkedin" },
+] as const;
 ---
 
 <Base title="Contact" description={profile.contact_invite} lang={lang}>
-  <section class="hero hero-split contact-hero">
-    <div class="hero-text">
-      <p class="eyebrow mono">Contact</p>
-      <h1>{t("contact.title")}</h1>
-      <p class="lead">{profile.contact_invite}</p>
-    </div>
-    <ProfilePhoto lang={lang} />
+  <section class="contact-head">
+    <p class="eyebrow mono">Contact</p>
+    <h1>{t("contact.title")}</h1>
+    <p class="lead">{profile.contact_invite}</p>
+  </section>
+
+  <!-- Key visual: one business card; pipelines from both sides flow into it (the favicon's data-flow P, scaled up). -->
+  <section class="contact-stage">
+    <svg class="stage-pipe is-left" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M0 22 C60 22 40 50 100 50" /><path d="M0 78 C60 78 40 50 100 50" />
+    </svg>
+    <article class="contact-card">
+      <span class="stage-node is-left" aria-hidden="true"></span>
+      <span class="stage-node is-right" aria-hidden="true"></span>
+      <header class="card-id">
+        <BrandMark class="card-mark" />
+        <div>
+          <p class="card-name">{profile.name}</p>
+          <p class="card-title mono">{profile.title}</p>
+        </div>
+      </header>
+      <div class="card-email">
+        <SocialIcon name="email" />
+        {email
+          ? <a class="card-email-link" href={`mailto:${email}`}>{email}</a>
+          : <span class="todo">TODO</span>}
+        {email && (
+          <button type="button" class="copy-email mono" data-email={email}
+                  data-copied={t("contact.copied")} data-failed={t("contact.copy_failed")}>{t("contact.copy")}</button>
+        )}
+      </div>
+      <ul class="card-links">
+        {sources.map((c) => (
+          <li>
+            {c.href
+              ? <a class="card-link" href={c.href} target="_blank" rel="noopener"><SocialIcon name={c.icon} />{c.label}</a>
+              : <span class="todo">TODO</span>}
+          </li>
+        ))}
+      </ul>
+      <dl class="card-facts">
+        <div><dt class="mono">{t("contact.seeking")}</dt><dd>{profile.contact_facts.seeking}</dd></div>
+        <div><dt class="mono">{t("contact.reply")}</dt><dd>{profile.contact_facts.reply}</dd></div>
+        <div><dt class="mono">{t("contact.hours")}</dt><dd>{profile.contact_facts.hours}</dd></div>
+      </dl>
+    </article>
+    <svg class="stage-pipe is-right" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
+      <path d="M100 22 C40 22 60 50 0 50" /><path d="M100 78 C40 78 60 50 0 50" />
+    </svg>
   </section>
 
   <section class="section">
-    <h2 class="section-title"><span class="mono">01</span> {t("contact.reach")}</h2>
-    <ul class="contact-cards">
-      {cards.map((c) => (
-        <li class="contact-card">
-          <span class="contact-card-label mono">{c.label}</span>
-          {c.href
-            ? <a class="contact-card-link" href={c.href} target={c.external ? "_blank" : undefined} rel="noopener">{c.text}</a>
-            : <span class="todo">TODO</span>}
-          {c.label === "Email" && c.text && (
-            <button type="button" class="copy-email mono" data-email={c.text}
-                    data-copied={t("contact.copied")} data-failed={t("contact.copy_failed")}>{t("contact.copy")}</button>
-          )}
-        </li>
+    <h2 class="section-title">{t("contact.topics")}</h2>
+    <ul class="talk-list">
+      {profile.talk_topics.map((topic) => (
+        <li><h3>{topic.title}</h3><p>{topic.body}</p></li>
       ))}
     </ul>
-  </section>
-
-  <section class="section">
-    <h2 class="section-title"><span class="mono">02</span> {t("contact.topics")}</h2>
-    <div class="principle-list">
-      {profile.talk_topics.map((topic) => (
-        <div class="principle">
-          <h3>{topic.title}</h3>
-          <p>{topic.body}</p>
-        </div>
-      ))}
-    </div>
   </section>
 </Base>
 

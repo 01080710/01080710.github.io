@@ -109,10 +109,16 @@ const t       = use_translations(lang);
     <p class="prose-block">{profile.life.intro}</p>
     <ul class="life-gallery">
       {profile.life.photos.map((photo, i) => (
-        <li class={i === 0 ? "is-wide" : ""}>
+        <li class={i === 0 || photo.video ? "is-wide" : ""}>
           <figure>
-            <img src={url(photo.src)} alt={photo.alt} loading="lazy" decoding="async"
-                 width={i === 0 ? 1600 : 1000} height={i === 0 ? 900 : 750} />
+            {photo.video ? (
+              /* Controls by default so it works without JS; the script below swaps them for muted autoplay. */
+              <video class="life-video" src={url(photo.video)} poster={url(photo.src)} aria-label={photo.alt}
+                     controls muted loop playsinline preload="none" width="1280" height="720"></video>
+            ) : (
+              <img src={url(photo.src)} alt={photo.alt} loading="lazy" decoding="async"
+                   width={i === 0 ? 1600 : 1000} height={i === 0 ? 900 : 750} />
+            )}
             <figcaption><span class="mono">{photo.place}</span> {photo.caption}</figcaption>
           </figure>
         </li>
@@ -120,6 +126,21 @@ const t       = use_translations(lang);
     </ul>
   </section>
 </Base>
+
+<script>
+  // Life video: muted loop that plays only while on screen; visitors who prefer reduced motion keep the controls.
+  const life_videos = document.querySelectorAll<HTMLVideoElement>(".life-video");
+  if (life_videos.length && !matchMedia("(prefers-reduced-motion: reduce)").matches && "IntersectionObserver" in window) {
+    const io = new IntersectionObserver((entries) => {
+      for (const e of entries) {
+        const v = e.target as HTMLVideoElement;
+        if (e.isIntersecting) v.play().catch(() => { v.controls = true; });
+        else v.pause();
+      }
+    }, { threshold: 0.4 });
+    life_videos.forEach((v) => { v.controls = false; v.preload = "auto"; io.observe(v); });
+  }
+</script>
 
 <script>
   // About entrance: the career bar assembles once when it scrolls into view (segments grow, tenure counts up);
