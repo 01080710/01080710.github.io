@@ -36,7 +36,7 @@ Peter Chang 的作品集網站（Astro 7 + Markdown + Mermaid，部署到 GitHub
 ## 網站設計慣例
 
 - **配色**：品牌色只用 `global.css` 的 token：`--accent`（深藍，主色）、`--accent-2`（磚紅，章節編號、hover 與長條的高亮列）、`--blob`（照片色塊）。不在頁面或元件寫死色碼；新增 token 必須同時在 `:root` 與 `:root[data-theme="dark"]` 各定義一次。紅黃綠只用於語意徽章（含 TL;DR 三格頂線：紅 Problem、黃 Approach、綠 Result），不當裝飾色。
-- **專案主題色**（frontmatter `accent`）：每個專案一色、不重複。目前 Drop-Order = `forest`、Credit Card = `violet`、Account Engine = `ocean`、Infra = `slate`；新專案需要新色時，在 [content.config.ts](src/content.config.ts) 的 enum 與 `global.css` 淺色、深色各加一組。
+- **專案主題色**（frontmatter `accent`）：每個專案一色、不重複。目前 Drop-Order = `forest`、Credit Card = `violet`、Account Engine = `ocean`、OP Ticket Data Pipeline = `slate`；新專案需要新色時，在 [content.config.ts](src/content.config.ts) 的 enum 與 `global.css` 淺色、深色各加一組。
 - **深淺色**：`<html data-theme>` 由 [Base.astro](src/layouts/Base.astro) 的 inline script 在首次繪製前設定（訪客選擇優先，否則跟隨系統）。CSS 一律寫 `[data-theme="dark"]`，不寫 `@media (prefers-color-scheme)`；JS 繪製的內容（例如 Mermaid）監聽 `themechange` 事件重畫。
 - **個人照片**：只用 [ProfilePhoto.astro](src/components/ProfilePhoto.astro)（不規則色塊 + 右下小點，不加手繪線條），目前用在首頁 hero 與 Contact。檔案為 `public/media/peter-photo.jpg`（560px 寬）；原始大圖與設計參考圖不留在 repo。
 - **外部設計素材**（Canva 等）：不直接放上網站，只沿用色票與形狀，用 CSS／SVG 重畫，避免授權問題。

@@ -24,6 +24,11 @@ const t       = use_translations(lang);
     <div class="prose-block">
       {profile.intro.map((p) => <p>{p}</p>)}
     </div>
+    <script is:inline>
+      // Opt in to the entrance animation before the career bar and timeline are parsed, so they never flash
+      // fully drawn first. Without JS, or with reduced motion, everything stays static and fully visible.
+      if (!matchMedia("(prefers-reduced-motion: reduce)").matches) document.documentElement.classList.add("motion-ok");
+    </script>
     <CareerBar experience={profile.experience} label={profile.career_label} lang={lang} />
     <ol class="timeline">
       {profile.experience.map((e) => (
@@ -40,7 +45,7 @@ const t       = use_translations(lang);
             </div>
             <p>{e.note}</p>
             <ul class="timeline-tags">
-              {e.tags.map((tag) => <li>{tag}</li>)}
+              {e.tags.map((tag, i) => <li style={`--i:${i}`}>{tag}</li>)}
             </ul>
           </div>
         </li>
@@ -98,3 +103,60 @@ const t       = use_translations(lang);
     </ol>
   </section>
 </Base>
+
+<script>
+  // About entrance: the career bar assembles once when it scrolls into view (segments grow, tenure counts up);
+  // the timeline's line follows scroll progress and reveals each job as the line reaches it. Plays once.
+  import { format_months } from "../../lib/career-period";
+  import type { Lang } from "../../i18n/ui";
+
+  const COUNT_MS  = 1200;   // keep in step with SWEEP_S in CareerBar.astro
+  const BAR_AT    = 0.85;   // start the bar when its top passes 85% of the viewport height
+  const LINE_AT   = 0.65;   // the timeline line's tip sits at 65% of the viewport height
+
+  const root     = document.documentElement;
+  const bar      = document.querySelector<HTMLElement>(".career-bar");
+  const timeline = document.querySelector<HTMLElement>(".timeline");
+
+  function count_up(el: SVGTextElement) {
+    const total = Number(el.dataset.countTotal), label = el.dataset.countLabel ?? "";
+    const lang  = (el.dataset.countLang ?? "zh") as Lang;
+    const start = performance.now();
+    const frame = (now: number) => {
+      const p = Math.min((now - start) / COUNT_MS, 1);
+      const months = Math.round(total * (1 - Math.pow(1 - p, 3)));   // ease-out: fast start, settles on the total
+      el.textContent = `${label} · ${format_months(months, lang) || "0"}`;
+      if (p < 1) requestAnimationFrame(frame);
+    };
+    requestAnimationFrame(frame);
+  }
+
+  function update() {
+    const vh = window.innerHeight;
+    if (bar && !bar.classList.contains("is-in") && bar.getBoundingClientRect().top < vh * BAR_AT) {
+      bar.classList.add("is-in");
+      const counter = bar.querySelector<SVGTextElement>("[data-count-total]");
+      if (counter) count_up(counter);
+    }
+    if (timeline) {
+      const rect = timeline.getBoundingClientRect();
+      const tip  = vh * LINE_AT - rect.top;
+      timeline.style.setProperty("--progress", String(Math.min(Math.max(tip / rect.height, 0), 1)));
+      timeline.querySelectorAll<HTMLElement>(":scope > li:not(.is-in)").forEach((li) => {
+        if (li.offsetTop + 12 <= tip) li.classList.add("is-in");
+      });
+    }
+  }
+
+  if (root.classList.contains("motion-ok")) {
+    let queued = false;
+    const on_scroll = () => {
+      if (queued) return;
+      queued = true;
+      requestAnimationFrame(() => { queued = false; update(); });
+    };
+    window.addEventListener("scroll", on_scroll, { passive: true });
+    window.addEventListener("resize", on_scroll);
+    update();
+  }
+</script>

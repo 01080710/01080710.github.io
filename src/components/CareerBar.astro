@@ -15,6 +15,7 @@ const W = 600, X0 = 20, X1 = 580;
 const BAR_Y = 44, BAR_H = 28, AXIS_Y = 86;
 const CHAR_W = 13;          // approx. width of one CJK glyph at font-size 13, used to decide if a label fits
 const SEG_GAP = 1.5;        // inset on each side so adjacent segments read as separate jobs
+const SWEEP_S = 1.2;        // entrance animation: seconds for the fill to sweep the whole career, left to right
 
 const jobs = [...experience].sort((a, b) => to_months(a.start) - to_months(b.start));
 const first_year = Number(jobs[0].start.slice(0, 4));
@@ -27,7 +28,7 @@ const short_name = (company: string) => company.replace(/(股份)?有限公司$/
 const segments = jobs.map((job) => {
   const x1 = x_of(job.start) + SEG_GAP, x2 = x_of(job.end || now_ym) - SEG_GAP;
   const name = short_name(job.company);
-  return { x: x1, w: x2 - x1, name, show_name: name.length * CHAR_W + 12 <= x2 - x1 };
+  return { x: x1, w: x2 - x1, name, show_name: name.length * CHAR_W + 12 <= x2 - x1, current: !job.end };
 });
 
 const total_months = jobs.reduce((sum, job) => sum + months_between(job.start, job.end), 0);
@@ -35,19 +36,25 @@ const bracket_x1 = x_of(jobs[0].start) + SEG_GAP;
 const bracket_x2 = x_of(jobs[jobs.length - 1].end || now_ym) - SEG_GAP;
 const bracket_text = `${label} · ${format_months(total_months, lang)}`;
 
+// Each segment grows during its own slice of the sweep, so the three jobs read as one continuous fill.
+const span = bracket_x2 - bracket_x1;
+const seg_timing = (s: { x: number; w: number }) =>
+  `--d:${(((s.x - bracket_x1) / span) * SWEEP_S).toFixed(3)}s;--t:${((s.w / span) * SWEEP_S).toFixed(3)}s`;
+
 const years = Array.from({ length: now_year - first_year + 1 }, (_, i) => first_year + i);
 const now_x = x_of(now_ym);
 ---
 
-<figure class="career-bar">
+<figure class="career-bar" style={`--sweep:${SWEEP_S}s`}>
   <svg viewBox={`0 0 ${W} 112`} role="img" aria-label={`${t("about.career_aria")}: ${bracket_text}`}>
     <g class="cb-bracket">
-      <path d={`M${bracket_x1} 38 V31 H${bracket_x2} V38`} />
-      <text x={(bracket_x1 + bracket_x2) / 2} y="23" text-anchor="middle">{bracket_text}</text>
+      <path d={`M${bracket_x1} 38 V31 H${bracket_x2} V38`} pathLength="1" />
+      <text x={(bracket_x1 + bracket_x2) / 2} y="23" text-anchor="middle"
+            data-count-label={label} data-count-total={total_months} data-count-lang={lang}>{bracket_text}</text>
     </g>
 
     {segments.map((s) => (
-      <g class="cb-seg">
+      <g class={s.current ? "cb-seg is-current" : "cb-seg"} style={seg_timing(s)}>
         <rect x={s.x} y={BAR_Y} width={s.w} height={BAR_H} rx="3" />
         {s.show_name && <text x={s.x + s.w / 2} y={BAR_Y + 19} text-anchor="middle">{s.name}</text>}
       </g>

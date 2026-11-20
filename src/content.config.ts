@@ -29,7 +29,7 @@ const projects = defineCollection({
     // Company system map in Quick Read; `area` is this project's highlighted part (see components/SystemMap.astro).
     system_map: z.object({
       map:  z.enum(["hytech"]),
-      area: z.enum(["infra", "credit-card", "drop-order", "account"]),
+      area: z.enum(["ticket", "credit-card", "drop-order", "account"]),
     }).optional(),
     tags:      z.array(z.string()).default([]),
     // Technology-type categories for the Projects page filter (at least one; values from data/project-categories.ts).

@@ -8,7 +8,7 @@
 |---|---|
 | 首頁定位、Engineering Philosophy | `PeterChang_core.md` 二、四、五節（改寫，未原文引用） |
 | 經歷、學歷 | PDF〈工作經驗〉〈學歷〉 |
-| 0-to-1 Operation Data Infrastructure | PDF 專案「營運數據基礎設施架構 0-to-1」+ 海科科技職務描述 1、2、3 |
+| OP Ticket Data Pipeline (Q4 PoC) | `Desktop/fresh` 程式與 README、`Desktop/db` 的 2026 .db、run.log + Peter 問答確認（2026-11-20）；取代原 0-to-1 Operation Data Infrastructure 頁 |
 | Credit Card Anomaly Detection | PDF 專案「信用卡異常出金偵測」+ 海科科技職務描述 4 |
 | Account Operation Automation Engine | PDF 專案「營運帳務自動化引擎」+〈工作技能〉 |
 | 「與營運端對齊偵測邏輯」 | Peter 口頭說明（2026-11-16） |
@@ -169,6 +169,79 @@ CSV 為對帳管線的輸出紀錄：每列 `Comparison` = 一次執行時間；
   - 03 的方案 A（維持人工調取）、B（等待 DB 權限或官方 API）依原頁面「取代人工調取」「不等 DB 權限或官方 API 開放」整理，待 Peter 確認是否為當時實際評估的方案。
   - 招牌視覺、05 的 log 與統計、權限範圍、排程與儲存工具、其餘 3 個平台皆為 TODO。
 
+## OP Ticket Data Pipeline (Q4 PoC)（2026-11-20）
+
+- 原「0-to-1 Operation Data Infrastructure」頁內容經 Peter 確認不屬實，整頁清除；slug 改為 `ticket-data-mart`，沿用 `slate` 與 `order: 1`。
+- **第二版（同日）依實際程式與資料重寫**，取代第一版依 scope（「Fresh 工單數據中台」整合包）寫的內容。第一版的 Freshdesk、`updated_since` + watermark、30 分鐘 Lookback、三張表、WAL 都與實作不符，已移除。
+- 來源（皆在 repo 外，只讀，未複製）：
+  - 程式與 README：`Desktop/fresh`（`fresh_export.py`、`ticket_db.py`、`freshservice_api.py`、`config.py`、`crontab.txt`、`docker-compose.yml`）。
+  - 資料：`Desktop/db/<prefix>_freshservice_2026.db`（唯讀查詢彙總，未輸出任何內文）。
+  - 執行紀錄：`Desktop/fresh/output/*/run.log`、`logs/20261119.log`。
+
+### 第三版：資料工程 + PM + 量化價值（2026-11-20）
+
+- Peter 要求依 Claude 的評估重排（資料工程站得住、PM 一半、量化價值站不住）：
+  - 標題由「Ticket Data Mart」改為「OP Ticket Data Pipeline」，避免「Data Mart」被追問建模；slug 維持 `ticket-data-mart`。
+  - 頁首 metrics 改為價值數字：取得資料「XX 天 → 每日」、節省「XX h/月」、人效對照率 100%（107,412 點）。原本的 47,530（家在 01）、146,814（家在 05）、200/min（家在 01 圖 3）不再放頁首。
+  - 01 痛點卡片加入索取成本（XX）；新增「成功標準」投影片（5 項，對應 06 驗收）。
+  - 02 新增「範圍決策」表（期間、範圍、儲存、輸出）與 Non-goals。
+  - 04 設計重點加入測試：`fresh/tests` 共 195 個 `def test_`（9 個檔案，其中 4 個用 mock／monkeypatch）；只計數，未在本 repo 執行。
+  - 05 開頭說明分為可靠性與業務產出；新增「從數據到行動」案例投影片（XX）。
+  - 06 Before / After 改為有數字的版本（XX），新增「整理工時」列、移除「全貌」列（併入資料取得），加上合計列。
+- **XX 待補清單**（Peter 提供後填入並標「估計」）：每次索取等待天數、來回次數、每月索取次數、每月整理工時與人數、每月人效統計工時、合計節省工時、OP 使用人數與頻率、一個「數據 → 行動」案例、HTTP 404 失敗的成因。
+
+### Freshservice 說明（2026-11-20）
+
+- Peter 選擇 A + B：名詞說明的 Freshservice 定義加上類比（Jira Service Management、Zendesk）與官網連結 `https://www.freshworks.com/freshservice/`（2026-11-20 以 curl 確認回 200）；01 背景加「一張工單的一生」Mermaid（圖 1），後面圖號順延。
+- 圖 1 的步驟依據：開單者為 CS、業務等內部單位（`department_name` 多為 CS team、APAC、BD Team）；派單與收口由 OP 負責（Peter 說明）；每步對應的欄位取自 `fresh` README〈輸出內容〉。中間狀態（Pending、Awaiting Approval 等）見 .db 的 `Status` 分布。
+- 不嵌入官網圖片、影片或 iframe（授權與載入考量）。
+
+### 數字口徑
+
+| 數字 | 值 | 計算方式 |
+|---|---|---|
+| 2026/10 建立的工單 | 47,530 張；平均 1,533／天 | `ticket_conversations` 中 `First_ModifyTime` 為 2026-10 的不重複 `ticket_id` |
+| 平日／週末 | 平日中位數 1,874（1,534–2,513）；週末中位數 590（418–769） | 同上，依建立日分日計數 |
+| 處理群組數 | 2026/10 有 16 個；.db 全部 18 個 | 不重複 `Assigned to`（抓取當下的群組） |
+| 2026/10 工單的對話 | 146,814 則（`conversation_id > 0`） | 每張平均約 3.1 則 = 146,814 ÷ 47,496 張有對話的工單 |
+| .db 內容 | 75,598 張、234,177 列；`skipped_tickets` 250 | 2026-11-20 查詢 |
+| 各群組處理時長（圖 6） | 中位數，例如 Deposit 14.1 h、Withdrawal 14.0 h | 2026/10 建立且 `Resolved_Time` 非空（47,071 張；未解決 459 張）；`Resolved_Time − First_ModifyTime`；只列 ≥ 500 張的群組 |
+| 回補統計 | 62 段、完成 61（無失敗 12、有失敗 49）、列數合計 288,998、失敗 293 | `output/20261119_all_views_nolimit/run.log` 的 `View complete/incomplete` 行，截至 2026-11-20 15:14（第 62 段執行中） |
+| 失敗原因 | 全部為 `items fail: HTTP 404` | 所有 run.log 的 `FAIL -` 行共 299 次，皆為 404 |
+| 429 重試 | 26,479 次 | 所有 run.log 中 `HTTP 429` 出現次數 |
+| 額度（圖 3） | 子限制 160/min、帳號 500/min | README〈API 流量限制（實測）〉 |
+| 新版速率 | 200/min | `config.py` 的 `RATE_LIMIT_PER_MINUTE`（README 舊段落寫 150，以設定檔為準） |
+| 舊版峰值 | ≈1,200/min | README〈與舊版程式的流量比較〉：10 並行、每請求約 0.5 秒推算，頁面標「推算」 |
+| 一次實際執行（05 log） | 736 = 732 + 4 + 0；新增 77 則 | `output/20261120_view_<id>_tf20e40_nolimit/run.log`；view ID、執行資料夾已移除，run_id 截 8 碼 |
+
+- 11/1–11/4 建立的工單數偏低（22、145、211、407），疑似未完整回補，統計只用 10 月。
+
+### 人效項目清冊（2026-11-20 加入）
+
+- 來源：Peter 提供、營運主管整理的「人效項目清冊 - Fresh Item」，存於 `canva-export/ticket-data-mart/fresh_item_mapping.csv`（含品牌 workspace 名稱，不進 repo）。只存到 workspace 2 會用到的列；VTJ workspace 的列多數沒有對應欄位，未存。
+- 欄位用法：`Item` = 工單的 `service_item`（完全比對）；`負責團隊` = 頁面的「負責團隊」；`Fresh Mapping` 為 `Raise to other department` 者算「轉派」；`Points for OP` = 人效點數。頁面寫「營運的人效項目清冊」，不寫整理者。
+- 清冊數字：排除 `TEST` 後 222 項、14 個負責團隊（即 Peter 第一次提供的 14 個部門）；OP 自理 132 項（負責團隊為 OP-*，且非轉派）、轉派 79 項（含 OP-DW 的 W8-1／W8-2 審批）、其他非 OP 且非轉派 11 項（APAC Support、ASIC Support）。點數 2–8。
+- 對照結果（2026/10 建立的 47,530 張）：100% 對得到；OP-AC 28,935 張／69,519 點、OP-DW 17,620／35,943、OP-AC,OP-DW 965／1,930、Risk Team 10／20，合計 107,412 點（每張 2.26）。子分類 Account Owner Transfer（3 點）10,983 張。
+- 發現：兩個 view 只取 OP 的處理群組，轉派項目的工單只有 25 張在範圍內 → 頁面在 06 寫成限制，擴充路線第 1 項。
+- 地圖新增「轉派部門（11）」節點（11 = 14 個負責團隊扣掉 OP-AC、OP-DW、OP-AC,OP-DW）。
+- 群組名稱含品牌主體代碼的 3 個群組（清冊 workspace 名稱可證），依品牌規則不出現在頁面與地圖；頁面「16 個處理群組」為計數，含其中 1 個，不列名稱。
+
+### Peter 確認事項（2026-11-20）
+
+- 定位改為「Freshservice 工單回補與每日同步」；停留時間、全量質檢、CRM JOIN 移到擴充路線。
+- 地圖使用資料庫 `Assigned to` 的群組全名。
+- Before：資料向其他非平行單位索取，曠日費時、維度經常錯置，溝通不良下看不到全貌、難以即時改善（無耗時數字）。
+- 使用者：OP。流程：OP 是中樞，依案件主責派給對應部門，最後由 OP 收口。
+
+### 待 Peter 確認
+
+- 人效統計的 Before：過去是否有人工依清冊計算人效？耗時多少？（目前寫「清冊與工單資料分開，無法直接對照」）
+- 名詞說明 12 個定義（Claude 草擬）；Role、Stack、Focus（Data Integration、ETL）。
+- 03 方案 B「舊版程式」、C「公開 API 篩選」依 README〈與舊版程式的流量比較〉〈技術選擇〉整理。
+- 權限範圍：帳號歸屬、核准者、帳密存放方式（頁面為 TODO；目前不在頁面描述帳密現況）。
+- 每日排程是否已正式上線（決定是否填 `launch`）。
+- 招牌視覺：圖 3 額度對照（新元件 `quota-list`），類型與其他專案不重複。
+
 ## Focus 與系統地圖（2026-11-18）
 
 - Stack 差異化採方案 B（Peter 選擇）：新增 `focus`。各頁取自已有內容：Infra = Incremental Sync、Schema Alignment（原 My Contribution 的增量同步與清洗對齊規範）；Credit Card = Amount Reconciliation、Parent / Child Ticket Matching（01 痛點與名詞）；Account Engine = Batch Query Engine、Exclusive Queue Lock（Tech Label）；Drop-Order = Status Reconciliation、Heartbeat Monitoring（判定規則與設計重點）。
@@ -183,7 +256,7 @@ frontmatter `period`（開發）／`launch`（上線）／`phases`（分線）�
 
 | 專案 | 開發 | 上線 | 來源與佐證 |
 |---|---|---|---|
-| 0-to-1 Operation Data Infrastructure | 2026/02~2026/03 | 無（未填 `launch`） | 建站初版（2026-11-16）既有值，沿用至今。Source Mapping 對應 PDF 專案「營運數據基礎設施架構 0-to-1」，但 PDF 期間未逐字核對（本機無 PDF 工具）。 |
+| OP Ticket Data Pipeline (Q4 PoC) | 2026/11~ | 無（建置中，未填 `launch`） | Peter 確認（2026-11-20）：資料範圍從 2026-10-01 起，開發 2026/11 開始。 |
 | Credit Card Anomaly Detection | 2026/01~2026/02 | 2026/02~2026/08 | 建站初版既有值。上線端佐證：CSV 第一筆執行 2026-02-12；Peter 說明 2026/2 底上線、約 2026/8 隨支付平台停用退場（見 Credit Card 段落）。 |
 | Account Operation Automation Engine | 2026/05~2026/06 | 2026/06~ | 開發結束月由初版的 2026/7 改為 2026/06（Peter 直接修改 .md，2026-11-19）。上線端佐證：Record 第一筆 2026-06-09（見 Account Engine 段落）。 |
 | Deposit & Withdrawal Drop-Order Monitor | 整體 2026/03~2026/09；入金 2026/03~2026/03、出金 2026/04~2026/09 | 入金 2026/03~、出金 2026/09~ | 上線日 Deposit 2026-03-30、Withdrawal 2026-09-09（Peter 確認，2026-11-18）；分線開發期間 Peter 確認（2026-11-19）。見 Drop-Order 段落口徑。 |
@@ -192,8 +265,7 @@ frontmatter `period`（開發）／`launch`（上線）／`phases`（分線）�
 
 | 數字 | 專案 | 來源 | 狀態 |
 |---|---|---|---|
-| 6 個異質平台、100% 自動化攝入 | Infrastructure | PDF | 平台清單只列出 CRM、PSP、CPS |
-| 10+ 頁面人工查找 | Infrastructure | PDF | — |
+| 47,530 張、146,814 則、200/min | OP Ticket Data Pipeline | .db 查詢 + config.py（見 OP Ticket Data Pipeline 段落） | 已取代第一版的 2,000+（估計）、14 群組、3 張表 |
 | 每日 5 → 20.7 次（實際平均）、最長 5 小時 → 1 小時內、95%+ | Credit Card | PDF + CSV + Peter 確認 | PDF 原寫 4 次、>24 小時，已更正；95% 計算基礎待補 |
 | 每輪人工約 45 分鐘（平台 35 + Excel 10）、每日 5 輪 ≈ 3.75 小時；3–7 月 153 天 ≈ 574 小時；年化 × 365 ≈ 1,369 小時 | Credit Card | Peter 口頭說明（2026-11-16） | 估計值 |
 | 45 秒/帳戶、381,629 帳戶、≈4,770 小時、≈NT$1.91M | Automation Engine | Record 工作表 + Peter 估計（45 秒、NT$400） | 已取代 PDF 的 75,340+／956+／382K+ |
@@ -208,12 +280,14 @@ frontmatter `period`（開發）／`launch`（上線）／`phases`（分線）�
 ## TODO
 
 - [x] GitHub / LinkedIn / Email 連結 → `src/data/profile.ts`（2026-11-16）
-- [ ] 6 個平台完整清單
+- [x] ~~6 個平台完整清單~~（原 Infra 頁已移除，2026-11-20）
 - [ ] 6-Layer Pipeline 其餘 3 層
 - [ ] 956 小時與 95% 的計算基礎
-- [ ] 逆向工程實際遇到的技術難點（可公開的抽象描述）
-- [ ] Infrastructure 排程與儲存層實際工具（是否用 Airflow / Superset）
+- [x] ~~逆向工程實際遇到的技術難點~~（原 Infra 頁已移除，2026-11-20）
+- [x] ~~Infrastructure 排程與儲存層實際工具~~（原 Infra 頁已移除，2026-11-20）
 - [ ] 信用卡偵測的告警通知管道
 - [ ] 信用卡偵測 Area 3 比對規則（Prepare／Build Logic／Separate Types／Regularity）
 - [ ] Drop-Order Monitor：名詞說明定義確認、帳號核准者、進線量與溝通次數的前後統計
-- [ ] 專案期間：Infra 開發 2026/02~2026/03 與 Credit Card 開發 2026/01~2026/02 尚未對照 PDF 或經 Peter 逐項確認；Infra 是否有上線期間
+- [ ] 專案期間：Credit Card 開發 2026/01~2026/02 尚未對照 PDF 或經 Peter 逐項確認
+- [ ] OP Ticket Data Pipeline：見該段〈待 Peter 確認〉；第 62 段回補完成後更新回補統計
+- [ ] `profile.ts`／`profile.en.ts` 仍引用舊 Infra 專案（「整合 6 個封閉平台」等），待 Peter 決定改寫內容

@@ -284,8 +284,11 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .career-bar text { font-family: var(--sans); font-size: 13px; }
 .cb-bracket path { fill: none; stroke: var(--accent); stroke-width: 1; }
 .cb-bracket text { fill: var(--accent); font-weight: 600; }
-.cb-seg rect { fill: var(--accent); }
-.cb-seg text { fill: var(--surface); font-weight: 600; }
+/* Past jobs are a light tint with accent text; the current job is solid accent. */
+.cb-seg rect { fill: color-mix(in srgb, var(--accent) 22%, var(--surface)); }
+.cb-seg text { fill: var(--accent); font-weight: 600; }
+.cb-seg.is-current rect { fill: var(--accent); }
+.cb-seg.is-current text { fill: var(--surface); }
 .cb-continue { stroke: var(--accent); stroke-width: 2; stroke-dasharray: 3 3; }
 .cb-axis, .cb-tick line { stroke: var(--line); stroke-width: 1; }
 .cb-tick line { stroke: var(--muted); }
@@ -295,6 +298,50 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 
 .timeline-tags { list-style: none; padding: 0; margin: 2px 0 0; display: flex; flex-wrap: wrap; gap: 6px; }
 .timeline-tags li { font-family: var(--mono); font-size: 0.75rem; color: var(--muted); border: 1px solid var(--line); background: var(--surface); padding: 1px 8px; border-radius: 4px; }
+
+/* ---------- About entrance animation ---------- */
+/* Only under .motion-ok (set by an inline script on About when JS runs and reduced motion is off), so the
+   no-JS and reduced-motion views are the static layout above. The script adds .is-in once; nothing replays. */
+.timeline { position: relative; }   /* offsetTop of each <li> is measured from the list */
+.motion-ok .timeline::before {
+  content: ""; position: absolute; left: -1px; top: 0; width: 2px; height: 100%;
+  background: var(--accent); transform-origin: top; transform: scaleY(var(--progress, 0));
+}
+.motion-ok .timeline > li::before { transform: scale(0); transition: transform 0.45s cubic-bezier(0.34, 1.8, 0.64, 1); z-index: 1; }
+.motion-ok .timeline > li.is-in::before { transform: scale(1); }
+.motion-ok .timeline > li > * { opacity: 0; transform: translateX(28px); transition: opacity 0.5s ease-out, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+.motion-ok .timeline > li > .timeline-body { transition-delay: 0.08s; }
+.motion-ok .timeline > li.is-in > * { opacity: 1; transform: none; }
+.motion-ok .timeline-tags li { opacity: 0; transform: translateY(6px); transition: opacity 0.35s ease-out, transform 0.35s ease-out; transition-delay: calc(0.35s + var(--i, 0) * 0.08s); }
+.motion-ok .timeline > li.is-in .timeline-tags li { opacity: 1; transform: none; }
+/* Current job: a slow radar ring, the only element that keeps moving after the entrance. */
+.motion-ok .timeline > li.is-current.is-in::after {
+  content: ""; position: absolute; left: -10px; top: 4px; width: 19px; height: 19px; border-radius: 50%;
+  border: 2px solid var(--accent-2); box-sizing: border-box; pointer-events: none;
+  animation: radar 2.4s ease-out 0.5s infinite both;
+}
+@keyframes radar { from { transform: scale(0.5); opacity: 0.8; } to { transform: scale(2.4); opacity: 0; } }
+
+/* Career bar: segments fill left to right (timing per segment from CareerBar.astro), the bracket draws,
+   then the "now" marker pops and the dotted continuation starts flowing. */
+.motion-ok .cb-seg rect { transform-box: fill-box; transform-origin: left center; transform: scaleX(0); }
+.motion-ok .cb-seg text { opacity: 0; }
+.motion-ok .cb-bracket path { stroke-dasharray: 1; stroke-dashoffset: 1; }
+.motion-ok .cb-bracket text, .motion-ok .cb-continue, .motion-ok .cb-now { opacity: 0; }
+.motion-ok .cb-now { transform-box: fill-box; transform-origin: center bottom; }
+.motion-ok .career-bar.is-in .cb-seg rect { animation: cb-grow var(--t) linear var(--d) forwards; }
+.motion-ok .career-bar.is-in .cb-seg text { animation: cb-fade 0.3s ease-out calc(var(--d) + var(--t)) forwards; }
+.motion-ok .career-bar.is-in .cb-bracket path { animation: cb-draw var(--sweep) ease-out forwards; }
+.motion-ok .career-bar.is-in .cb-bracket text { animation: cb-fade 0.2s ease-out forwards; }
+.motion-ok .career-bar.is-in .cb-now { animation: cb-pop 0.5s cubic-bezier(0.34, 1.8, 0.64, 1) var(--sweep) forwards; }
+.motion-ok .career-bar.is-in .cb-continue {
+  animation: cb-fade 0.3s ease-out var(--sweep) forwards, cb-flow 0.8s linear var(--sweep) infinite;
+}
+@keyframes cb-grow { to { transform: scaleX(1); } }
+@keyframes cb-fade { to { opacity: 1; } }
+@keyframes cb-draw { to { stroke-dashoffset: 0; } }
+@keyframes cb-pop  { 0% { opacity: 0; transform: scale(0.3); } 100% { opacity: 1; transform: scale(1); } }
+@keyframes cb-flow { to { stroke-dashoffset: -6; } }
 
 .principle-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
 .principle { border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; background: var(--surface); }
@@ -360,6 +407,21 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
   margin: 16px 0; padding: 16px; border: 1px solid var(--line); border-radius: var(--radius);
   background: var(--surface); overflow-x: auto; text-align: center;
 }
+/* Outcome nodes in decision diagrams: Mermaid classDef only names the class (it cannot read CSS variables),
+   colours come from tokens here. !important beats the id-scoped styles Mermaid embeds in each SVG. */
+.prose .mermaid .node:is(.cmpSkip, .cmpRefresh, .cmpOp, .cmpOk, .cmpNoItems, .cmpFail) :is(rect, path, polygon) { stroke-width: 1.5px !important; }
+.prose .mermaid .node.cmpSkip :is(rect, path, polygon)    { fill: var(--bg) !important; stroke: var(--line) !important; }
+.prose .mermaid .node:is(.cmpRefresh, .cmpOp) :is(rect, path, polygon) { fill: var(--accent-bg) !important; stroke: var(--accent) !important; }
+.prose .mermaid .node.cmpOk :is(rect, path, polygon)      { fill: var(--accent) !important; stroke: var(--accent) !important; }
+.prose .mermaid .node.cmpNoItems :is(rect, path, polygon) { fill: var(--bg) !important; stroke: var(--muted) !important; stroke-dasharray: 4 3; }
+.prose .mermaid .node.cmpFail :is(rect, path, polygon)    { fill: var(--bg) !important; stroke: var(--accent-2) !important; stroke-width: 2px !important; }
+.prose .mermaid .node.cmpSkip :is(.nodeLabel, text)  { color: var(--muted) !important; fill: var(--muted) !important; }
+.prose .mermaid .node.cmpOk :is(.nodeLabel, text)    { color: var(--bg) !important; fill: var(--bg) !important; }
+.prose .mermaid .node.cmpFail :is(.nodeLabel, text)  { color: var(--accent-2) !important; fill: var(--accent-2) !important; }
+.prose .mermaid .node.cmpReq :is(rect, path, polygon)  { fill: var(--surface) !important; stroke: var(--accent) !important; stroke-width: 1.5px !important; }
+.prose .mermaid .node.cmpReq :is(.nodeLabel, text)     { font-family: var(--mono); font-size: 0.85em; }
+.prose .mermaid .node.cmpNote :is(rect, path, polygon) { fill: transparent !important; stroke: var(--muted) !important; stroke-dasharray: 4 3; }
+.prose .mermaid .node.cmpNote :is(.nodeLabel, text)    { color: var(--muted) !important; fill: var(--muted) !important; }
 
 /* ---------- Chapters (project pages, built by JS in [slug].astro) ---------- */
 .chapter-tabs {
@@ -636,11 +698,11 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .system-map .arrow { fill: var(--muted); stroke: none; }
 .system-map[data-focus="drop-order"] .area[data-area="drop-order"] .arrow { fill: var(--accent); }
 .system-map .area { opacity: 0.35; transition: opacity 0.2s; }
-.system-map[data-focus="infra"]       .area[data-area="infra"],
+.system-map[data-focus="ticket"]      .area[data-area="ticket"],
 .system-map[data-focus="credit-card"] .area[data-area="credit-card"],
 .system-map[data-focus="drop-order"]  .area[data-area="drop-order"],
 .system-map[data-focus="account"]     .area[data-area="account"] { opacity: 1; }
-.system-map[data-focus="infra"]       .area[data-area="infra"] :is(.node, .flow),
+.system-map[data-focus="ticket"]      .area[data-area="ticket"] :is(.node, .flow),
 .system-map[data-focus="credit-card"] .area[data-area="credit-card"] :is(.node, .flow),
 .system-map[data-focus="drop-order"]  .area[data-area="drop-order"] :is(.node, .flow),
 .system-map[data-focus="account"]     .area[data-area="account"] :is(.node, .flow) { stroke: var(--accent); stroke-width: 2.5; }
@@ -662,6 +724,33 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .bar-list .is-peak .bar::before { background: var(--accent-2); }
 .bar-list .is-peak .bar-value { color: var(--accent-2); font-weight: 700; }
 .bar-list .bar-value { font-family: var(--mono); text-align: right; }
+
+/* ---------- Quota meter: request rates against fixed API limits (OP Ticket Data Pipeline signature visual) ---------- */
+/* --limit-sub / --limit-total on .quota-list place the two limit lines (% of the scale); --v on each row is its rate. */
+.quota-figure { margin: 24px 0; }
+.quota-figure figcaption { margin-top: 10px; font-size: 0.85rem; color: var(--muted); font-style: italic; }
+.prose .quota-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
+.prose .quota-list li { display: grid; grid-template-columns: minmax(9em, 16em) minmax(0, 1fr) 4.5em; align-items: center; gap: 12px; margin: 0; font-size: 0.9rem; }
+.quota-bar { position: relative; height: 20px; border-radius: 4px; background: var(--line); }
+.quota-bar::before { content: ""; display: block; height: 100%; width: var(--v, 0%); background: var(--accent); border-radius: 4px; }
+.quota-list .is-over .quota-bar::before { background: var(--accent-2); }
+.quota-list .is-over .quota-value { color: var(--accent-2); font-weight: 700; }
+/* Limit lines drawn over the fill so they stay visible on both rows. */
+.quota-bar::after {
+  content: ""; position: absolute; inset: -4px 0; pointer-events: none;
+  background:
+    linear-gradient(var(--muted), var(--muted)) var(--limit-sub) 0 / 2px 100% no-repeat,
+    linear-gradient(var(--fg), var(--fg)) var(--limit-total) 0 / 2px 100% no-repeat;
+}
+.quota-value { font-family: var(--mono); text-align: right; }
+.quota-legend { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; margin: 12px 0 0; font-size: 0.82rem; color: var(--muted); }
+.quota-mark { display: inline-block; width: 2px; height: 14px; vertical-align: middle; }
+.quota-mark.is-sub { background: var(--muted); }
+.quota-mark.is-total { background: var(--fg); }
+@media (max-width: 640px) {
+  .prose .quota-list li { grid-template-columns: minmax(0, 1fr) 4.5em; gap: 4px 12px; }
+  .quota-label { grid-column: 1 / -1; }
+}
 
 /* ---------- CSV viewer (rendered by JS in [slug].astro) ---------- */
 :is(.csv-details, .glossary-details) { margin: 24px 0; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
