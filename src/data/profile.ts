@@ -67,6 +67,24 @@ export const profile = {
     note:   "國立陽明交通大學 食品安全及風險評估研究所（碩士肄業）",
   },
 
+  // About "Off the Clock" section. Places and subjects provided by Peter; intro line is a Claude draft pending review.
+  // Originals live in canva-export/life/ (not committed); published copies are resized, EXIF-stripped,
+  // and the companion's face in the turtle photo is blurred (no consent to publish).
+  life: {
+    intro:  "工作之外，我喜歡往天空和海裡跑：在芭達雅跳過傘，也在小琉球、峇里島與馬爾地夫的海裡和海洋生物相遇。",
+    home_hook: "工作之外的我：",
+    photos: [
+      { src: "media/life/nurse-sharks-maldives.jpg", place: "馬爾地夫", caption: "與護士鯊同游",
+        alt:  "空拍畫面：我穿著紅色救生衣漂浮在藍綠色海面，周圍環繞十多隻護士鯊" },
+      { src: "media/life/skydive-pattaya.jpg",       place: "泰國 芭達雅", caption: "高空跳傘",
+        alt:  "我與教練雙人跳傘，剛離開紅白色小飛機，背景是藍天" },
+      { src: "media/life/turtle-xiaoliuqiu.jpg",     place: "小琉球",     caption: "潛水遇見海龜",
+        alt:  "我與潛伴在珊瑚礁旁潛水，一隻海龜在前方覓食" },
+      { src: "media/life/manta-bali.jpg",            place: "印尼 峇里島", caption: "鬼蝠魟",
+        alt:  "一隻鬼蝠魟張開嘴在藍色海水中游過" },
+    ],
+  },
+
   // Contact page: one-line invitation (also used as the Home CTA) and topics drawn from the projects above.
   contact_invite: "資料管線、營運自動化或系統整合相關的合作與職缺，都歡迎來信聊聊。",
   talk_topics: [
@@ -74,6 +92,7 @@ export const profile = {
     { title: "把人工流程變成自動化服務", body: "人工對帳、人工查核如何改成排程與一鍵工具，並用數字量化節省的工時。" },
     { title: "異質平台的資料整合",       body: "多個系統、格式不一、文件不齊時，如何對齊欄位與指標，讓資料能放在一起看。" },
     { title: "非技術同仁也能用的工具",   body: "以試算表等熟悉的介面當入口，加上輸入驗證與紀錄，讓營運端自己操作。" },
+    { title: "跳傘、潛水與旅行",         body: "去過芭達雅跳傘，也在小琉球、峇里島、馬爾地夫下過水；交換旅行或潛點口袋名單也很歡迎。" },
   ],
 
   contact: {

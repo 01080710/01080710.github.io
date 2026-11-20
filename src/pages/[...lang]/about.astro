@@ -4,6 +4,7 @@ import CareerBar from "../../components/CareerBar.astro";
 import { get_profile } from "../../i18n/profile";
 import { lang_from_param, lang_static_paths, use_translations } from "../../i18n/ui";
 import { format_duration } from "../../lib/career-period";
+import { url } from "../../lib/url";
 
 export const getStaticPaths = lang_static_paths;
 
@@ -101,6 +102,22 @@ const t       = use_translations(lang);
         </li>
       ))}
     </ol>
+  </section>
+
+  <section class="section" id="off-the-clock">
+    <h2 class="section-title"><span class="mono">05</span> Off the Clock</h2>
+    <p class="prose-block">{profile.life.intro}</p>
+    <ul class="life-gallery">
+      {profile.life.photos.map((photo, i) => (
+        <li class={i === 0 ? "is-wide" : ""}>
+          <figure>
+            <img src={url(photo.src)} alt={photo.alt} loading="lazy" decoding="async"
+                 width={i === 0 ? 1600 : 1000} height={i === 0 ? 900 : 750} />
+            <figcaption><span class="mono">{photo.place}</span> {photo.caption}</figcaption>
+          </figure>
+        </li>
+      ))}
+    </ul>
   </section>
 </Base>
 

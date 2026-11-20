@@ -33,6 +33,7 @@ const featured = (await get_projects(lang)).filter((p) => p.data.featured);
     <h2 class="section-title"><span class="mono">01</span> Introduction</h2>
     <div class="prose-block">
       {profile.intro.map((p) => <p>{p}</p>)}
+      <p class="life-hook">{profile.life.home_hook} <a href={`${lang_path("about/", lang)}#off-the-clock`}>{t("home.life_link")}</a></p>
     </div>
   </section>
 
