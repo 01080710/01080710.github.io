@@ -10,16 +10,19 @@ stack: ["Python", "API Reverse Engineering", "crontab", "Lark Bot", "LarkSheet A
 focus: ["Financial Reconciliation", "Anomaly Detection"]
 system_map: { map: "hytech", area: "credit-card" }
 metrics:
-  - { value: "1 hr", label: "資料可取得後的偵測時效（原最長約 5 小時）" }
-  - { value: "≈574 hr", label: "3–7 月節省的人工比對工時（估計）" }
+  - { value: "1 hr", label: "資料可取得後的偵測時效（原最長約 5 小時）", on_home: true }
+  - { value: "≈574 hr", label: "3–7 月節省的人工比對工時（估計）", on_home: true }
   - { value: "3,162", label: "3–7 月自動對帳執行次數" }
+impact:
+  before: "輪班人工比對報表，錯誤退款事後才發現"
+  after: "錯誤退款在下一輪執行就被標記"
 tldr:
   problem: "信用卡出金時，Payabl 實際退款與 CRM 記帳可能對不上；人工 Excel 比對靠輪班，頻率與準確度都到了極限。"
   approach: "以 API 逆向工程自動擷取兩邊報表，每小時全量對帳，只把不一致的交易寫入 LarkSheet 交給營運複核。"
   result: "錯誤退款在下一輪執行就被標記，交由營運撤銷；比對不再需要輪班人力。"
 tags: ["Reverse Engineering", "Automation", "Risk Control"]
 categories: ["Data Pipeline", "Automation"]
-featured: true
+home: true
 order: 2
 accent: violet
 ---

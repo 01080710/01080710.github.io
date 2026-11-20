@@ -166,6 +166,105 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .section-title { font-size: 1.25rem; margin-bottom: 20px; display: flex; align-items: baseline; gap: 12px; }
 .section-title .mono { color: var(--accent-2); font-size: 0.85rem; font-weight: 500; }
 .section-note { margin-top: -8px; }
+/* Home hero: the value statement is the headline; the job title and open-to-work link sit under it. */
+.hero h1.hero-statement { font-size: clamp(1.5rem, 2.8vw, 2.05rem); line-height: 1.35; letter-spacing: -0.01em; }
+.hero-intro { margin: 16px 0 0; max-width: 620px; color: var(--muted); line-height: 1.75; }
+.hero .intro-links { margin: 20px 0 0; font-size: 0.92rem; }
+/* Home keyword strip: focus terms as plain chips, tools in mono; both derived from the project files. */
+.keyword-strip { padding: 22px 0; border-bottom: 1px solid var(--line); }
+.keyword-strip dl { margin: 0; display: grid; gap: 12px; }
+.keyword-strip dl > div { display: grid; grid-template-columns: 5.5em minmax(0, 1fr); gap: 12px; align-items: baseline; }
+.keyword-strip dt { font-size: 0.75rem; color: var(--accent-2); text-transform: uppercase; letter-spacing: 0.06em; }
+.keyword-strip dd { margin: 0; }
+.keyword-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
+.keyword-strip li { padding: 3px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 0.85rem; }
+.keyword-strip li.mono { font-size: 0.78rem; color: var(--muted); }
+.hero-role { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 16px 0 0; color: var(--muted); }
+.open-to-work {
+  display: inline-flex; align-items: center; gap: 8px; padding: 3px 12px; border-radius: 999px;
+  background: var(--accent-bg); font-size: 0.85rem; font-weight: 600;
+}
+.open-to-work::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--accent-2); }
+.open-to-work:hover { text-decoration: none; color: var(--accent-2); }
+/* Home impact map: the shared system map with every area lit in its project's accent, then one card per project. */
+.system-map[data-focus="all"] .area { opacity: 1; }
+.system-map[data-focus="all"] .area :is(.node, .flow) { stroke: var(--accent); stroke-width: 2; }
+.system-map[data-focus="all"] .area .arrow { fill: var(--accent); }
+.system-map .map-tag { fill: var(--accent); font-size: 12px; font-weight: 700; }
+/* In-progress project: faded, dashed outline, matching its dashed card. */
+.system-map[data-focus="all"] .area.is-building { opacity: 0.55; }
+.system-map[data-focus="all"] .area.is-building .node { stroke-dasharray: 4 4; }
+/* Narrow screens collapse the map behind this summary; on wide screens the summary is hidden and the map stays open. */
+.impact-map-details > summary {
+  display: inline-flex; align-items: center; gap: 8px; margin-bottom: 12px; padding: 6px 14px;
+  border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--fg);
+  font-size: 0.8rem; cursor: pointer; list-style: none;
+}
+.impact-map-details > summary::-webkit-details-marker { display: none; }
+.impact-map-details > summary::before { content: "+"; color: var(--accent-2); font-weight: 700; }
+.impact-map-details[open] > summary::before { content: "−"; }
+.impact-map-details > summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+@media (min-width: 641px) { .impact-map-details > summary { display: none; } }
+/* Hover or focus a card: its area stays lit, the others fade. */
+.impact-company:has(.impact-card[data-area="ticket"]:is(:hover, :focus-within))      .area:not([data-area="ticket"]),
+.impact-company:has(.impact-card[data-area="credit-card"]:is(:hover, :focus-within)) .area:not([data-area="credit-card"]),
+.impact-company:has(.impact-card[data-area="drop-order"]:is(:hover, :focus-within))  .area:not([data-area="drop-order"]),
+.impact-company:has(.impact-card[data-area="account"]:is(:hover, :focus-within))     .area:not([data-area="account"]) { opacity: 0.2; }
+.impact-toolbar { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
+.impact-toolbar label { font-size: 0.78rem; color: var(--muted); }
+.impact-select {
+  appearance: none; padding: 6px 34px 6px 14px; border: 1px solid var(--line); border-radius: 999px;
+  background: var(--surface);
+  color: var(--fg); font: 600 0.9rem var(--sans); cursor: pointer;
+}
+.impact-select:hover { border-color: var(--accent); }
+/* Chevron drawn with borders so it follows the theme tokens. */
+.impact-select-wrap { position: relative; display: inline-flex; }
+.impact-select-wrap::after {
+  content: ""; position: absolute; right: 15px; top: 50%; width: 7px; height: 7px; margin-top: -6px; pointer-events: none;
+  border-right: 1.6px solid var(--muted); border-bottom: 1.6px solid var(--muted); transform: rotate(45deg);
+}
+.impact-select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.impact-company + .impact-company { margin-top: 40px; }
+.impact-company-name { margin: 0 0 10px; font-weight: 700; }
+/* With the picker active, the dropdown already names the company. */
+.has-impact-picker .impact-company-name { display: none; }
+.has-impact-picker .impact-company + .impact-company { margin-top: 0; }
+.impact-cards { list-style: none; margin: 16px 0 0; padding: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+.impact-card { display: flex; }
+.impact-card > a {
+  flex: 1; display: flex; flex-direction: column; gap: 14px; padding: 18px; color: var(--fg);
+  background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--accent); border-radius: var(--radius);
+  transition: border-color .2s;
+}
+.impact-card > a:hover { text-decoration: none; border-color: var(--accent); }
+.impact-card > a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.impact-card-head { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; }
+.impact-card-title { font-weight: 700; font-size: 0.95rem; line-height: 1.35; color: var(--accent); }
+.impact-badge { padding: 1px 8px; border: 1px dashed var(--accent); border-radius: 999px; font-size: 0.7rem; color: var(--accent); }
+.impact-ba { margin: 0; display: grid; gap: 8px; }
+.impact-ba div { display: grid; grid-template-columns: 3.2em minmax(0, 1fr); gap: 8px; align-items: baseline; }
+.impact-ba dt { font-size: 0.72rem; color: var(--muted); }
+.impact-ba dd { margin: 0; font-size: 0.88rem; line-height: 1.5; }
+.impact-ba div:first-child dd { color: var(--muted); }
+.impact-ba div:last-child dd { font-weight: 600; }
+.impact-nums { margin: 0; display: grid; gap: 10px; padding-top: 12px; border-top: 1px solid var(--line); }
+.impact-nums dt { font-size: 1.35rem; font-weight: 700; color: var(--accent); line-height: 1.2; }
+.impact-nums dd { margin: 2px 0 0; font-size: 0.78rem; color: var(--muted); line-height: 1.45; }
+.impact-card .read-more { margin-top: auto; }
+.impact-card.is-building > a { border-top-style: dashed; background: var(--bg); }
+@media (max-width: 960px) { .impact-cards { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+/* Home closing card: a small version of the Contact business card. */
+.home-contact {
+  display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 20px 24px;
+  padding: 28px 32px; background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow);
+}
+.home-contact-mark { width: 48px; height: 48px; }
+.home-contact h2 { font-size: 1.3rem; margin-bottom: 4px; }
+.home-contact-text p { margin: 0; font-size: 0.92rem; }
+.home-contact-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px 12px; }
+.home-contact-email { font-weight: 600; overflow-wrap: anywhere; }
+.home-contact-more { flex-basis: 100%; text-align: right; font-size: 0.8rem; }
 .prose-block { max-width: 760px; }
 
 /* ---------- Off the Clock (About 05): one wide photo, then a row of three; single column on narrow screens ---------- */
@@ -177,7 +276,8 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .life-gallery video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 9; object-fit: cover; border-radius: var(--radius); border: 1px solid var(--line); background: var(--line); }
 .life-gallery figcaption { margin-top: 8px; font-size: 0.85rem; color: var(--muted); }
 .life-gallery figcaption .mono { color: var(--accent-2); margin-right: 6px; }
-.life-hook { color: var(--muted); }
+/* Home intro: "more about me" and the off-the-clock hook on their own lines. */
+.intro-links { display: flex; flex-direction: column; gap: 6px; }
 @media (max-width: 640px) { .life-gallery { grid-template-columns: 1fr; } }
 
 /* ---------- Per-project accent (frontmatter `accent`) ---------- */
@@ -845,6 +945,10 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
   .header-right { gap: 12px; }
   nav a { font-size: 0.85rem; }
   .brand-name { display: none; }
+  .impact-cards { grid-template-columns: 1fr; }
+  .home-contact { grid-template-columns: auto minmax(0, 1fr); padding: 24px 20px; }
+  .home-contact-actions { grid-column: 1 / -1; justify-content: flex-start; }
+  .home-contact-more { text-align: left; }
   .hero { padding: 56px 0 40px; }
   .hero-split { grid-template-columns: 1fr; gap: 40px; }
   .hero-photo { width: 200px; justify-self: center; grid-row: 1; margin-right: 0; }

@@ -23,6 +23,11 @@ const page_title = title ? `${title} — ${profile.name}` : `${profile.name} | $
 const full_path  = Astro.url.pathname.replace(import.meta.env.BASE_URL.replace(/\/$/, ""), "") || "/";
 const path       = full_path.replace(/^\/en(\/|$)/, "/");   // same path in both languages, e.g. "/about/"
 const other_path = alt_path ?? (lang === "en" ? path : `/en${path}`);
+// Social preview (LinkedIn, Slack, messaging apps). public/og.png is generated from scripts/og/og.html.
+// Astro.site is set on GitHub Actions builds; locally it falls back to the dev URL so the tags still render.
+const site_root  = Astro.site ?? Astro.url;
+const page_url   = new URL(Astro.url.pathname, site_root).href;
+const og_image   = new URL(url("og.png"), site_root).href;
 
 const nav = [
   { href: lang_path("/", lang),          label: "Home",     active: path === "/" },
@@ -39,6 +44,18 @@ const nav = [
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>{page_title}</title>
     <meta name="description" content={description} />
+    <link rel="canonical" href={page_url} />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content={profile.name} />
+    <meta property="og:title" content={page_title} />
+    <meta property="og:description" content={description} />
+    <meta property="og:url" content={page_url} />
+    <meta property="og:locale" content={lang === "en" ? "en_US" : "zh_TW"} />
+    <meta property="og:image" content={og_image} />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content={`${profile.name} · ${profile.title}`} />
+    <meta name="twitter:card" content="summary_large_image" />
     <link rel="icon" type="image/svg+xml" href={url("favicon.svg")} />
     <script is:inline>
       // Runs before first paint so the page never flashes the wrong theme.

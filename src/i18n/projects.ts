@@ -4,12 +4,48 @@
 // metric values and the system map stay from the zh file so each number has one source.
 import { getCollection, type CollectionEntry } from "astro:content";
 import type { Lang } from "./ui";
+import { map_area_order } from "../data/system-maps";
 
 export interface LocalizedProject {
   id:   string;
   data: CollectionEntry<"projects">["data"];
   // Entry whose Markdown body is rendered on the case study page.
   body: CollectionEntry<"projects"> | CollectionEntry<"projects_en">;
+}
+
+// Home keyword strip, derived from the project files so it never needs hand upkeep:
+// focus = union of every project's `focus` (recruiter search terms); tools = `stack` items used in 2+ projects,
+// most used first. Language-independent (focus and stack are only written in the zh files).
+export async function get_keywords(): Promise<{ focus: string[]; tools: string[] }> {
+  const projects = await get_projects("zh");
+  const focus = [...new Set(projects.flatMap((p) => p.data.focus ?? []))];
+  const count = new Map<string, number>();
+  for (const tool of projects.flatMap((p) => p.data.stack)) count.set(tool, (count.get(tool) ?? 0) + 1);
+  const tools = [...count].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).map(([tool]) => tool);
+  return { focus, tools };
+}
+
+// Home impact map: every project drawn on a company system map, finished ones first, in the map's left-to-right order
+// (data/system-maps.ts). ImpactMap.astro groups them by `system_map.map` (one map and dropdown option per company).
+// A project with `home` shows its `on_home` metrics; one without it is shown as "in progress" with no numbers.
+// Fails the build when a Home project still has an "XX" placeholder, has more than 2 `on_home` metrics,
+// or a mapped project lacks `impact` text, so Home never shows an unfinished number or an empty card.
+export async function get_impact_projects(lang: Lang): Promise<LocalizedProject[]> {
+  const mapped = (await get_projects(lang)).filter((p) => p.data.system_map);
+  for (const p of mapped) {
+    if (!p.data.impact) throw new Error(`projects/${p.id}.md: add \`impact: { before, after }\` (zh and en) for the Home impact map.`);
+    if (!p.data.home) continue;
+    if (p.data.metrics.some((m) => /XX/.test(m.value))) {
+      throw new Error(`projects/${p.id}.md has an "XX" placeholder metric; remove its \`home\` entry until the number is final.`);
+    }
+    if (p.data.metrics.filter((m) => m.on_home).length > 2) {
+      throw new Error(`projects/${p.id}.md: at most 2 metrics may set \`on_home: true\`.`);
+    }
+  }
+  // Finished projects first, each group in the map's left-to-right order; "in progress" cards go last.
+  const rank = (p: LocalizedProject) =>
+    (p.data.home ? 0 : 100) + map_area_order[p.data.system_map!.map].indexOf(p.data.system_map!.area);
+  return mapped.sort((a, b) => rank(a) - rank(b));
 }
 
 export async function get_projects(lang: Lang): Promise<LocalizedProject[]> {
@@ -40,7 +76,8 @@ export async function get_projects(lang: Lang): Promise<LocalizedProject[]> {
         summary:  en.data.summary,
         role:     en.data.role,
         tldr:     en.data.tldr ?? p.data.tldr,
-        metrics:  p.data.metrics.map((m, i) => ({ value: m.value, label: en.data.metric_labels[i] })),
+        impact:   en.data.impact ?? p.data.impact,
+        metrics:  p.data.metrics.map((m, i) => ({ ...m, label: en.data.metric_labels[i] })),
       },
     };
   });

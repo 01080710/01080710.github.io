@@ -97,7 +97,7 @@ const t       = use_translations(lang);
           <div>
             <h3>{a.title}</h3>
             <p>{a.body}</p>
-            <p class="muted small">{t("about.example")}{a.example}</p>
+            {a.example && <p class="muted small">{t("about.example")}{a.example}</p>}
           </div>
         </li>
       ))}

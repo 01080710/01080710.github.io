@@ -40,7 +40,7 @@ export const profile = {
   approach: [
     { step: "Align",       title: "對齊脈絡",     body: "與需求方確認商業脈絡、判斷規則與預期指標。", example: "信用卡異常出金偵測：偵測規則先與營運端逐條對齊。" },
     { step: "Generalize",  title: "找出通則",     body: "從零散需求中歸納可以共用的流程，而不是逐案處理。", example: "營運帳務自動化引擎：歸納出可涵蓋約 80% 業務場景的共通流程。" },
-    { step: "Unblock",     title: "打通資料",     body: "缺少權限或 API 時，用逆向工程建立資料通道。", example: "0-to-1 營運數據基礎設施：整合 6 個封閉平台。" },
+    { step: "Unblock",     title: "打通資料",     body: "缺少權限或 API 時，用逆向工程建立資料通道。", },
     { step: "Systematize", title: "系統化",       body: "補上輸入驗證、排程、正規化與審計，讓解法可以穩定重複執行。", example: "每小時增量同步與每小時對帳管線。" },
     { step: "Deliver",     title: "交付與量化",   body: "包裝成非技術同仁可直接使用的工具，並用數字回報成效。", example: "LarkSheet 批量查詢引擎；累計節省約 4,770 小時（估計）。" },
   ],
@@ -72,7 +72,7 @@ export const profile = {
   // and the companion's face in the turtle photo is blurred (no consent to publish).
   life: {
     intro:  "工作上喜歡與技術交手、解決各種難題；而工作外則喜歡往天空飛、向大海深潛，曾在芭達雅挑戰高空跳傘，也曾在小琉球、峇里島、馬爾地夫與斐濟探索海底世界，與海洋生物近距離相遇。不甘於一成不變，喜歡冒險、熱愛嘗試新事物，總期待在不同的地方，遇見不一樣的風景與自己。",
-    home_hook: "工作之外的我：",
+   
     photos: [
       { src: "media/life/nurse-sharks-maldives.jpg", place: "馬爾地夫 - 馬富士", caption: "與護士鯊同游",
         alt:  "空拍畫面：我穿著紅色救生衣漂浮在藍綠色海面，周圍環繞十多隻護士鯊" },

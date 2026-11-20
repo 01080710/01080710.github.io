@@ -1,0 +1,106 @@
+---
+// Home impact map: per company, the system map with every project lit in its own accent and one card per project
+// under it (before -> after, plus up to 2 `on_home` metrics). A dropdown picks the company. Numbers and text come
+// from the project files; companies come from each project's `system_map.map` and `company`.
+// Hovering or focusing a card dims the other areas of the map (CSS :has, no JS needed).
+import SystemMap from "./SystemMap.astro";
+import { get_impact_projects } from "../i18n/projects";
+import { lang_path, use_translations, type Lang } from "../i18n/ui";
+
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+const t = use_translations(lang);
+
+const projects = await get_impact_projects(lang);
+// One group per company map, in order of first appearance; the company name comes from the projects' `company`.
+const groups = [...new Set(projects.map((p) => p.data.system_map!.map))].map((map) => {
+  const items = projects.filter((p) => p.data.system_map!.map === map);
+  return {
+    map,
+    company: items[0].data.company,
+    items,
+    accents: Object.fromEntries(items.map((p) => [p.data.system_map!.area, p.data.accent])),
+    building: items.filter((p) => !p.data.home).map((p) => p.data.system_map!.area),
+  };
+});
+---
+
+<section class="section impact-map" aria-labelledby="impact-map-title">
+  <h2 class="section-title" id="impact-map-title">{t("home.map_title")}</h2>
+  <p class="muted section-note">{t("home.map_note")}</p>
+
+  <!-- Company picker: revealed by the script below. Without JS every company's map and cards are shown in turn. -->
+  <div class="impact-toolbar" hidden>
+    <label for="impact-company" class="mono">{t("home.map_company")}</label>
+    <span class="impact-select-wrap">
+      <select id="impact-company" class="impact-select">
+        {groups.map((g) => <option value={g.map}>{g.company}</option>)}
+      </select>
+    </span>
+  </div>
+
+  {groups.map((g) => (
+    <div class="impact-company" data-company={g.map}>
+      <p class="impact-company-name">{g.company}</p>
+      <!-- Open by default (no-JS readers get the map). The script below closes it on narrow screens, where the
+           wide map would only scroll sideways; the cards carry the same content. -->
+      <details class="impact-map-details" open>
+        <summary class="mono">{t("home.map_show")}</summary>
+        <SystemMap map={g.map} accents={g.accents} building={g.building} lang={lang} />
+      </details>
+      <ul class="impact-cards">
+        {g.items.map((p) => (
+          <li class:list={["impact-card", { "is-building": !p.data.home }]} data-accent={p.data.accent} data-area={p.data.system_map!.area}>
+            <a href={lang_path(`projects/${p.id}/`, lang)}>
+              <span class="impact-card-head">
+                <span class="system-map-key" aria-hidden="true"></span>
+                <span class="impact-card-title">{p.data.title}</span>
+                {!p.data.home && <span class="impact-badge mono">{t("home.building")}</span>}
+              </span>
+              <dl class="impact-ba">
+                <div><dt class="mono">{t("home.before")}</dt><dd>{p.data.impact!.before}</dd></div>
+                <div><dt class="mono">{t("home.after")}</dt><dd>{p.data.impact!.after}</dd></div>
+              </dl>
+              {p.data.home && (
+                <dl class="impact-nums">
+                  {p.data.metrics.filter((m) => m.on_home).map((m) => (
+                    <div><dt class="mono">{m.value}</dt><dd>{m.label}</dd></div>
+                  ))}
+                </dl>
+              )}
+              <span class="read-more mono">{t("card.read_more")}</span>
+            </a>
+          </li>
+        ))}
+      </ul>
+    </div>
+  ))}
+</section>
+
+<script>
+  // Company picker: show one company's map and cards at a time. The choice is remembered for this visitor only.
+  const KEY = "impact-company";
+  const select = document.querySelector<HTMLSelectElement>("#impact-company");
+  const panels = [...document.querySelectorAll<HTMLElement>(".impact-company")];
+  if (select && panels.length) {
+    const show = (map: string) => {
+      for (const p of panels) p.hidden = p.dataset.company !== map;
+      try { localStorage.setItem(KEY, map); } catch { /* storage blocked: the choice just isn't remembered */ }
+    };
+    let saved: string | null = null;
+    try { saved = localStorage.getItem(KEY); } catch { /* ignore */ }
+    if (saved && panels.some((p) => p.dataset.company === saved)) select.value = saved;
+    select.closest<HTMLElement>(".impact-toolbar")!.hidden = false;
+    document.documentElement.classList.add("has-impact-picker");
+    show(select.value);
+    select.addEventListener("change", () => show(select.value));
+  }
+
+  // Narrow screens: start with the system map collapsed; wide screens: always open (the summary is hidden by CSS).
+  const wide = matchMedia("(min-width: 641px)");
+  const sync_map = () => {
+    for (const d of document.querySelectorAll<HTMLDetailsElement>(".impact-map-details")) d.open = wide.matches;
+  };
+  sync_map();
+  wide.addEventListener("change", sync_map);
+</script>

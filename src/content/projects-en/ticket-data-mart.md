@@ -7,6 +7,9 @@ metric_labels:
   - "Time for OP to get ticket data (previously requested from other teams, estimated)"
   - "Data preparation and workload-statistics hours saved (estimated)"
   - "October 2026 tickets matched to the workload item register (107,412 points)"
+impact:
+  before: "Ticket data had to be requested from other teams"
+  after: "Synced daily, so OP gets the full data itself"
 tldr:
   problem: "OP is the ticket hub, but data had to be requested from other teams: slow, often misaligned, never the whole picture."
   approach: "Backfill Q4 tickets and conversations within the shared API quota, diff them into SQLite, and schedule a daily run."

@@ -46,7 +46,7 @@ export const profile_en: typeof profile = {
   ...profile,
   tagline: "I start from users' pain points, connect data scattered across systems, and turn it into automated services the team relies on every day and can hand over with confidence.",
   intro: [
-    "Hi, I'm Peter, a data engineer who loves working with data. I currently own the operations data infrastructure at my company: I integrated data from 6 platforms from scratch and built risk-control reconciliation and operations accounting automation on top of it.",
+    "Hi, I'm Peter, a data engineer who loves working with data. I built the operations data infrastructure and, on top of it, risk-control reconciliation and operations accounting automation.",
     "I look at a request from the user's side and check that it is complete before deciding how much architecture it deserves. What I deliver is not a one-off script but a service with validation, scheduling and records, so non-technical colleagues can run it themselves with confidence.",
     "I believe going far means growing with the team, so I enjoy sharing what I learn and work alongside decision-makers to propose improvements grounded in evidence. Next, I want to keep deepening my work in data engineering and AI and build smarter, friendlier systems. (Every case study includes real screen recordings and explanations.)",
   ],
@@ -76,7 +76,7 @@ export const profile_en: typeof profile = {
   approach: [
     { step: "Align",       title: "Align on context",         body: "Confirm business context, decision rules and expected metrics with the requester.", example: "Credit card anomaly detection: every detection rule was aligned with operations first." },
     { step: "Generalize",  title: "Find the common pattern",  body: "Distill shared workflows from scattered requests instead of handling each case separately.", example: "Account operation automation engine: one shared workflow covering about 80% of business scenarios." },
-    { step: "Unblock",     title: "Open the data path",       body: "When access or APIs are missing, build data channels through reverse engineering.", example: "0-to-1 operation data infrastructure: integrated 6 closed platforms." },
+    { step: "Unblock",     title: "Open the data path",       body: "When access or APIs are missing, build data channels through reverse engineering.", },
     { step: "Systematize", title: "Systematize",              body: "Add input validation, scheduling, normalization and auditing so the solution runs reliably and repeatably.", example: "Hourly incremental sync and an hourly reconciliation pipeline." },
     { step: "Deliver",     title: "Deliver and quantify",     body: "Package it as a tool non-technical colleagues can use directly, and report the impact in numbers.", example: "LarkSheet batch query engine; about 4,770 hours saved in total (estimate)." },
   ],
@@ -93,7 +93,6 @@ export const profile_en: typeof profile = {
 
   life: {
     intro:     "At work, I enjoy wrestling with technology and solving hard problems; off the clock, I head for the sky and dive deep into the sea. I've taken on a skydive in Pattaya and explored the underwater world of Xiaoliuqiu, Bali, the Maldives and Fiji, meeting sea life up close. I don't settle for routine: I love adventure and trying new things, and I always look forward to finding new scenery, and a different side of myself, in new places.",
-    home_hook: "Off the clock:",
     photos:    profile.life.photos.map((photo, i) => ({ ...photo, ...life_photo_text[i] })),
   },
 

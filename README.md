@@ -32,7 +32,7 @@ npm run preview   # 預覽 build 結果
 │  ├─ data/profile.en.ts     # 英文版文案（只覆寫文字；日期、標籤、連結沿用 profile.ts）
 │  ├─ i18n/                  # ui.ts（介面字串、語言路徑）、profile.ts（依語言取文案）
 │  ├─ data/project-categories.ts  # Projects 頁篩選用的技術類型清單
-│  ├─ components/            # ProjectCard、ContactLinks（頁尾）、ProfilePhoto（首頁與 Contact 共用照片）
+│  ├─ components/            # ProjectCard、ContactLinks（頁尾）、ProfilePhoto（首頁照片）、BrandMark（P 標誌）、SocialIcon、CopyEmail
 │  ├─ layouts/Base.astro     # 共用 header / footer
 │  ├─ pages/[...lang]/       # 所有頁面（含 projects/[slug]）；同一份模板輸出中文 / 與英文 /en/
 │  ├─ lib/url.ts             # 加上 GitHub Pages base path
@@ -79,7 +79,8 @@ metrics:                     # 選填，最多 3 個，數字要能對回 docs/s
   - { value: "95%", label: "人工工作量減少" }
 tags: ["Automation"]
 categories: ["Automation"]   # 必填，Projects 頁篩選用；可選值見 src/data/project-categories.ts
-featured: true               # true = 顯示在首頁
+home: true                   # 選填：首頁成果地圖卡片顯示數字（沒填 = 標「建置中」）；metrics 含 XX 時不可填
+# metrics 每項可加 on_home: true（首頁成果地圖卡片顯示，最多 2 個）；另填 impact: { before, after } 給成果地圖
 order: 4                     # 排序，小的在前
 ---
 

@@ -10,16 +10,19 @@ stack: ["Python", "Asyncio", "LarkSheet API", "Input Validation", "Data Normaliz
 focus: ["Batch Processing", "Process Automation"]
 system_map: { map: "hytech", area: "account" }
 metrics:
-  - { value: "381,629", label: "累計驗證帳戶（2026-06-09 ~ 11-16）" }
-  - { value: "≈4,770 hr", label: "累計節省人工查詢工時（估計）" }
+  - { value: "381,629", label: "累計驗證帳戶（2026-06-09 ~ 11-16）", on_home: true }
+  - { value: "≈4,770 hr", label: "累計節省人工查詢工時（估計）", on_home: true }
   - { value: "≈NT$1.91M", label: "折合人力成本（估計）" }
+impact:
+  before: "在多個 CRM 後台之間逐筆切換查詢"
+  after: "OP 填完名單就能批量送件，每次申請都可追溯"
 tldr:
   problem: "OP 確認客戶帳戶狀態時，要在多個 CRM 後台之間切換 regulator、逐筆查詢；整批案件出現時，人力撐不住。"
   approach: "把共通的查詢流程做成以 LarkSheet 為入口的批量引擎：先驗證輸入，再由排程自動查詢，成功與失敗都留紀錄。"
   result: "OP 填完名單就能自行送件，查詢不再佔用人力；每一次申請都可以追溯。"
 tags: ["System Architecture", "Automation", "Product Thinking"]
 categories: ["Automation"]
-featured: true
+home: true
 order: 3
 accent: ocean
 ---

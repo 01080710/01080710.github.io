@@ -12,13 +12,15 @@ metrics:
   - { value: "XX d → 1 d", label: "OP 取得工單資料的時間（原本向其他單位索取，估計）" }
   - { value: "XX h/mo", label: "節省的資料整理與人效統計工時（估計）" }
   - { value: "100%", label: "2026/10 工單對到人效項目清冊（107,412 點）" }
+impact:
+  before: "工單資料要向其他單位索取"
+  after: "每日同步，OP 自己取得全量資料"
 tldr:
   problem: "OP 是工單的中樞，但資料要向其他單位索取，耗時、維度常錯置，看不到全貌。"
   approach: "在共用 API 額度內回補 Q4 工單與對話，逐則比對後寫入 SQLite，並設定每日排程。"
   result: "OP 拿到全量、格式固定且能對照人效的資料；重跑不重複，中斷可以從斷點續跑。"
 tags: ["Data Engineering", "Backfill", "PoC"]
 categories: ["Data Pipeline"]
-featured: true
 order: 1
 accent: slate
 ---

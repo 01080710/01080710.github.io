@@ -1,0 +1,26 @@
+---
+// Copy-email button used on Home and Contact. Avoids forcing visitors through a mailto handler they may not use.
+// Feedback text comes from data-* attributes so both languages share one script.
+import { use_translations, type Lang } from "../i18n/ui";
+interface Props { email: string; lang: Lang }
+const { email, lang } = Astro.props;
+const t = use_translations(lang);
+---
+<button type="button" class="copy-email mono" data-email={email}
+        data-copied={t("contact.copied")} data-failed={t("contact.copy_failed")}>{t("contact.copy")}</button>
+
+<script>
+  for (const btn of document.querySelectorAll<HTMLButtonElement>(".copy-email")) {
+    btn.addEventListener("click", async () => {
+      const original = btn.textContent;
+      try {
+        await navigator.clipboard.writeText(btn.dataset.email ?? "");
+        btn.textContent = btn.dataset.copied ?? "";
+      } catch (err) {
+        console.warn("Copy email failed", err);
+        btn.textContent = btn.dataset.failed ?? "";
+      }
+      setTimeout(() => { btn.textContent = original; }, 1800);
+    });
+  }
+</script>

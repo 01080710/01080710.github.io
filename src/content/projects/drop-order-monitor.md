@@ -11,17 +11,20 @@ role: "與營運端對齊掉單判定規則，負責管線設計與實作"
 stack: ["Python", "pandas", "SQLAlchemy / MySQL", "API Reverse Engineering", "pyotp (2FA)", "aiohttp", "cron", "LarkSheet API", "Lark Drive API", "JSON Structured Logging"]
 focus: ["Data Reconciliation", "Data Quality Monitoring"]
 system_map: { map: "hytech", area: "drop-order" }
+impact:
+  before: "每日人工抽查，掉單常等客訴才發現"
+  after: "自動比對兩邊狀態，掉單直接派工"
 tldr:
   problem: "CRM 與 CPS 的出入金狀態不同步（掉單），常常等客戶來問才發現，排查還要逐層翻兩個系統。"
   approach: "每小時自動比對兩邊的訂單狀態，依規則判定掉單，去重後寫入營運已在用的 LarkSheet 案件表。"
   result: "掉單從事後客訴變成每小時派工；取數與比對不再需要人工，監控也不再受排班影響。"
 metrics:
-  - { value: "1 hr", label: "掉單揭露顆粒（原 Deposit、Withdrawal 各每日 2 次抽查）" }
+  - { value: "1 hr", label: "掉單揭露顆粒（原 Deposit、Withdrawal 各每日 2 次抽查）", on_home: true }
   - { value: "≈606 hr", label: "至 2026/11/17 節省的人工監控工時（估計）" }
-  - { value: "15,393", label: "至 2026/11/17 自動揭露的掉單案件" }
+  - { value: "15,393", label: "至 2026/11/17 自動揭露的掉單案件", on_home: true }
 tags: ["Reconciliation", "Automation", "Operations"]
 categories: ["Data Pipeline", "Automation"]
-featured: true
+home: true
 order: 4
 accent: forest
 ---

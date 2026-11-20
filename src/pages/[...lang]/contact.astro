@@ -1,6 +1,7 @@
 ---
 import Base from "../../layouts/Base.astro";
 import BrandMark from "../../components/BrandMark.astro";
+import CopyEmail from "../../components/CopyEmail.astro";
 import SocialIcon from "../../components/SocialIcon.astro";
 import { get_profile } from "../../i18n/profile";
 import { lang_from_param, lang_static_paths, use_translations } from "../../i18n/ui";
@@ -47,10 +48,7 @@ const sources = [
         {email
           ? <a class="card-email-link" href={`mailto:${email}`}>{email}</a>
           : <span class="todo">TODO</span>}
-        {email && (
-          <button type="button" class="copy-email mono" data-email={email}
-                  data-copied={t("contact.copied")} data-failed={t("contact.copy_failed")}>{t("contact.copy")}</button>
-        )}
+        {email && <CopyEmail email={email} lang={lang} />}
       </div>
       <ul class="card-links">
         {sources.map((c) => (
@@ -82,20 +80,3 @@ const sources = [
   </section>
 </Base>
 
-<script>
-  // Copy-email button: avoids forcing visitors through a mailto handler they may not use.
-  // Feedback text comes from data-* attributes so both languages share this script.
-  for (const btn of document.querySelectorAll<HTMLButtonElement>(".copy-email")) {
-    btn.addEventListener("click", async () => {
-      const original = btn.textContent;
-      try {
-        await navigator.clipboard.writeText(btn.dataset.email ?? "");
-        btn.textContent = btn.dataset.copied ?? "";
-      } catch (err) {
-        console.warn("Copy email failed", err);
-        btn.textContent = btn.dataset.failed ?? "";
-      }
-      setTimeout(() => { btn.textContent = original; }, 1800);
-    });
-  }
-</script>

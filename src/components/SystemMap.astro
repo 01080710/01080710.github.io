@@ -4,13 +4,29 @@
 // `area` highlights one project's part of the map; the rest is dimmed.
 // To add a company later: add its map name to the schema enum and a new branch below.
 import { use_translations, type Lang } from "../i18n/ui";
+import { map_tags, type MapArea, type MapName } from "../data/system-maps";
 
+type Area = MapArea;
 interface Props {
-  map: "hytech";
-  area: "ticket" | "credit-card" | "drop-order" | "account";
+  map: MapName;
+  // One project's area (case study pages). Omit for the overview (Home impact map): every area is lit.
+  area?: Area;
+  // Overview only: each area's project accent (frontmatter `accent`), so the map matches the cards below it.
+  accents?: Partial<Record<Area, string>>;
+  // Overview only: areas whose project is still in progress (drawn faded with dashed outlines).
+  building?: Area[];
   lang?: Lang;
 }
-const { map, area, lang = "zh" } = Astro.props;
+const { map, area, accents = {}, building = [], lang = "zh" } = Astro.props;
+const overview = !area;
+const tags = map_tags[lang];
+// Where each area's tag sits in the 960x484 viewBox (overview only).
+const tag_at: Record<Area, { x: number; y: number }> = {
+  "credit-card": { x: 125, y: 116 },
+  "ticket":      { x: 317, y: 240 },
+  "account":     { x: 480, y: 376 },
+  "drop-order":  { x: 680, y: 228 },
+};
 const t = use_translations(lang);
 
 const area_labels = {
@@ -27,7 +43,8 @@ const area_labels = {
     "account":     "Account statuses between CRM accounts and MetaTrader",
   },
 };
-const area_label = area_labels[lang][area];
+const area_label = area ? area_labels[lang][area] : "";
+const uid = `sysmap-${map}-${area ?? "all"}`;   // unique per page even when several maps are shown
 const svg_text = lang === "en"
   ? { title: "Money flow and system map",
       desc:  "Clients enter the CRM through the Client Portal; deposits and withdrawals go through CPS to each payment channel; credit card payments go through Bridger to the credit card PSP; CRM accounts map to MetaTrader trading accounts; Freshservice tickets are handled by OP groups or dispatched to 11 other teams and closed out by OP; OP group tickets are synced daily into a yearly SQLite data mart.",
@@ -38,12 +55,12 @@ const svg_text = lang === "en"
 ---
 
 {map === "hytech" && (
-  <figure class="system-map" data-focus={area}>
-    <p class="system-map-focus"><span class="system-map-key"></span>{t("map.focus")}{area_label}</p>
+  <figure class="system-map" data-focus={area ?? "all"}>
+    {area && <p class="system-map-focus"><span class="system-map-key"></span>{t("map.focus")}{area_label}</p>}
     <div class="system-map-scroll">
-      <svg viewBox="0 0 960 484" role="img" aria-labelledby="sysmap-title sysmap-desc">
-        <title id="sysmap-title">{svg_text.title}</title>
-        <desc id="sysmap-desc">{svg_text.desc} {t("map.focus")}{area_label}</desc>
+      <svg viewBox="0 0 960 484" role="img" aria-labelledby={`${uid}-title ${uid}-desc`}>
+        <title id={`${uid}-title`}>{svg_text.title}</title>
+        <desc id={`${uid}-desc`}>{svg_text.desc}{area && ` ${t("map.focus")}${area_label}`}</desc>
 
         <!-- Base flow: always visible -->
         <g class="map-base">
@@ -60,7 +77,8 @@ const svg_text = lang === "en"
         </g>
 
         <!-- Credit Card Anomaly Detection: card PSP <-> Bridger <-> CRM -->
-        <g class="area" data-area="credit-card">
+        <g class:list={["area", { "is-building": building.includes("credit-card") }]} data-area="credit-card" data-accent={accents["credit-card"]}>
+          {overview && <text class="map-tag" x={tag_at["credit-card"].x} y={tag_at["credit-card"].y}>{tags["credit-card"]}</text>}
           <path class="flow" d="M210 178 H250" />
           <path class="flow" d="M360 178 H400" />
           <rect class="node" x="40" y="128" width="170" height="100" rx="6" />
@@ -74,7 +92,8 @@ const svg_text = lang === "en"
         </g>
 
         <!-- Deposit & Withdrawal Drop-Order Monitor: CRM <-> CPS -> channels -->
-        <g class="area" data-area="drop-order">
+        <g class:list={["area", { "is-building": building.includes("drop-order") }]} data-area="drop-order" data-accent={accents["drop-order"]}>
+          {overview && <text class="map-tag" x={tag_at["drop-order"].x} y={tag_at["drop-order"].y}>{tags["drop-order"]}</text>}
           <path class="flow" d="M560 84 H680 V142" />
           <path class="arrow" d="M680 150 L675 141 H685 Z" />
           <path class="flow" d="M620 170 H568" />
@@ -112,7 +131,8 @@ const svg_text = lang === "en"
         </g>
 
         <!-- Account Operation Automation Engine: CRM account <-> MetaTrader -->
-        <g class="area" data-area="account">
+        <g class:list={["area", { "is-building": building.includes("account") }]} data-area="account" data-accent={accents["account"]}>
+          {overview && <text class="map-tag" x={tag_at["account"].x} y={tag_at["account"].y}>{tags["account"]}</text>}
           <path class="flow" d="M480 206 V246" />
           <path class="flow" d="M480 286 V316" />
           <rect class="node" x="420" y="246" width="120" height="40" rx="6" />
@@ -122,7 +142,8 @@ const svg_text = lang === "en"
         </g>
 
         <!-- OP Ticket Data Pipeline: Freshservice tickets -> yearly SQLite -> OP; OP dispatches to and closes out from these groups -->
-        <g class="area" data-area="ticket">
+        <g class:list={["area", { "is-building": building.includes("ticket") }]} data-area="ticket" data-accent={accents["ticket"]}>
+          {overview && <text class="map-tag" x={tag_at["ticket"].x} y={tag_at["ticket"].y}>{tags["ticket"]}</text>}
           <path class="flow" d="M210 278 H242" />
           <path class="arrow" d="M250 278 L241 273 V283 Z" />
           <path class="flow" d="M125 306 V330" />
@@ -162,7 +183,7 @@ const svg_text = lang === "en"
 <script>
   // On narrow screens the map scrolls sideways; start with the highlighted area in view.
   // Without JS the map is still complete and can be scrolled by hand.
-  for (const fig of document.querySelectorAll<HTMLElement>(".system-map[data-focus]")) {
+  for (const fig of document.querySelectorAll<HTMLElement>(".system-map[data-focus]:not([data-focus='all'])")) {
     const scroller = fig.querySelector<HTMLElement>(".system-map-scroll");
     const area     = fig.querySelector<SVGGraphicsElement>(`.area[data-area="${fig.dataset.focus}"]`);
     const svg      = fig.querySelector<SVGSVGElement>("svg");

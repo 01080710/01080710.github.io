@@ -7,6 +7,9 @@ metric_labels:
   - "Detection time once data is available (previously up to about 5 hours)"
   - "Manual comparison hours saved, Mar–Jul (estimate)"
   - "Automated reconciliation runs, Mar–Jul"
+impact:
+  before: "Shift staff compared reports by hand; wrong refunds were found late"
+  after: "A wrong refund is flagged on the next run"
 tldr:
   problem: "On credit card withdrawals, the refund Payabl actually paid may not match what the CRM recorded; manual Excel checks relied on shifts and had hit their limits on frequency and accuracy."
   approach: "Pull both reports automatically via API reverse engineering, reconcile everything every hour, and write only mismatched transactions to LarkSheet for operations to review."

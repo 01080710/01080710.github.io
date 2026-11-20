@@ -1,0 +1,56 @@
+<!doctype html>
+<!--
+  Source of public/og.png (the 1200x630 social preview used by og:image / twitter:image).
+  Colours copy the light-theme tokens in src/styles/global.css (--bg, --fg, --muted, --accent, --accent-2, --line);
+  the P mark copies public/favicon.svg. Regenerate after changing any of them:
+    "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --headless=new --hide-scrollbars \
+      --window-size=1200,630 --screenshot=public/og.png "file://$PWD/scripts/og/og.html"
+-->
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; width: 1200px; height: 630px; overflow: hidden; }
+  body {
+    background: #fafaf8; color: #16181d; position: relative;
+    font-family: "Inter", "Noto Sans TC", "PingFang TC", system-ui, sans-serif;
+  }
+  .dots { position: absolute; inset: 0; background-image: radial-gradient(#e2e3df 1.6px, transparent 2px); background-size: 28px 28px; }
+  .pipes { position: absolute; right: 0; top: 0; width: 376px; height: 630px; }
+  .pipes path { fill: none; stroke: #2f4f8f; stroke-width: 3; stroke-dasharray: 10 8; }
+  .card {
+    position: absolute; left: 80px; top: 120px; width: 640px; padding: 48px 52px;
+    background: #fff; border: 1.5px solid #e2e3df; border-radius: 28px;
+    box-shadow: 0 2px 4px rgb(20 24 33 / .06), 0 24px 60px rgb(20 24 33 / .12);
+  }
+  .id { display: flex; align-items: center; gap: 28px; }
+  .id svg { width: 112px; height: 112px; flex: none; }
+  .name { margin: 0; font-size: 64px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; }
+  .zh { margin: 8px 0 0; font-size: 30px; color: #5b6170; font-weight: 600; }
+  .title { margin: 40px 0 0; padding-top: 28px; border-top: 1.5px solid #e2e3df; font: 600 30px ui-monospace, "SFMono-Regular", Menlo, monospace; color: #2f4f8f; }
+  .tag { margin: 14px 0 0; font-size: 24px; color: #5b6170; }
+  .node { position: absolute; border-radius: 50%; }
+  .node.hot { width: 30px; height: 30px; background: #b86f5a; left: 809px; top: 300px; box-shadow: 0 0 0 8px #fafaf8; }
+</style>
+</head>
+<body>
+  <div class="dots"></div>
+  <svg class="pipes" viewBox="0 0 376 630" preserveAspectRatio="none">
+    <path d="M376 120 C200 120 170 315 0 315" />
+    <path d="M376 315 H0" />
+    <path d="M376 510 C200 510 170 315 0 315" />
+  </svg>
+  <div class="card">
+    <div class="id">
+      <svg viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#2f4f8f"/><path d="M10 25V7.5h8a5.5 5.5 0 0 1 0 11h-2.5" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/><circle cx="10" cy="25" r="3" fill="#fff"/><circle cx="10" cy="7.5" r="3" fill="#fff"/><circle cx="14.5" cy="18.5" r="3.4" fill="#e09a83"/></svg>
+      <div>
+        <p class="name">Peter Chang</p>
+        <p class="zh">張豈愷</p>
+      </div>
+    </div>
+    <p class="title">Data Engineer &amp; System Builder</p>
+    <p class="tag">Data pipelines · Reconciliation · Automation</p>
+  </div>
+  <span class="node hot"></span>
+</body>
+</html>

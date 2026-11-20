@@ -1,9 +1,11 @@
 ---
 import Base from "../../layouts/Base.astro";
-import ProjectCard from "../../components/ProjectCard.astro";
+import BrandMark from "../../components/BrandMark.astro";
+import CopyEmail from "../../components/CopyEmail.astro";
+import ImpactMap from "../../components/ImpactMap.astro";
 import ProfilePhoto from "../../components/ProfilePhoto.astro";
 import { get_profile } from "../../i18n/profile";
-import { get_projects } from "../../i18n/projects";
+import { get_keywords } from "../../i18n/projects";
 import { lang_from_param, lang_path, lang_static_paths, use_translations } from "../../i18n/ui";
 
 export const getStaticPaths = lang_static_paths;
@@ -12,53 +14,56 @@ const lang    = lang_from_param(Astro.params.lang);
 const profile = get_profile(lang);
 const t       = use_translations(lang);
 
-const featured = (await get_projects(lang)).filter((p) => p.data.featured);
+// Home = a 30-second pitch: value statement + first intro paragraph -> keyword strip -> impact map
+// (company map + one card per project) -> contact card. Project cards and numbers come from the project files (see ImpactMap.astro).
+const { email } = profile.contact;
+const keywords  = await get_keywords();
 ---
 
 <Base lang={lang}>
   <section class="hero hero-split">
     <div class="hero-text">
       <p class="eyebrow mono">{profile.name_zh} · {profile.name}</p>
-      <h1>{profile.title}</h1>
-      <p class="lead">{profile.tagline}</p>
+      <h1 class="hero-statement">{profile.tagline}</h1>
+      <p class="hero-intro">{profile.intro[0]}</p>
+      <p class="hero-role">
+        <span class="mono">{profile.title}</span>
+        <a class="open-to-work" href={lang_path("contact/", lang)}>{t("home.open_to_work")} →</a>
+      </p>
       <div class="hero-actions">
         <a class="btn primary" href={lang_path("projects/", lang)}>{t("home.view_projects")}</a>
-        <a class="btn" href={lang_path("about/", lang)}>{t("home.about_me")}</a>
+        <a class="btn" href={lang_path("contact/", lang)}>{t("home.contact")}</a>
       </div>
+      <p class="intro-links">
+        <a href={lang_path("about/", lang)}>{t("home.about_link")}</a>
+        <a href={`${lang_path("about/", lang)}#off-the-clock`}>{t("home.life_link")}</a>
+      </p>
     </div>
     <ProfilePhoto lang={lang} />
   </section>
 
+  <!-- Keywords recruiters scan for; computed from the projects (see get_keywords). -->
+  <section class="keyword-strip" aria-label={t("home.keywords")}>
+    <dl>
+      <div><dt class="mono">{t("home.skills")}</dt><dd><ul>{keywords.focus.map((k) => <li>{k}</li>)}</ul></dd></div>
+      <div><dt class="mono">{t("home.tools")}</dt><dd><ul>{keywords.tools.map((k) => <li class="mono">{k}</li>)}</ul></dd></div>
+    </dl>
+  </section>
+
+  <ImpactMap lang={lang} />
+
   <section class="section">
-    <h2 class="section-title"><span class="mono">01</span> Introduction</h2>
-    <div class="prose-block">
-      {profile.intro.map((p) => <p>{p}</p>)}
-      <p class="life-hook">{profile.life.home_hook} <a href={`${lang_path("about/", lang)}#off-the-clock`}>{t("home.life_link")}</a></p>
+    <div class="home-contact">
+      <BrandMark class="home-contact-mark" />
+      <div class="home-contact-text">
+        <h2>{t("contact.title")}</h2>
+        <p class="muted">{profile.contact_invite}</p>
+      </div>
+      <div class="home-contact-actions">
+        {email && <a class="home-contact-email" href={`mailto:${email}`}>{email}</a>}
+        {email && <CopyEmail email={email} lang={lang} />}
+        <a class="home-contact-more mono" href={lang_path("contact/", lang)}>{t("home.contact_link")}</a>
+      </div>
     </div>
-  </section>
-
-  <section class="section">
-    <h2 class="section-title"><span class="mono">02</span> Selected Projects</h2>
-    <p class="muted section-note">{t("home.projects_note")}</p>
-    <div class="project-grid">
-      {featured.map((project, i) => <ProjectCard project={project} index={i} lang={lang} />)}
-    </div>
-  </section>
-
-  <section class="section">
-    <h2 class="section-title"><span class="mono">03</span> Core Capabilities</h2>
-    <ul class="capability-grid">
-      {profile.capabilities.map((c) => (
-        <li>
-          <h3 class="mono">{c.name}</h3>
-          <p>{c.desc}</p>
-        </li>
-      ))}
-    </ul>
-  </section>
-
-  <section class="section">
-    <h2 class="section-title"><span class="mono">04</span> Contact</h2>
-    <p class="contact-cta">{profile.contact_invite} <a href={lang_path("contact/", lang)}>{t("home.contact_link")}</a></p>
   </section>
 </Base>
