@@ -35,8 +35,8 @@ const projects = defineCollection({
     tldr:      z.object({ problem: z.string(), approach: z.string(), result: z.string() }).optional(),
     // Company system map in Quick Read; `area` is this project's highlighted part (see components/SystemMap.astro).
     system_map: z.object({
-      map:  z.enum(["hytech"]),                                        // keep in step with data/system-maps.ts
-      area: z.enum(["ticket", "credit-card", "drop-order", "account"]),
+      map:  z.enum(["hytech", "weishuo"]),                                        // keep in step with data/system-maps.ts
+      area: z.enum(["ticket", "credit-card", "drop-order", "account", "noise-enforcement"]),
     }).optional(),
     tags:      z.array(z.string()).default([]),
     // Technology-type categories for the Projects page filter (at least one; values from data/project-categories.ts).
@@ -45,7 +45,7 @@ const projects = defineCollection({
     // Cards follow the map's area order (data/system-maps.ts). Projects with "XX" placeholder metrics must not set it.
     home:      z.boolean().optional(),
     // Per-project accent so case studies don't all look alike; semantic badge colours stay fixed.
-    accent:    z.enum(["forest", "violet", "ocean", "slate"]).default("forest"),
+    accent:    z.enum(["forest", "violet", "ocean", "slate", "amber"]).default("forest"),
     order:     z.number().default(99),
   }),
 });

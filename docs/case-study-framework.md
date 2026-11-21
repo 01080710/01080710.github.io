@@ -56,7 +56,7 @@
 ### 招牌視覺
 
 - 每個專案指定一個只有它才有的主視覺，放在 01 或 02，讓讀者記得「這是哪個專案」。各專案的招牌視覺記在 source-notes，類型不要重複。
-- 現有：Credit Card = 兩邊 Ticket 對不起來的平台截圖（01）；Account Engine = 人工與系統並排錄影（05 開頭，錄影類可例外放在 Result）；Drop-Order = 11/6 上游故障的時段長條（01）；OP Ticket Data Pipeline = 舊版與新版請求速率對 API 額度的對照（01，`quota-list`）。
+- 現有：Credit Card = 兩邊 Ticket 對不起來的平台截圖（01）；Account Engine = 人工與系統並排錄影（05 開頭，錄影類可例外放在 Result）；Drop-Order = 11/6 上游故障的時段長條（01）；OP Ticket Data Pipeline = 舊版與新版請求速率對 API 額度的對照（01，`quota-list`）；Noise Camera Enforcement = 判定一筆事件的證據卡（02，`evidence-card`）。
 
 ## Section Checklist (各章必備內容)
 
@@ -148,6 +148,7 @@ Markdown 中直接寫 HTML；樣式都在 [global.css](../src/styles/global.css)
 | CSV 表格 | `<details class="csv-details">` 內放 `<div class="csv-viewer" data-src="../../data/<file>.csv">`（附下載連結） | 05 |
 | 操作錄影 | `video-figure` > `video-grid` > `video-item`（`video-label` + `<video controls muted playsinline preload="metadata">`）；檔案放 `public/media/<slug>/` | 05 |
 | Before / After | `ba-figure` > `ba-table` > `ba-row`（`ba-item` / `ba-before` / `ba-after`） | 06 |
+| 判定證據卡 | `evidence-figure` > `evidence-card` > `evidence-groups`（`evidence-group`，天候組加 `is-weather`）＋ `evidence-arrow` ＋ `evidence-result`（`evidence-verdict` 內放 `evidence-chips`） | Noise Camera Enforcement 02（招牌視覺，其他專案不重複使用） |
 | 章內投影片 | 單獨一行 `<hr data-slide="小標">`（前後空行），從這裡開始新的一張；第一個記號緊接在 `##` 之後才能命名第一張，否則第一張叫「概覽」；沒有記號的章維持單頁 | 任何超過約一個螢幕的章 |
 
 **投影片切法**：一張約一個螢幕、只講一件事；小標 2–6 個字；說明文字和它說明的圖、表放同一張（例如「以下是圖 2 的文字版流程」和 Mermaid 同一張）；有 `###` 的章在每個 `###` 前切。網址 `#ch-<章>-<張>` 可以直接分享到某一張。
@@ -158,7 +159,7 @@ Markdown 中直接寫 HTML；樣式都在 [global.css](../src/styles/global.css)
 
 1. **收集來源**：簡報圖片、資料 CSV、log；放 `canva-export/`。
 2. **核對資料**：讀完所有欄位，定口徑，算出統計；與簡報數字不一致的地方列出來問 Peter。
-3. **寫骨架**：六個 `##` 章節＋frontmatter（`metrics` 最多 3 個，都要能對回 source-notes；`accent` 選一個與其他專案不同的強調色：`forest`／`violet`／`ocean`／`slate`（目前依序為 Drop-Order／Credit Card／Account Engine／OP Ticket Data Pipeline；新專案需要新色時，在 schema 與 `global.css` 淺色、深色各加一組），只改強調色，紅黃綠語意徽章不變；`categories` 至少選一個技術類型，可選值見 `src/data/project-categories.ts`，新類型先加進該檔）。
+3. **寫骨架**：六個 `##` 章節＋frontmatter（`metrics` 最多 3 個，都要能對回 source-notes；`accent` 選一個與其他專案不同的強調色：`forest`／`violet`／`ocean`／`slate`／`amber`（目前依序為 Drop-Order／Credit Card／Account Engine／OP Ticket Data Pipeline／Noise Camera Enforcement；新專案需要新色時，在 schema 與 `global.css` 淺色、深色各加一組），只改強調色，紅黃綠語意徽章不變；`categories` 至少選一個技術類型，可選值見 `src/data/project-categories.ts`，新類型先加進該檔）。
 4. **補元件**：痛點卡片 → Area 對應截圖 → Tech Label → CSV → Before / After；最後依〈投影片切法〉在長章節插入 `<hr data-slide>`。
 5. **去識別**：圖片裁切／模糊、CSV 跑腳本、掃描殘留。
 6. **驗證**：`npm run build`、`python -m pytest tests`、桌機與 375px 截圖（無水平溢出）、頁標 01–06 點擊會捲到章節開頭。

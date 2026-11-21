@@ -191,6 +191,16 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .system-map[data-focus="all"] .area :is(.node, .flow) { stroke: var(--accent); stroke-width: 2; }
 .system-map[data-focus="all"] .area .arrow { fill: var(--accent); }
 .system-map .map-tag { fill: var(--accent); font-size: 12px; font-weight: 700; }
+/* Spine map (weishuo): stage kickers above Peter's nodes and a two-item legend. */
+.system-map text.stage-kicker { text-anchor: start; font-family: var(--mono); font-size: 11px; font-weight: 700; fill: var(--accent-2); }
+.system-map text.legend { text-anchor: start; font-size: 11px; fill: var(--muted); }
+/* Connector labels: what each arrow carries (centred above horizontal arrows, right of vertical ones). */
+.system-map text.edge { font-size: 10px; fill: var(--muted); }
+.system-map text.edge-r { text-anchor: start; }
+.system-map text.edge-end { text-anchor: end; }
+.system-map .legend-mine { fill: var(--accent-bg); stroke: var(--accent); stroke-width: 1.5; }
+.system-map .legend-other { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+.system-map .node-store { fill: var(--surface); stroke: var(--muted); stroke-width: 1.5; }
 /* In-progress project: faded, dashed outline, matching its dashed card. */
 .system-map[data-focus="all"] .area.is-building { opacity: 0.55; }
 .system-map[data-focus="all"] .area.is-building .node { stroke-dasharray: 4 4; }
@@ -209,7 +219,8 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .impact-company:has(.impact-card[data-area="ticket"]:is(:hover, :focus-within))      .area:not([data-area="ticket"]),
 .impact-company:has(.impact-card[data-area="credit-card"]:is(:hover, :focus-within)) .area:not([data-area="credit-card"]),
 .impact-company:has(.impact-card[data-area="drop-order"]:is(:hover, :focus-within))  .area:not([data-area="drop-order"]),
-.impact-company:has(.impact-card[data-area="account"]:is(:hover, :focus-within))     .area:not([data-area="account"]) { opacity: 0.2; }
+.impact-company:has(.impact-card[data-area="account"]:is(:hover, :focus-within))     .area:not([data-area="account"]),
+.impact-company:has(.impact-card[data-area="noise-enforcement"]:is(:hover, :focus-within)) .area:not([data-area="noise-enforcement"]) { opacity: 0.2; }
 .impact-toolbar { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
 .impact-map-company { color: var(--muted); font-weight: 600; }
 /* 2-4 companies: pill tabs. */
@@ -296,10 +307,12 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 [data-accent="violet"] { --accent: #6d3fc0; --accent-bg: #f1ecfb; }
 [data-accent="ocean"]  { --accent: #1d64b0; --accent-bg: #e8f0fa; }
 [data-accent="slate"]  { --accent: #4a5d73; --accent-bg: #eef1f5; }
+[data-accent="amber"]  { --accent: #9a5b13; --accent-bg: #f8efe3; }
 [data-theme="dark"] [data-accent="forest"] { --accent: #52c79a; --accent-bg: #15261f; }
 [data-theme="dark"] [data-accent="violet"] { --accent: #b79cf2; --accent-bg: #241a3a; }
 [data-theme="dark"] [data-accent="ocean"]  { --accent: #7cb4f0; --accent-bg: #14223a; }
 [data-theme="dark"] [data-accent="slate"]  { --accent: #a9b8cc; --accent-bg: #1c222b; }
+[data-theme="dark"] [data-accent="amber"]  { --accent: #e7b26a; --accent-bg: #2a2014; }
 .case-study .page-head::before {
   content: ""; display: block; width: 48px; height: 4px; margin-bottom: 20px;
   border-radius: 2px; background: var(--accent);
@@ -802,6 +815,30 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 
 /* ---------- Tech labels & Before/After (Result / Impact, redrawn from the project deck) ---------- */
 .tech-figure, .ba-figure { margin: 24px 0; }
+/* Evidence card (noise camera enforcement signature): what a reviewer needs to judge one over-limit event.
+   Evidence groups on the left, the judgement and outputs on the right; each group names the part that supplies it. */
+.evidence-figure { margin: 24px 0; }
+.evidence-card {
+  display: grid; grid-template-columns: minmax(0, 1.6fr) auto minmax(0, 1fr); align-items: stretch; gap: 14px;
+  padding: 18px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface);
+}
+.evidence-groups { display: grid; gap: 10px; }
+.evidence-group { padding: 12px 14px; border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--radius); background: var(--bg); }
+.evidence-group.is-weather { border-left-color: var(--accent-2); }
+.evidence-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin: 0 0 6px; }
+.evidence-head b { font-size: 0.92rem; }
+.evidence-src { font-family: var(--mono); font-size: 0.7rem; color: var(--muted); }
+.evidence-group ul { margin: 0; padding-left: 18px; font-size: 0.85rem; line-height: 1.6; }
+.evidence-arrow { align-self: center; font-size: 1.4rem; color: var(--accent-2); }
+.evidence-result { display: grid; gap: 10px; align-content: start; }
+.evidence-verdict { padding: 14px; border-radius: var(--radius); background: var(--accent-bg); border: 1px solid var(--line); }
+.evidence-verdict p { margin: 0 0 6px; font-size: 0.85rem; }
+.evidence-verdict .evidence-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 0; padding: 0; list-style: none; }
+.evidence-verdict .evidence-chips li { padding: 1px 10px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface); font-size: 0.78rem; }
+@media (max-width: 760px) {
+  .evidence-card { grid-template-columns: 1fr; }
+  .evidence-arrow { justify-self: center; transform: rotate(90deg); }
+}
 :is(.tech-figure, .ba-figure) figcaption { margin-top: 10px; font-size: 0.85rem; color: var(--muted); font-style: italic; }
 .tech-labels { display: grid; gap: 12px; grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .tech-label {
@@ -867,10 +904,12 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .system-map .arrow { fill: var(--muted); stroke: none; }
 .system-map[data-focus="drop-order"] .area[data-area="drop-order"] .arrow { fill: var(--accent); }
 .system-map .area { opacity: 0.35; transition: opacity 0.2s; }
+.system-map[data-focus="noise-enforcement"] .area[data-area="noise-enforcement"],
 .system-map[data-focus="ticket"]      .area[data-area="ticket"],
 .system-map[data-focus="credit-card"] .area[data-area="credit-card"],
 .system-map[data-focus="drop-order"]  .area[data-area="drop-order"],
 .system-map[data-focus="account"]     .area[data-area="account"] { opacity: 1; }
+.system-map[data-focus="noise-enforcement"] .area[data-area="noise-enforcement"] :is(.node, .flow),
 .system-map[data-focus="ticket"]      .area[data-area="ticket"] :is(.node, .flow),
 .system-map[data-focus="credit-card"] .area[data-area="credit-card"] :is(.node, .flow),
 .system-map[data-focus="drop-order"]  .area[data-area="drop-order"] :is(.node, .flow),

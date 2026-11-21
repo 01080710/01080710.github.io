@@ -79,7 +79,7 @@ const picker = groups.length === 1 ? "none" : groups.length <= 4 ? "tabs" : "sel
                 <div><dt class="mono">{t("home.before")}</dt><dd>{p.data.impact!.before}</dd></div>
                 <div><dt class="mono">{t("home.after")}</dt><dd>{p.data.impact!.after}</dd></div>
               </dl>
-              {p.data.home && (
+              {p.data.home && p.data.metrics.some((m) => m.on_home) && (
                 <dl class="impact-nums">
                   {p.data.metrics.filter((m) => m.on_home).map((m) => (
                     <div><dt class="mono">{m.value}</dt><dd>{m.label}</dd></div>

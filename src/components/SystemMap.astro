@@ -21,7 +21,7 @@ interface Props {
 const { map, area, accents = {}, building = [], lang = "zh" } = Astro.props;
 const overview = !area;
 // Case study pages show a zoomed crop of their own area; Home shows the whole map.
-const view_box = area ? map_crops[map][area] : "0 0 960 484";
+const view_box = area ? (map_crops[map][area] ?? "0 0 960 484") : (map === "weishuo" ? "0 0 960 325" : "0 0 960 484");
 const tags = map_tags[lang];
 // Where each area's tag sits in the 960x484 viewBox (overview only).
 const tag_at: Record<Area, { x: number; y: number }> = {
@@ -38,12 +38,14 @@ const area_labels = {
     "credit-card": "信用卡 PSP ↔ CRM 的退款金額",
     "drop-order":  "CRM ↔ CPS 的出入金狀態與各渠道",
     "account":     "CRM 帳戶 ↔ MetaTrader 的帳戶狀態",
+    "noise-enforcement": "設備主檔 → 天候查證 → 事件審核 → 稽核儀表板",
   },
   en: {
     "ticket":      "Freshservice tickets → yearly SQLite → per-group Excel for OP",
     "credit-card": "Refund amounts between the credit card PSP and CRM",
     "drop-order":  "Deposit and withdrawal statuses between CRM, CPS and each channel",
     "account":     "Account statuses between CRM accounts and MetaTrader",
+    "noise-enforcement": "Device records → weather evidence → event review → audit dashboard",
   },
 };
 const area_label = area ? area_labels[lang][area] : "";
@@ -55,6 +57,36 @@ const svg_text = lang === "en"
   : { title: "海科科技的資金流與系統地圖",
       desc:  "客戶經 Client Portal 進入 CRM；入金與出金經 CPS 連到各支付渠道；信用卡款項經 Bridger 連到信用卡 PSP；CRM 帳戶對應 MetaTrader 交易帳戶；Freshservice 工單由 OP 的處理群組處理，或派給 11 個轉派部門後由 OP 收口；OP 群組的工單每日同步到每年一檔的 SQLite。",
       serial: "流水號", groups: "OP 處理群組", mart: "SQLite · 每年一檔", dispatch: "派單／收口", other: "轉派部門（11）", not_yet: "尚未納入擷取" };
+// Noise camera enforcement (weishuo): a "spine" diagram. One event's main path runs left to right
+// (site -> event DB -> review API -> dashboard); the device & site management API and the image team join from
+// above (master data and plates), weather evidence feeds the review, outputs leave below,
+// so every arrow points right or down. Each connector is labelled with the data it carries. Base = others' parts; the area = Peter's four services, each tagged with
+// the case study's stage word (measured / verified / judged / seen), without numbers so they never clash with chapter numbers. Column centres 100 / 285 / 470 / 655 / 840, nodes 140 wide, viewBox 960x325.
+const ws = lang === "en"
+  ? { title: "Noise camera enforcement: data flow",
+      desc:  "Roadside sites (noise meter, anemometer, cameras) write their readings into the event database; the device and site management API maintains site, device and calibration records in the same database; the image team's recognition adds plates; weather evidence from CODiS supports the event review API, where reviewers judge each event valid or invalid; judgements feed the audit dashboard and the existing C# generator that produces inspection work orders for the environmental agency.",
+      site: "Roadside site", site_s: "meters · cameras", db: "Event database", db_s: "main · history",
+      img: "Image recognition", img_s: "image processing team", codis: "CODiS", codis_s: "CWA observation data",
+      cs: "Work order generator", cs_s: "existing C# program", gov: "Agency", gov_s: "environmental protection",
+      api: "Device & site mgmt", api_s: "master data · live", wx: "Weather evidence", wx_s: "crawler · Weather AI",
+      rev: "Event review API", rev_s: "valid / invalid", dash: "Audit dashboard", dash_s: "hotspots · hours",
+      wo: "Work order", wo_s: "existing C# generator",
+      stages: ["Measured", "Verified", "Judged", "Seen"],
+      mine: "My part", others: "Other teams / external",
+      edge: { readings: "readings", writes: "site & device records", events: "events", verdicts: "verdicts", imagery: "plates, imagery",
+              obs: "observations", wx: "road, wind, rain", valid: "valid events", insight: "insights", sent: "sent" } }
+  : { title: "聲音照相科技執法的資料流",
+      desc:  "路邊站點（噪音計、風速計、攝影機）把量測值寫入事件資料庫；設備與場域管理 API 在同一個資料庫維護站點、設備與校正紀錄主檔；影像處理團隊的辨識為每筆超標事件補上車牌；CODiS 的天候資料作為事件審核的證據，審核人員在事件審核 API 判定有效或無效；審核後的事件進入稽核儀表板，並交給既有 C# 程式產出稽查紀錄工作單，送交環保單位。",
+      site: "路邊站點", site_s: "噪音計 · 風速計 · 攝影機", db: "事件資料庫", db_s: "主庫 · 歷史庫",
+      img: "影像辨識", img_s: "影像處理團隊", codis: "CODiS", codis_s: "中央氣象署觀測資料",
+      cs: "工作單產生器", cs_s: "既有 C# 程式", gov: "環保單位", gov_s: "稽查與執法決策",
+      api: "設備與場域管理 API", api_s: "主檔維護 · 即時監測", wx: "天候查證", wx_s: "爬蟲服務 · Weather AI",
+      rev: "事件審核 API", rev_s: "四項條件 → 有效／無效", dash: "稽核儀表板", dash_s: "熱區 · 時段 · 累犯車輛",
+      wo: "稽查紀錄工作單", wo_s: "既有 C# 產生器",
+      stages: ["量到", "查證", "判定", "看見"],
+      mine: "本人負責", others: "其他團隊／外部系統",
+      edge: { readings: "量測值", writes: "站點與設備主檔、校正紀錄", events: "事件", verdicts: "判定結果", imagery: "車牌、影像",
+              obs: "觀測紀錄", wx: "乾濕、風速、降雨", valid: "有效事件", insight: "洞察", sent: "送交" } };
 ---
 
 {map === "hytech" && (
@@ -182,6 +214,94 @@ const svg_text = lang === "en"
           <text class="tiny" x="128" y="450">(OP) ASIC - Account Team</text>
           <text class="tiny" x="298" y="450">(OP) ASIC - Withdraw Team</text>
           <text class="tiny" x="128" y="463">(OP) ASIC - Deposit Team</text>
+        </g>
+      </svg>
+    </div>
+  </figure>
+)}
+
+
+{map === "weishuo" && (
+  <figure class="system-map" data-focus={area ?? "all"}>
+    {area && (
+      <div class="system-map-bar">
+        <a class="system-map-full mono" href={`${lang_path("/", lang)}#impact-map-title`}>{t("map.full")}</a>
+        <p class="system-map-focus"><span class="system-map-key"></span>{t("map.focus")}{area_label}</p>
+      </div>
+    )}
+    <div class="system-map-scroll">
+      <svg viewBox={view_box} role="img" aria-labelledby={`${uid}-title ${uid}-desc`}>
+        <title id={`${uid}-title`}>{ws.title}</title>
+        <desc id={`${uid}-desc`}>{ws.desc}{area && ` ${t("map.focus")}${area_label}`}</desc>
+
+        <!-- Base: parts owned by others, always visible -->
+        <g class="map-base">
+          <rect class="node" x="30" y="160" width="140" height="50" rx="6" />
+          <text class="strong" x="100" y="181">{ws.site}</text>
+          <text class="small" x="100" y="199">{ws.site_s}</text>
+          <rect class="node node-store" x="400" y="160" width="140" height="50" rx="25" />
+          <text class="strong" x="470" y="181">{ws.db}</text>
+          <text class="small" x="470" y="199">{ws.db_s}</text>
+          <path class="flow" d="M170 185 H392" /><path class="arrow" d="M400 185 L391 180 V190 Z" />
+          <text class="edge" x="285" y="177">{ws.edge.readings}</text>
+          <rect class="node" x="430" y="76" width="140" height="44" rx="6" />
+          <text class="strong" x="500" y="94">{ws.img}</text>
+          <text class="small" x="500" y="111">{ws.img_s}</text>
+          <path class="flow" d="M510 120 V152" /><path class="arrow" d="M510 160 L505 151 H515 Z" />
+          <text class="edge edge-r" x="517" y="142">{ws.edge.imagery}</text>
+          <rect class="node" x="585" y="4" width="140" height="40" rx="6" />
+          <text class="strong" x="655" y="21">{ws.codis}</text>
+          <text class="small" x="655" y="37">{ws.codis_s}</text>
+          <rect class="node" x="585" y="266" width="140" height="50" rx="6" />
+          <text class="strong" x="655" y="287">{ws.wo}</text>
+          <text class="small" x="655" y="305">{ws.wo_s}</text>
+          <rect class="node" x="770" y="266" width="140" height="50" rx="25" />
+          <text class="strong" x="840" y="287">{ws.gov}</text>
+          <text class="small" x="840" y="305">{ws.gov_s}</text>
+          <path class="flow" d="M725 291 H762" /><path class="arrow" d="M770 291 L761 286 V296 Z" />
+          <text class="edge" x="745" y="283">{ws.edge.sent}</text>
+          <rect class="legend-other" x="30" y="298" width="14" height="10" rx="2" />
+          <text class="legend" x="50" y="307">{ws.others}</text>
+        </g>
+
+        <!-- Peter's four services on the spine; connectors carry what flows through them -->
+        <g class:list={["area", { "is-building": building.includes("noise-enforcement") }]} data-area="noise-enforcement" data-accent={accents["noise-enforcement"]}>
+          <rect class="node node-core" x="215" y="76" width="160" height="44" rx="6" />
+          <text class="strong" x="295" y="94">{ws.api}</text>
+          <text class="small" x="295" y="111">{ws.api_s}</text>
+          <text class="stage-kicker" x="215" y="68">{ws.stages[0]}</text>
+          <path class="flow" d="M375 98 H420 V152" /><path class="arrow" d="M420 160 L415 151 H425 Z" />
+          <text class="edge edge-end" x="414" y="142">{ws.edge.writes}</text>
+
+          <path class="flow" d="M655 44 V68" /><path class="arrow" d="M655 76 L650 67 H660 Z" />
+          <text class="edge edge-r" x="662" y="62">{ws.edge.obs}</text>
+          <rect class="node node-core" x="585" y="76" width="140" height="44" rx="6" />
+          <text class="strong" x="655" y="94">{ws.wx}</text>
+          <text class="small" x="655" y="111">{ws.wx_s}</text>
+          <text class="stage-kicker" x="735" y="102">{ws.stages[1]}</text>
+          <path class="flow" d="M655 120 V152" /><path class="arrow" d="M655 160 L650 151 H660 Z" />
+          <text class="edge edge-r" x="662" y="142">{ws.edge.wx}</text>
+
+          <path class="flow" d="M540 185 H577" /><path class="arrow" d="M585 185 L576 180 V190 Z" />
+          <text class="edge" x="562" y="177">{ws.edge.events}</text>
+          <rect class="node node-core" x="585" y="160" width="140" height="50" rx="25" />
+          <text class="strong" x="655" y="181">{ws.rev}</text>
+          <text class="small" x="655" y="199">{ws.rev_s}</text>
+          <text class="stage-kicker" x="585" y="232">{ws.stages[2]}</text>
+          <path class="flow" d="M655 210 V258" /><path class="arrow" d="M655 266 L650 257 H660 Z" />
+          <text class="edge edge-r" x="662" y="244">{ws.edge.valid}</text>
+
+          <path class="flow" d="M725 185 H762" /><path class="arrow" d="M770 185 L761 180 V190 Z" />
+          <text class="edge" x="747" y="177">{ws.edge.verdicts}</text>
+          <rect class="node node-core" x="770" y="160" width="140" height="50" rx="6" />
+          <text class="strong" x="840" y="181">{ws.dash}</text>
+          <text class="small" x="840" y="199">{ws.dash_s}</text>
+          <text class="stage-kicker" x="770" y="152">{ws.stages[3]}</text>
+          <path class="flow" d="M840 210 V258" /><path class="arrow" d="M840 266 L835 257 H845 Z" />
+          <text class="edge edge-r" x="847" y="244">{ws.edge.insight}</text>
+
+          <rect class="legend-mine" x="30" y="280" width="14" height="10" rx="2" />
+          <text class="legend" x="50" y="289">{ws.mine}</text>
         </g>
       </svg>
     </div>
