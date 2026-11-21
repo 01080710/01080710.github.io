@@ -4,7 +4,8 @@
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",
-    "preview": "astro preview"
+    "preview": "astro preview",
+    "build:routes": "node scripts/build-routes.mjs"
   },
   "description": "Peter Chang engineering portfolio (Astro static site)",
   "dependencies": {
