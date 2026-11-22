@@ -29,6 +29,11 @@ const short_name = (name: string) => name.replace(/(股份)?有限公司$|,?\s*(
 const picker = groups.length === 1 ? "none" : groups.length <= 4 ? "tabs" : "select";
 ---
 
+<script is:inline>
+  // Opt in to the impact map's entrance before the map is parsed, so it never flashes fully lit first.
+  // Without JS, or with reduced motion, the map and cards stay static and fully visible.
+  if (!matchMedia("(prefers-reduced-motion: reduce)").matches && "IntersectionObserver" in window) document.documentElement.classList.add("motion-ok");
+</script>
 <section class="section impact-map" aria-labelledby="impact-map-title">
   <h2 class="section-title" id="impact-map-title">
     {t("home.map_title")}{picker === "none" && <span class="impact-map-company"> · {short_name(groups[0].company)}</span>}
@@ -135,6 +140,39 @@ const picker = groups.length === 1 ? "none" : groups.length <= 4 ? "tabs" : "sel
         show(next.dataset.company!);
       });
     });
+  }
+
+  // Map <-> cards: each card's area takes the card's position (--i), so on first view the areas light up and the cards
+  // arrive in the map's left-to-right order. Hovering an area lights its card and dims the other areas; clicking it
+  // opens the case study (the card stays the keyboard path, so areas add no extra tab stops).
+  const STEP_MS = 350;
+  for (const panel of panels) {
+    const cards = [...panel.querySelectorAll<HTMLElement>(".impact-card")];
+    cards.forEach((card, i) => {
+      card.style.setProperty("--i", String(i));
+      const area = panel.querySelector<SVGGElement>(`.system-map .area[data-area="${card.dataset.area}"]`);
+      const link = card.querySelector<HTMLAnchorElement>("a");
+      if (!area || !link) return;
+      area.style.setProperty("--i", String(i));
+      area.classList.add("is-linked");
+      const hot = (on: boolean) => {
+        panel.classList.toggle("has-hot", on);
+        area.classList.toggle("is-hot", on);
+        card.classList.toggle("is-hot", on);
+      };
+      area.addEventListener("mouseenter", () => hot(true));
+      area.addEventListener("mouseleave", () => hot(false));
+      area.addEventListener("click", () => link.click());
+    });
+    if (!document.documentElement.classList.contains("motion-ok")) continue;
+    const io = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return;
+      io.disconnect();
+      panel.classList.add("is-in");
+      // After the sequence, drop the stagger so hover dimming responds at once.
+      setTimeout(() => panel.classList.add("is-settled"), cards.length * STEP_MS + 700);
+    }, { rootMargin: "0px 0px -20% 0px" });
+    io.observe(panel);
   }
 
   // Narrow screens: start with the system map collapsed; wide screens: always open (the summary is hidden by CSS).

@@ -3,6 +3,7 @@ import Base from "../../layouts/Base.astro";
 import BrandMark from "../../components/BrandMark.astro";
 import CopyEmail from "../../components/CopyEmail.astro";
 import ImpactMap from "../../components/ImpactMap.astro";
+import PipelineView from "../../components/PipelineView.astro";
 import ProfilePhoto from "../../components/ProfilePhoto.astro";
 import { get_profile } from "../../i18n/profile";
 import { get_keywords } from "../../i18n/projects";
@@ -22,7 +23,25 @@ const keywords  = await get_keywords(lang);
 
 <Base lang={lang}>
   <section class="hero hero-split">
+    <!-- Pipeline (wide screens, JS only): drawn by the script below from the real layout; without it the hero is unchanged. -->
+    <svg class="hero-pipes" aria-hidden="true" hidden
+         data-steps={[t("home.pipe_validate"), t("home.pipe_schedule"), t("home.pipe_log")].join("|")}></svg>
+    <button type="button" class="hero-drop" hidden>{t("home.pipe_drop")}</button>
     <div class="hero-text">
+      <script is:inline>
+        // Before first paint: the entrance (pipes snap together, headline and title assemble from scattered
+        // characters) plays once per session; .ts-pending hides that text until the script takes over (CSS has a
+        // timed fallback). .has-pipes reserves the pipeline band now, so the hero does not jump when it is drawn.
+        try {
+          const root = document.documentElement;
+          if (sessionStorage.getItem("hero-run")) root.classList.add("hero-seen");
+          else {
+            sessionStorage.setItem("hero-run", "1");
+            if (!matchMedia("(prefers-reduced-motion: reduce)").matches) root.classList.add("ts-pending");
+          }
+        } catch { /* storage blocked: the pipeline plays every time, the text stays still */ }
+        if (matchMedia("(min-width: 900px)").matches) document.currentScript.closest(".hero").classList.add("has-pipes");
+      </script>
       <p class="eyebrow mono">{profile.name_zh} · {profile.name}</p>
       <h1 class="hero-statement">{profile.tagline}</h1>
       <p class="hero-intro">{profile.intro[0]}</p>
@@ -33,6 +52,14 @@ const keywords  = await get_keywords(lang);
       <div class="hero-actions">
         <a class="btn primary" href={lang_path("projects/", lang)}>{t("home.view_projects")}</a>
         <a class="btn" href={lang_path("contact/", lang)}>{t("home.contact")}</a>
+        <!-- Opens the pipeline view (PipelineView.astro); revealed by its script, so it never shows without JS. -->
+        <button type="button" class="btn pv-open" aria-haspopup="dialog" hidden>
+          <svg viewBox="0 0 20 20" aria-hidden="true">
+            <path d="M5 10 C10 10 10 4.5 14 4.5 M5 10 C10 10 10 15.5 14 15.5" />
+            <circle cx="4" cy="10" r="2.6" /><circle cx="16" cy="4.5" r="2.6" /><circle cx="16" cy="15.5" r="2.6" />
+          </svg>
+          {t("home.pipeline_view")}
+        </button>
       </div>
       <p class="intro-links">
         <a href={lang_path("about/", lang)}>{t("home.about_link")}</a>
@@ -71,4 +98,422 @@ const keywords  = await get_keywords(lang);
       </div>
     </div>
   </section>
+
+  <PipelineView lang={lang} />
 </Base>
+
+<script>
+  // Hero pipeline, "noise in, order out". Three generic sources (database, API, spreadsheet) feed raw packets of mixed
+  // shapes into one trunk with three stations:
+  //   validate - a scanner checks each packet; bad ones are kicked down a chute into the reject tray (housing shakes)
+  //   schedule - a gate holds the queue and releases one packet per beat, so packets leave evenly spaced
+  //   log      - a stamp presses each packet into a uniform seal
+  // The trunk then rises into the photo; the blob springs on every arrival. Visitors can drop their own packet
+  // (button, or click any empty spot); theirs is highlighted and always passes.
+  // First visit of a session: the pipes snap together piece by piece, then a burst of packets floods in.
+  // Later visits / resize: built at once, simulation pre-warmed. Reduced motion: a still frame of the same scene.
+  // Hidden below 900px, where the photo stacks above the text. Paused while off screen.
+  import { svg_el as el, make_packet, place, set_clean, rand, Route } from "../../lib/pipe-packets";
+  import { assemble } from "../../lib/scatter-text";
+
+  const svg    = document.querySelector<SVGSVGElement>(".hero-pipes");
+  const hero   = svg?.closest<HTMLElement>(".hero") ?? null;
+  const drop   = hero?.querySelector<HTMLButtonElement>(".hero-drop") ?? null;
+  const blob   = hero?.querySelector<HTMLElement>(".hero-blob") ?? null;
+  const wide   = matchMedia("(min-width: 900px)");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  const SPAWN_S = 0.5, REJECT = 0.2, RELEASE_S = 0.42, OUT_V = 130, GAP = 15, GRAVITY = 1600, MAX_IN = 16;
+  const SW = 62, SH = 40;                 // station housing
+  const ASSEMBLED_S = 1.7;                // keep in step with the snap timings below and --hp-arrive
+
+  type Phase = "fly" | "stub" | "trunk" | "fall" | "rest";
+  interface Packet {
+    g: SVGGElement; phase: Phase; stub: number; s: number; v: number;
+    x: number; y: number; a: number; spin: number;
+    bad: boolean; checked: boolean; released: boolean; clean: boolean; bounced: boolean;
+    vx: number; vy: number; t: number; fx: number; fy: number; qx: number; qy: number;
+  }
+  interface Scene {
+    layer: Element; stubs: Route[]; trunk: Route; inlets: { x: number; y: number }[];
+    queues: Packet[][]; line: Packet[]; loose: Packet[];
+    s_check: number; s_gate: number; s_log: number; xv: number; tray_top: number; floor: number;
+    housing: Element; gate: Element; stamp: Element;
+    spawn_t: number; release_t: number; next_stub: number;
+  }
+  let scene: Scene | null = null;
+  let build_id = 0;
+
+  // ---------- drawing ----------
+  let layers: Record<"edge" | "core" | "house" | "packets" | "top", Element>;
+  const tube = (d: string, snap: string) => {
+    el("path", { d, class: "hp-edge hp-piece", style: snap }, layers.edge);
+    el("path", { d, class: "hp-core hp-piece", style: snap }, layers.core);
+  };
+  const flange = (x: number, y: number, vertical: boolean, at: number, parent: Element) =>
+    el("rect", vertical ? { x: x - 3.5, y: y - 13, width: 7, height: 26, rx: 1.5, class: "hp-flange", style: `--d:${at}s` }
+                        : { x: x - 13, y: y - 3.5, width: 26, height: 7, rx: 1.5, class: "hp-flange", style: `--d:${at}s` }, parent);
+
+  // Generic source icons: database (cylinder), API (braces), spreadsheet (grid with a header row).
+  function source_icon(kind: number, c: number, y: number, g: Element) {
+    if (kind === 0) {
+      el("path", { d: `M${c - 9} ${y - 6} V${y + 6} A9 3.2 0 0 0 ${c + 9} ${y + 6} V${y - 6}`, class: "hp-icon" }, g);
+      el("path", { d: `M${c - 9} ${y} A9 3.2 0 0 0 ${c + 9} ${y}`, class: "hp-icon" }, g);
+      el("ellipse", { cx: c, cy: y - 6, rx: 9, ry: 3.2, class: "hp-icon hp-icon-top" }, g);
+    } else if (kind === 1) {
+      const brace = (dir: number) =>
+        `M${c + dir * 3} ${y - 8} Q${c + dir * 7} ${y - 8} ${c + dir * 7} ${y - 4} V${y - 2} Q${c + dir * 7} ${y} ${c + dir * 10} ${y}` +
+        ` Q${c + dir * 7} ${y} ${c + dir * 7} ${y + 2} V${y + 4} Q${c + dir * 7} ${y + 8} ${c + dir * 3} ${y + 8}`;
+      el("path", { d: brace(-1), class: "hp-icon" }, g);
+      el("path", { d: brace(1), class: "hp-icon" }, g);
+    } else {
+      el("rect", { x: c - 10, y: y - 4.5, width: 20, height: 4.5, class: "hp-icon-head" }, g);
+      el("rect", { x: c - 10, y: y - 7.5, width: 20, height: 15, rx: 1.5, class: "hp-icon" }, g);
+      el("path", { d: `M${c - 10} ${y - 2.5} H${c + 10} M${c - 10} ${y + 2.5} H${c + 10} M${c - 3.3} ${y - 7.5} V${y + 7.5} M${c + 3.3} ${y - 7.5} V${y + 7.5}`, class: "hp-icon hp-icon-grid" }, g);
+    }
+  }
+
+  function build(animate: boolean) {
+    if (!svg || !hero || !drop) return;
+    stop();
+    scene = null;
+    const id = ++build_id;
+    if (!wide.matches) { svg.hidden = true; drop.hidden = true; hero.classList.remove("has-pipes"); return; }
+    hero.classList.add("has-pipes");
+    svg.hidden = false;
+    const text = hero.querySelector<HTMLElement>(".hero-text")!, img = hero.querySelector<HTMLElement>(".hero-photo img")!;
+    const box = hero.getBoundingClientRect(), tb = text.getBoundingClientRect(), pb = img.getBoundingClientRect();
+    const W = box.width, H = box.height;
+    svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+    svg.classList.toggle("is-static", !animate);
+    hero.classList.toggle("hp-animate", animate);
+    svg.replaceChildren();
+    layers = { edge: el("g", {}, svg), core: el("g", {}, svg), house: el("g", {}, svg), packets: el("g", {}, svg), top: el("g", {}, svg) };
+
+    const Y   = tb.bottom - box.top + 84;                 // trunk line, under the hero text
+    const ys  = [Y - 36, Y, Y + 36];
+    const sx  = 50;                                        // source ports end here
+    const cx  = Math.max(150, W * 0.18);                   // the three stubs merge here
+    const px  = pb.left + pb.width / 2 - box.left;         // rise into the photo
+    const top = pb.bottom - box.top + 14;
+    const span = px - 16 - cx;
+    const [xv, xs, xl] = [0.2, 0.5, 0.8].map((f) => cx + span * f);   // validate, schedule, log
+    const tray_top = Y + 50, tray_floor = Y + 80;
+
+    const at = (k: number) => 0.2 + k * 0.12;              // piece k snaps in here (last one ends ~ASSEMBLED_S)
+    const snap = (k: number, dx: number, dy: number) => `--d:${at(k)}s;--dx:${dx}px;--dy:${dy}px`;
+    const group = (s: string) => el("g", { class: "hp-piece", style: s }, layers.top);
+
+    // k 0-2: source ports with their stubs, bending into the trunk
+    const stub_d = ys.map((y, i) => i === 1 ? `M${sx} ${Y} H${cx}`
+      : `M${sx} ${y} H${cx - 14} Q${cx} ${y} ${cx} ${y + (i === 0 ? 14 : -14)} V${Y}`);
+    ys.forEach((y, i) => {
+      const s = snap(i, -30, 0), g = group(s);
+      tube(stub_d[i], s);
+      el("rect", { x: 0, y: y - 15, width: sx, height: 30, rx: 9, class: "hp-source" }, g);
+      source_icon(i, sx / 2 - 2, y, g);
+      flange(sx + 4, y, true, at(i) + 0.4, g);
+    });
+    // k 3: the trunk, from the merge to the photo column
+    const main_d = `M${cx} ${Y} H${px - 16} Q${px} ${Y} ${px} ${Y - 16}`;
+    const s3 = snap(3, 0, -18);
+    tube(main_d, s3);
+    flange(cx + 14, Y, true, at(3) + 0.4, group(s3));
+    // k 4-6: stations drop onto the trunk
+    const steps = (svg.dataset.steps ?? "").split("|");
+    let housing!: Element, gate!: Element, stamp!: Element;
+    [xv, xs, xl].forEach((x, i) => {
+      const s = snap(4 + i, 0, -26), g = group(s);
+      const house = el("rect", { x: x - SW / 2, y: Y - SH / 2, width: SW, height: SH, rx: 9, class: "hp-station hp-piece", style: s }, layers.house);
+      el("text", { x, y: Y - SH / 2 - 9, class: "hp-step" }, g).textContent = steps[i] ?? "";
+      if (i === 0) {
+        housing = house;
+        el("line", { x1: x, y1: Y - SH / 2 + 5, x2: x, y2: Y + SH / 2 - 5, class: "hp-scan" }, el("g", {}, g));
+      } else if (i === 1) {
+        gate = el("rect", { x: x + 8, y: Y - 11, width: 4, height: 22, rx: 1.5, class: "hp-gate" }, g);
+      } else {
+        stamp = el("rect", { x: x - 8, y: Y - SH / 2 + 3, width: 16, height: 6, rx: 1.5, class: "hp-stamp" }, g);
+      }
+    });
+    // k 7: reject chute and tray under the validator
+    const s7 = snap(7, 0, 24), g7 = group(s7);
+    tube(`M${xv} ${Y + SH / 2 - 2} V${tray_top + 2}`, s7);
+    el("path", { d: `M${xv - 30} ${tray_top} V${tray_floor} H${xv + 30} V${tray_top}`, class: "hp-tray" }, g7);
+    // k 8: the rise into the photo
+    const s8 = snap(8, 0, 26);
+    tube(`M${px} ${Y - 16} V${top}`, s8);
+    flange(px, Y - 22, false, at(8) + 0.4, group(s8));
+
+    // Routes (invisible): one per stub, then the trunk from the merge to the photo.
+    const route_el = (d: string) => el("path", { d, class: "hp-route" }, svg) as SVGPathElement;
+    const stubs = stub_d.map((d) => new Route(route_el(d)));
+    const trunk = new Route(route_el(`${main_d} V${top}`));
+
+    scene = {
+      layer: layers.packets, stubs, trunk, inlets: ys.map((y) => ({ x: sx, y })),
+      queues: [[], [], []], line: [], loose: [],
+      s_check: xv - cx, s_gate: xs - cx, s_log: xl - cx, xv, tray_top, floor: tray_floor - 8,
+      housing, gate, stamp, spawn_t: 0, release_t: RELEASE_S, next_stub: 0,
+    };
+
+    if (reduce) { still_frame(); drop.hidden = true; return; }
+    drop.hidden = false;
+    drop.style.left = `${xs - 26}px`;
+    drop.style.top = `${Y + SH / 2 + 14}px`;
+    drop.style.maxWidth = `${px - 40 - (xs - 26)}px`;
+    if (animate) {
+      setTimeout(() => {
+        if (id !== build_id) return;
+        for (let k = 0; k < 8; k++) setTimeout(() => id === build_id && spawn(k % 3, rand(120, 170)), k * 70);
+        live = true;
+        sync();
+      }, ASSEMBLED_S * 1000);
+    } else {
+      for (let i = 0; i < 240; i++) step(1 / 60, true);   // pre-warm: arrive mid-flow, not empty
+      render();
+      live = true;
+      sync();
+    }
+  }
+
+  // ---------- simulation ----------
+  function new_packet(mine: boolean): Packet {
+    return { g: make_packet(scene!.layer, mine), phase: "stub", stub: 0, s: 0, v: rand(70, 140),
+             x: 0, y: 0, a: rand(0, 360), spin: rand(-220, 220), bad: false, checked: false, released: false,
+             clean: false, bounced: false, vx: 0, vy: 0, t: 0, fx: 0, fy: 0, qx: 0, qy: 0 };
+  }
+  function spawn(stub: number, v?: number) {
+    const sc = scene;
+    if (!sc) return;
+    const waiting = sc.queues.reduce((n, q) => n + q.length, 0) + sc.line.filter((p) => !p.released).length;
+    if (waiting >= MAX_IN) return;
+    const p = new_packet(false);
+    p.stub = stub;
+    p.bad = Math.random() < REJECT;
+    if (v) p.v = v;
+    sc.queues[stub].push(p);
+  }
+  function drop_at(x: number, y: number) {
+    const sc = scene;
+    if (!sc) return;
+    let stub = 0, best = Infinity;
+    sc.inlets.forEach((p, i) => { const d = Math.hypot(p.x - x, p.y - y); if (d < best) { best = d; stub = i; } });
+    const p = new_packet(true), inlet = sc.inlets[stub];
+    Object.assign(p, { phase: "fly", stub, x, y, fx: x, fy: y, qx: (x + inlet.x) / 2, qy: Math.min(y, inlet.y) - 110,
+                       v: 165, spin: 620 * (Math.random() < 0.5 ? -1 : 1) });
+    sc.loose.push(p);
+    place(p.g, x, y, p.a);
+  }
+
+  let last_pulse = 0;
+  const bump = (node: Element | null, frames: Keyframe[], ms: number) =>
+    node?.animate(frames, { duration: ms, easing: "cubic-bezier(0.34, 1.6, 0.64, 1)" });
+
+  function step(dt: number, quiet: boolean) {
+    const sc = scene!;
+    sc.spawn_t += dt;
+    if (sc.spawn_t >= SPAWN_S) { sc.spawn_t = 0; spawn(Math.floor(Math.random() * 3)); }
+
+    // loose packets: visitor drops in flight, rejects falling into the tray, rejects at rest
+    for (let k = 0; k < sc.loose.length; k++) {
+      const p = sc.loose[k];
+      if (p.phase === "fly") {
+        p.t = Math.min(p.t + dt / 0.55, 1);
+        const u = 1 - p.t, inlet = sc.inlets[p.stub];
+        p.x = u * u * p.fx + 2 * u * p.t * p.qx + p.t * p.t * inlet.x;
+        p.y = u * u * p.fy + 2 * u * p.t * p.qy + p.t * p.t * inlet.y;
+        p.a += p.spin * dt;
+        if (p.t >= 1) { sc.loose.splice(k--, 1); p.phase = "stub"; p.s = 0; sc.queues[p.stub].push(p); }
+      } else if (p.phase === "fall") {
+        p.vy += GRAVITY * dt;
+        p.y += p.vy * dt;
+        if (p.y > sc.tray_top && !p.vx) p.vx = rand(-140, 140);
+        p.x = Math.min(Math.max(p.x + p.vx * dt, sc.xv - 22), sc.xv + 22);
+        p.a += p.spin * dt;
+        if (p.y >= sc.floor) {
+          p.y = sc.floor;
+          if (!p.bounced && p.vy > 150) { p.vy = -p.vy * 0.3; p.vx *= 0.5; p.bounced = true; }
+          else { p.phase = "rest"; p.vx = p.vy = p.spin = 0; }
+        }
+      }
+    }
+    const resting = sc.loose.filter((p) => p.phase === "rest");
+    if (resting.length > 5) {
+      const old = resting[0];
+      sc.loose.splice(sc.loose.indexOf(old), 1);
+      if (quiet) old.g.remove();
+      else old.g.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300 }).onfinish = () => old.g.remove();
+    }
+
+    // stubs: first in, first out, packets bunch up behind each other
+    sc.queues.forEach((q, i) => {
+      q.forEach((p, k) => {
+        const limit = k === 0 ? sc.stubs[i].length : q[k - 1].s - GAP;
+        p.s = Math.max(p.s, Math.min(p.s + p.v * dt, limit));
+        p.a += p.spin * dt;
+      });
+    });
+    // merge: stubs take turns; a head enters the trunk once its entrance is clear
+    for (let n = 0; n < 3; n++) {
+      const i = (sc.next_stub + n) % 3, head = sc.queues[i][0];
+      if (!head || head.s < sc.stubs[i].length - 0.5) continue;
+      const last = sc.line[sc.line.length - 1];
+      if (last && last.s < GAP) break;
+      sc.queues[i].shift();
+      head.phase = "trunk";
+      head.s = 0;
+      sc.line.push(head);
+      sc.next_stub = (i + 1) % 3;
+      break;
+    }
+
+    // trunk: validate -> queue at the gate -> one release per beat -> stamp -> photo
+    sc.release_t = Math.min(sc.release_t + dt, RELEASE_S);
+    let head_seen = false;
+    for (let k = 0; k < sc.line.length; k++) {
+      const p = sc.line[k];
+      if (!p.released) {
+        const ahead = sc.line[k - 1];
+        const limit = Math.min(sc.s_gate, ahead && !ahead.released ? ahead.s - GAP : Infinity);
+        p.s = Math.max(p.s, Math.min(p.s + p.v * dt, limit));
+        p.a += p.spin * dt;
+        if (!p.checked && p.s >= sc.s_check) {
+          p.checked = true;
+          if (p.bad) {
+            const pt = sc.trunk.at(p.s);
+            Object.assign(p, { phase: "fall", x: pt.x, y: pt.y, vx: 0, vy: 80 });
+            p.g.classList.add("is-rejected");
+            sc.line.splice(k--, 1);
+            sc.loose.push(p);
+            if (!quiet) bump(sc.housing, [{ transform: "translateX(0)" }, { transform: "translateX(-4px)" },
+              { transform: "translateX(4px)" }, { transform: "translateX(-2px)" }, { transform: "translateX(0)" }], 280);
+            continue;
+          }
+        }
+        if (!head_seen) {
+          head_seen = true;
+          if (p.s >= sc.s_gate - 0.5 && sc.release_t >= RELEASE_S) {
+            p.released = true;
+            p.spin = 0;
+            sc.release_t = 0;
+            if (!quiet) bump(sc.gate, [{ transform: "translateY(0)" }, { transform: "translateY(-17px)", offset: 0.3 }, { transform: "translateY(0)" }], 320);
+          }
+        }
+      } else {
+        p.s += OUT_V * dt;
+        if (!p.clean && p.s >= sc.s_log) {
+          p.clean = true;
+          p.a = 0;
+          set_clean(p.g);
+          if (!quiet) bump(sc.stamp, [{ transform: "translateY(0)" }, { transform: "translateY(6px)", offset: 0.35 }, { transform: "translateY(0)" }], 240);
+        }
+        if (p.s >= sc.trunk.length) {
+          p.g.remove();
+          sc.line.splice(k--, 1);
+          const now = performance.now();
+          if (!quiet && now - last_pulse > 200) {
+            last_pulse = now;
+            bump(blob, [{ scale: "1" }, { scale: "1.045" }, { scale: "1" }], 420);
+          }
+        }
+      }
+    }
+  }
+
+  function render() {
+    const sc = scene!;
+    sc.queues.forEach((q, i) => q.forEach((p) => { const pt = sc.stubs[i].at(p.s); place(p.g, pt.x, pt.y, p.a); }));
+    for (const p of sc.line) { const pt = sc.trunk.at(p.s); place(p.g, pt.x, pt.y, p.a); }
+    for (const p of sc.loose) place(p.g, p.x, p.y, p.a);
+  }
+
+  // Reduced motion: one still frame that tells the same story (raw in, queue, sealed out, rejects in the tray).
+  function still_frame() {
+    const sc = scene!;
+    sc.queues.forEach((q) => [56, 22].forEach((s) => { const p = new_packet(false); p.s = s + rand(0, 8); q.push(p); }));
+    [0, 1, 2].forEach((k) => { const p = new_packet(false); p.phase = "trunk"; p.checked = true; p.s = sc.s_gate - k * GAP; sc.line.push(p); });
+    [1, 2, 3].forEach((k) => {
+      const p = new_packet(false);
+      Object.assign(p, { phase: "trunk", checked: true, released: true, clean: true, a: 0, s: Math.min(sc.s_log + k * 55, sc.trunk.length - 30) });
+      set_clean(p.g);
+      sc.line.unshift(p);
+    });
+    [-12, 10].forEach((dx) => {
+      const p = new_packet(false);
+      Object.assign(p, { phase: "rest", x: sc.xv + dx, y: sc.floor });
+      p.g.classList.add("is-rejected");
+      sc.loose.push(p);
+    });
+    render();
+  }
+
+  // ---------- loop ----------
+  let raf = 0, last = 0, running = false, live = false, on_screen = true;
+  function frame(now: number) {
+    step(Math.min((now - last) / 1000, 0.05), false);
+    last = now;
+    render();
+    raf = requestAnimationFrame(frame);
+  }
+  function stop() { running = false; live = false; cancelAnimationFrame(raf); }
+  function sync() {
+    const go = live && scene && on_screen && !document.hidden && !reduce;
+    if (go && !running) { running = true; last = performance.now(); raf = requestAnimationFrame(frame); }
+    else if (!go && running) { running = false; cancelAnimationFrame(raf); }
+  }
+
+  // First visit: the headline, then the title, assemble from characters scattered across the text column, each
+  // landing with a stamp-coloured pop ("data scattered across systems, joined up"). The intro paragraph stays still
+  // so it can be read at once. Measured after build(), which sets the hero's final padding.
+  function assemble_text() {
+    const root = document.documentElement;
+    const head = hero?.querySelector<HTMLElement>(".hero-statement");
+    const role = hero?.querySelector<HTMLElement>(".hero-role > .mono");
+    if (!hero || !head || !role) { root.classList.remove("ts-pending"); return; }
+    head.classList.add("ts-hide");
+    role.classList.add("ts-hide");
+    root.classList.remove("ts-pending");
+    const show = () => { head.classList.remove("ts-hide"); role.classList.remove("ts-hide"); };
+    try {
+      const tokens = getComputedStyle(root), tok = (name: string) => tokens.getPropertyValue(name).trim();
+      const box = hero.getBoundingClientRect(), col = hero.querySelector<HTMLElement>(".hero-text")!.getBoundingClientRect();
+      const common = {
+        host: hero, raw_color: tok("--muted"), stamp_color: tok("--accent-2"),
+        area: { left: 0, top: 0, right: Math.min(box.width, col.right - box.left + 40), bottom: box.height - 24 },
+      };
+      const a = assemble(head, { ...common, start_ms: 250, spread_ms: 1800, max_stagger_ms: 40, duration_ms: 720, final_color: tok("--fg") });
+      const b = assemble(role, { ...common, start_ms: 2300, spread_ms: 600, max_stagger_ms: 24, duration_ms: 520, final_color: tok("--muted") });
+      a.done.then(() => head.classList.remove("ts-hide"));
+      b.done.then(() => role.classList.remove("ts-hide"));
+      // A resize mid-flight would leave clones at stale positions: land everything at once.
+      window.addEventListener("resize", () => { a.finish(); b.finish(); }, { once: true });
+    } catch { show(); }
+  }
+
+  if (svg && hero && drop) {
+    const first_run = !reduce && !document.documentElement.classList.contains("hero-seen");
+    document.fonts.ready.then(() => {
+      build(first_run);
+      if (document.documentElement.classList.contains("ts-pending")) assemble_text();
+      let built_w = hero.getBoundingClientRect().width;
+      new ResizeObserver(() => {
+        const w = hero.getBoundingClientRect().width;
+        if (Math.abs(w - built_w) > 1) { built_w = w; build(false); }
+      }).observe(hero);
+      wide.addEventListener("change", () => build(false));
+      new IntersectionObserver(([e]) => { on_screen = e.isIntersecting; sync(); }).observe(hero);
+      document.addEventListener("visibilitychange", sync);
+    });
+    // Visitors drop their own packet: the button (keyboard), or a click on any empty spot of the hero.
+    drop.addEventListener("click", () => {
+      const b = drop.getBoundingClientRect(), box = hero.getBoundingClientRect();
+      drop_at(b.left - box.left + 14, b.top - box.top + b.height / 2);
+    });
+    hero.addEventListener("click", (e) => {
+      if (!running || (e.target as Element).closest("a, button, input, select, textarea, label")) return;
+      if (String(window.getSelection() ?? "").length) return;
+      const box = hero.getBoundingClientRect();
+      drop_at(e.clientX - box.left, e.clientY - box.top);
+    });
+  }
+</script>

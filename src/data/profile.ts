@@ -73,16 +73,17 @@ export const profile = {
   life: {
     intro:  "工作上喜歡與技術交手、解決各種難題；而工作外則喜歡往天空飛、向大海深潛，曾在芭達雅挑戰高空跳傘，也曾在小琉球、峇里島、馬爾地夫與斐濟探索海底世界，與海洋生物近距離相遇。不甘於一成不變，喜歡冒險、熱愛嘗試新事物，總期待在不同的地方，遇見不一樣的風景與自己。",
    
+    // zone places each photo on the About sky / sea-level / underwater axis (no altitudes or depths shown).
     photos: [
-      { src: "media/life/nurse-sharks-maldives.jpg", place: "馬爾地夫 - 馬富士", caption: "與護士鯊同游",
+      { src: "media/life/nurse-sharks-maldives.jpg", zone: "surface", place: "馬爾地夫 - 馬富士", caption: "與護士鯊同游",
         alt:  "空拍畫面：我穿著紅色救生衣漂浮在藍綠色海面，周圍環繞十多隻護士鯊" },
-      { src: "media/life/skydive-pattaya.jpg",       place: "泰國 - 芭達雅", caption: "高空跳傘",
+      { src: "media/life/skydive-pattaya.jpg",       zone: "sky", place: "泰國 - 芭達雅", caption: "高空跳傘",
         alt:  "我與教練雙人跳傘，剛離開紅白色小飛機，背景是藍天" },
-      { src: "media/life/turtle-xiaoliuqiu.jpg",     place: "台灣 - 小琉球",     caption: "潛水遇見海龜",
+      { src: "media/life/turtle-xiaoliuqiu.jpg",     zone: "underwater", place: "台灣 - 小琉球",     caption: "潛水遇見海龜",
         alt:  "我與潛伴在珊瑚礁旁潛水，一隻海龜在前方覓食" },
-      { src: "media/life/manta-bali.jpg",            place: "印尼 - 峇里島", caption: "鬼蝠魟",
+      { src: "media/life/manta-bali.jpg",            zone: "underwater", place: "印尼 - 峇里島", caption: "鬼蝠魟",
         alt:  "一隻鬼蝠魟張開嘴在藍色海水中游過" },
-      { src: "media/life/reef-sharks-fiji.jpg", video: "media/life/reef-sharks-fiji.mp4",
+      { src: "media/life/reef-sharks-fiji.jpg", zone: "underwater", video: "media/life/reef-sharks-fiji.mp4",
         place: "斐濟 - 庫塔島", caption: "黑鰭礁鯊與白鰭礁鯊",
         alt:  "影片：藍色海水中，礁鯊在珊瑚礁上方巡游" },
     ],

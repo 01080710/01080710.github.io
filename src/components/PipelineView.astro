@@ -1,0 +1,357 @@
+---
+// Home "pipeline view": the same Home content redrawn as a data pipeline DAG, opened from the hero's
+// "pipeline view" button. Source (hero) -> capabilities (the keyword strip's focus groups) -> projects (every
+// project on the impact map, one lane per company) -> sink (contact), plus the common tools as a runtime rail.
+// Edges are real lineage: a project hangs off every capability group holding one of its `focus` terms.
+// The script morphs each Home section into its node with View Transitions, grows the edges, then runs the DAG
+// once (queued -> running -> done; an in-progress project ends "in progress"), with sealed packets travelling the
+// edges. Hovering or focusing a node traces its upstream and downstream; clicking it morphs back to that section.
+// Without JS the button stays hidden and the dialog is never shown. All text comes from existing data.
+import BrandMark from "./BrandMark.astro";
+import { get_profile } from "../i18n/profile";
+import { get_impact_projects, get_keywords } from "../i18n/projects";
+import { use_translations, type Lang } from "../i18n/ui";
+import { url } from "../lib/url";
+
+interface Props { lang: Lang }
+const { lang } = Astro.props;
+const t = use_translations(lang);
+const profile = get_profile(lang);
+const { groups, tools } = await get_keywords(lang);
+const projects = await get_impact_projects(lang);
+
+const short_name = (name: string) => name.replace(/(股份)?有限公司$|,?\s*(Co\.,?\s*)?Ltd\.?$/i, "").trim();
+const caps_of = (focus: string[] = []) =>
+  groups.flatMap((g, i) => (g.terms.some((term) => focus.includes(term)) ? [`cap-${i}`] : []));
+const lanes = [...new Set(projects.map((p) => p.data.system_map!.map))].map((map) => {
+  const items = projects.filter((p) => p.data.system_map!.map === map);
+  return { map, company: short_name(items[0].data.company), items };
+});
+const project_ids = projects.map((p) => `pj-${p.data.system_map!.area}`);
+const labels = {
+  queued: t("pipeline.queued"), running: t("pipeline.running"), done: t("pipeline.done"),
+  building: t("home.building"), run_done: t("pipeline.run_done"),
+};
+---
+
+<dialog class="pv" aria-labelledby="pv-title" data-labels={JSON.stringify(labels)}>
+  <div class="pv-inner">
+    <header class="pv-bar">
+      <div>
+        <h2 id="pv-title" class="pv-title">{t("pipeline.title")}</h2>
+        <p class="pv-hint">{t("pipeline.hint")}</p>
+      </div>
+      <div class="pv-actions">
+        <button type="button" class="btn primary pv-run">
+          <svg viewBox="0 0 12 12" aria-hidden="true"><path d="M3 1.8 L10.2 6 L3 10.2 Z" /></svg>{t("pipeline.run")}
+        </button>
+        <button type="button" class="btn pv-close">{t("pipeline.close")}</button>
+      </div>
+    </header>
+
+    <div class="pv-canvas">
+      <svg class="pv-edges" aria-hidden="true"></svg>
+
+      <div class="pv-col">
+        <p class="pv-col-name mono">{t("pipeline.col_source")}</p>
+        <button type="button" class="pv-node pv-node-src" data-node="src" data-target=".hero" data-morph=".hero-text" data-s="queued">
+          <span class="pv-avatar" data-morph=".hero-photo"><img src={url("media/peter-photo.jpg")} alt="" width="560" height="716" /></span>
+          <span class="pv-node-body">
+            <span class="pv-node-title">{profile.name}</span>
+            <span class="pv-node-sub mono">{profile.title}</span>
+            <span class="pv-status">{labels.queued}</span>
+          </span>
+          <span class="pv-progress" aria-hidden="true"><i></i></span>
+        </button>
+      </div>
+
+      <div class="pv-col">
+        <p class="pv-col-name mono">{t("pipeline.col_skills")}</p>
+        {groups.map((g, i) => (
+          <button type="button" class="pv-node" data-node={`cap-${i}`} data-deps="src" data-s="queued"
+                  data-target={`.focus-groups > li:nth-child(${i + 1})`}>
+            <span class="pv-node-body">
+              <span class="pv-node-title">{g.label}</span>
+              <span class="pv-node-sub">{g.terms.join(" · ")}</span>
+              <span class="pv-status">{labels.queued}</span>
+            </span>
+            <span class="pv-progress" aria-hidden="true"><i></i></span>
+          </button>
+        ))}
+      </div>
+
+      <div class="pv-col">
+        <p class="pv-col-name mono">{t("pipeline.col_projects")}</p>
+        {lanes.map((lane) => (
+          <div class="pv-lane">
+            <p class="pv-lane-name">{lane.company}</p>
+            {lane.items.map((p) => (
+              <button type="button" class="pv-node" data-node={`pj-${p.data.system_map!.area}`} data-accent={p.data.accent}
+                      data-deps={caps_of(p.data.focus).join(" ")} data-building={p.data.home ? undefined : ""} data-s="queued"
+                      data-target={`.impact-card[data-area="${p.data.system_map!.area}"]`}>
+                <span class="pv-node-body">
+                  <span class="pv-node-title">{p.data.title}</span>
+                  <span class="pv-status">{labels.queued}</span>
+                </span>
+                <span class="pv-progress" aria-hidden="true"><i></i></span>
+              </button>
+            ))}
+          </div>
+        ))}
+      </div>
+
+      <div class="pv-col">
+        <p class="pv-col-name mono">{t("pipeline.col_sink")}</p>
+        <button type="button" class="pv-node pv-node-sink" data-node="sink" data-deps={project_ids.join(" ")} data-s="queued"
+                data-target=".home-contact">
+          <BrandMark class="pv-sink-mark" />
+          <span class="pv-node-body">
+            <span class="pv-node-title">{t("home.contact")}</span>
+            {profile.contact.email && <span class="pv-node-sub">{profile.contact.email}</span>}
+            <span class="pv-status">{labels.queued}</span>
+          </span>
+          <span class="pv-progress" aria-hidden="true"><i></i></span>
+        </button>
+      </div>
+
+      <div class="pv-rail">
+        <span class="pv-col-name mono">{t("pipeline.runtime")}</span>
+        <ul data-morph=".keyword-strip dl > div:nth-child(2) ul">{tools.map((k) => <li class="mono">{k}</li>)}</ul>
+      </div>
+    </div>
+    <p class="sr-only" aria-live="polite" data-live></p>
+  </div>
+</dialog>
+
+<script>
+  import { svg_el as el, make_packet, set_clean, place, rand, Route } from "../lib/pipe-packets";
+
+  const dialog = document.querySelector<HTMLDialogElement>("dialog.pv");
+  const opener = document.querySelector<HTMLButtonElement>(".pv-open");
+  if (dialog && opener && typeof dialog.showModal === "function") init(dialog, opener);
+
+  function init(dialog: HTMLDialogElement, opener: HTMLButtonElement) {
+    const reduce  = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const labels  = JSON.parse(dialog.dataset.labels ?? "{}") as Record<string, string>;
+    const canvas  = dialog.querySelector<HTMLElement>(".pv-canvas")!;
+    const svg     = dialog.querySelector<SVGSVGElement>(".pv-edges")!;
+    const live    = dialog.querySelector<HTMLElement>("[data-live]")!;
+    const run_btn = dialog.querySelector<HTMLButtonElement>(".pv-run")!;
+    const nodes   = [...dialog.querySelectorAll<HTMLButtonElement>(".pv-node")];
+    const by_id   = new Map(nodes.map((n) => [n.dataset.node!, n]));
+    const deps    = (n: HTMLElement) => (n.dataset.deps ?? "").split(" ").filter(Boolean);
+    const outs    = new Map<string, string[]>();
+    for (const n of nodes) for (const d of deps(n)) outs.set(d, [...(outs.get(d) ?? []), n.dataset.node!]);
+    const building = (id: string) => by_id.get(id)?.dataset.building !== undefined;
+
+    // ---------- morph pairs: Home element <-> pipeline element (data-morph, defaulting to data-target) ----------
+    const morphs = [...dialog.querySelectorAll<HTMLElement>("[data-morph], .pv-node")].map((node, i) => ({
+      node, name: `pv-m${i}`,
+      page: () => document.querySelector<HTMLElement>(node.dataset.morph ?? node.dataset.target ?? ""),
+    }));
+    // Each element lands a beat after the previous one, so the page "collapses" into the DAG in reading order.
+    const stagger = document.createElement("style");
+    stagger.textContent = morphs.map((m, i) => `::view-transition-group(${m.name}){animation-delay:${i * 28}ms}`).join("");
+    document.head.appendChild(stagger);
+
+    const name_side = (side: "page" | "node" | null) => {
+      for (const m of morphs) {
+        m.page()?.style.setProperty("view-transition-name", side === "page" ? m.name : "");
+        m.node.style.setProperty("view-transition-name", side === "node" ? m.name : "");
+      }
+    };
+    const transition = (update: () => void, done: () => void) => {
+      const doc = document as Document & { startViewTransition?: (cb: () => void) => { finished: Promise<void> } };
+      if (reduce || !doc.startViewTransition) { update(); name_side(null); done(); return; }
+      document.documentElement.classList.add("pv-morph");
+      doc.startViewTransition(update).finished.finally(() => {
+        document.documentElement.classList.remove("pv-morph");
+        name_side(null);
+        done();
+      });
+    };
+
+    // ---------- edges (two layers: every shell under every core, so converging tubes read as one joint) ----------
+    interface Edge { from: string; to: string; parts: SVGElement[]; route: Route }
+    let edges: Edge[] = [];
+    let packets: SVGGElement = el("g", {}, svg) as SVGGElement;
+    const mark = (e: Edge, cls: string, on: boolean) => e.parts.forEach((p) => p.classList.toggle(cls, on));
+    function draw_edges() {
+      const box = canvas.getBoundingClientRect();
+      svg.setAttribute("viewBox", `0 0 ${box.width} ${box.height}`);
+      svg.replaceChildren();
+      edges = [];
+      const shells = el("g", {}, svg), cores = el("g", {}, svg);
+      for (const n of nodes) for (const from of deps(n)) {
+        const a = by_id.get(from)!.getBoundingClientRect(), b = n.getBoundingClientRect();
+        let d: string;
+        if (b.left >= a.right - 8) {                // columns side by side: right edge -> left edge
+          const x1 = a.right - box.left, y1 = a.top + a.height / 2 - box.top;
+          const x2 = b.left - box.left,  y2 = b.top + b.height / 2 - box.top, mx = (x1 + x2) / 2;
+          d = `M${x1} ${y1} C${mx} ${y1} ${mx} ${y2} ${x2} ${y2}`;
+        } else {                                     // stacked (narrow screens): bottom -> top
+          const x1 = a.left + a.width / 2 - box.left, y1 = a.bottom - box.top;
+          const x2 = b.left + b.width / 2 - box.left, y2 = b.top - box.top, my = (y1 + y2) / 2;
+          d = `M${x1} ${y1} C${x1} ${my} ${x2} ${my} ${x2} ${y2}`;
+        }
+        const cls = building(from) || building(n.dataset.node!) ? " is-building" : "";
+        const shell = el("path", { d, class: `pv-edge-shell${cls}`, pathLength: 1 }, shells);
+        const core = el("path", { d, class: `pv-edge-core${cls}`, pathLength: 1 }, cores) as SVGPathElement;
+        edges.push({ from, to: n.dataset.node!, parts: [shell, core], route: new Route(core) });
+      }
+      packets = el("g", {}, svg) as SVGGElement;
+    }
+
+    // ---------- lineage tracing ----------
+    function trace(id: string | null) {
+      canvas.classList.toggle("has-trace", !!id);
+      if (!id) { nodes.forEach((n) => n.classList.remove("is-lit")); edges.forEach((e) => mark(e, "is-lit", false)); return; }
+      const lit = new Set([id]);
+      const up = (x: string) => deps(by_id.get(x)!).forEach((d) => { if (!lit.has(d)) { lit.add(d); up(d); } });
+      const down = (x: string) => (outs.get(x) ?? []).forEach((o) => { if (!lit.has(o)) { lit.add(o); down(o); } });
+      up(id); down(id);
+      nodes.forEach((n) => n.classList.toggle("is-lit", lit.has(n.dataset.node!)));
+      edges.forEach((e) => mark(e, "is-lit", lit.has(e.from) && lit.has(e.to)));
+    }
+
+    // ---------- run ----------
+    let run_id = 0;
+    let timers: number[] = [];
+    const set_status = (n: HTMLElement, s: string) => {
+      n.dataset.s = s;
+      n.querySelector(".pv-status")!.textContent = labels[s] ?? s;
+    };
+    function reset() {
+      run_id++;
+      timers.forEach(clearTimeout);
+      timers = [];
+      nodes.forEach((n) => set_status(n, "queued"));
+      edges.forEach((e) => mark(e, "is-done", false));
+      packets.replaceChildren();
+    }
+    function send(edge: Edge, id: number, arrive: () => void) {
+      const g = make_packet(packets);
+      set_clean(g);
+      const start = performance.now(), MS = 620, len = edge.route.length;
+      const frame = (now: number) => {
+        if (id !== run_id) { g.remove(); return; }
+        const p = Math.min((now - start) / MS, 1), e = p < 0.5 ? 2 * p * p : 1 - (-2 * p + 2) ** 2 / 2;
+        const pt = edge.route.at(len * e);
+        place(g, pt.x, pt.y, 0);
+        if (p < 1) requestAnimationFrame(frame);
+        else { g.remove(); mark(edge, "is-done", true); arrive(); }
+      };
+      requestAnimationFrame(frame);
+    }
+    function run() {
+      reset();
+      const id = run_id;
+      live.textContent = "";
+      const arrived = new Map<string, number>();
+      const later = (ms: number, fn: () => void) => timers.push(window.setTimeout(() => id === run_id && fn(), ms));
+      // A node starts once every upstream that will deliver (i.e. is not itself in progress) has delivered.
+      const expected = (n: HTMLElement) => deps(n).filter((d) => !building(d)).length;
+      const start = (n: HTMLElement) => {
+        const ms = reduce ? 200 : n.dataset.node === "src" ? 700 : rand(650, 1300);
+        n.style.setProperty("--dur", `${ms}ms`);
+        set_status(n, "running");
+        later(ms, () => finish(n));
+      };
+      const finish = (n: HTMLElement) => {
+        const node = n.dataset.node!;
+        set_status(n, building(node) ? "building" : "done");
+        if (node === "sink") { live.textContent = labels.run_done; return; }
+        if (building(node)) return;
+        for (const to of outs.get(node) ?? []) {
+          const target = by_id.get(to)!, edge = edges.find((e) => e.from === node && e.to === to);
+          const arrive = () => {
+            const count = (arrived.get(to) ?? 0) + 1;
+            arrived.set(to, count);
+            if (count === expected(target)) start(target);
+          };
+          if (reduce || !edge) { if (edge) mark(edge, "is-done", true); later(120, arrive); }
+          else send(edge, id, arrive);
+        }
+      };
+      start(by_id.get("src")!);
+    }
+
+    // ---------- open / close ----------
+    // Tracing follows the pointer only after it has actually moved inside the view: when the dialog opens under a
+    // resting cursor, the node that happens to be there should not light up on its own.
+    let armed = false;
+    function open() {
+      if (dialog.open) return;
+      armed = false;
+      // Impact cards that have not played their entrance yet would be captured invisible: settle them first.
+      document.querySelectorAll(".impact-company").forEach((p) => p.classList.add("is-in", "is-settled"));
+      name_side("page");
+      transition(() => {
+        name_side("node");
+        dialog.showModal();
+        dialog.scrollTop = 0;
+        draw_edges();
+        reset();
+        svg.classList.add("is-waiting");            // edges stay out of the morph; they grow once nodes have landed
+      }, () => {
+        draw_edges();
+        svg.classList.remove("is-waiting");
+        if (!reduce) {
+          svg.classList.add("is-growing");
+          setTimeout(() => svg.classList.remove("is-growing"), 700);
+        }
+        run_btn.focus({ preventScroll: true });
+        timers.push(window.setTimeout(run, reduce ? 0 : 550));
+      });
+    }
+    function reveal(target: HTMLElement) {
+      const panel = target.closest<HTMLElement>(".impact-company");
+      if (panel?.hidden) {
+        const company = panel.dataset.company ?? "";
+        const tab = document.querySelector<HTMLButtonElement>(`.impact-tab[data-company="${company}"]`);
+        const select = document.querySelector<HTMLSelectElement>("#impact-company");
+        if (tab) tab.click();
+        else if (select) { select.value = company; select.dispatchEvent(new Event("change")); }
+      }
+      target.scrollIntoView({ block: "center", behavior: "instant" as ScrollBehavior });
+    }
+    function close(target: HTMLElement | null = null) {
+      if (!dialog.open) return;
+      reset();
+      trace(null);
+      name_side("node");
+      transition(() => {
+        name_side("page");
+        dialog.close();
+        if (target) reveal(target);
+      }, () => {
+        if (target) {
+          target.classList.add("pv-landed");
+          setTimeout(() => target.classList.remove("pv-landed"), 1600);
+        }
+        (target?.querySelector<HTMLElement>("a, button") ?? opener).focus({ preventScroll: true });
+      });
+    }
+
+    opener.hidden = false;
+    opener.addEventListener("click", open);
+    run_btn.addEventListener("click", run);
+    dialog.querySelector(".pv-close")!.addEventListener("click", () => close());
+    dialog.addEventListener("cancel", (e) => { e.preventDefault(); close(); });
+    dialog.addEventListener("pointermove", (e) => {
+      if (armed) return;
+      armed = true;
+      const n = (e.target as Element).closest<HTMLElement>(".pv-node");
+      if (n) trace(n.dataset.node!);
+    });
+    for (const n of nodes) {
+      const id = n.dataset.node!;
+      n.addEventListener("click", () => close(document.querySelector<HTMLElement>(n.dataset.target ?? "")));
+      n.addEventListener("pointerenter", () => { if (armed) trace(id); });
+      n.addEventListener("pointerleave", () => trace(null));
+      n.addEventListener("focus", () => trace(id));
+      n.addEventListener("blur", () => trace(null));
+    }
+    new ResizeObserver(() => { if (dialog.open) draw_edges(); }).observe(canvas);
+  }
+</script>

@@ -160,6 +160,162 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .hero-dots { position: absolute; z-index: 2; right: -14px; bottom: -6px; display: flex; gap: 6px; transform: rotate(-20deg); }
 .hero-dots i { width: 16px; height: 11px; border-radius: 50%; background: var(--accent-2); }
 .hero-dots i:nth-child(2) { background: var(--accent); transform: translateY(-8px); }
+/* Hero pipeline (script in index.astro builds the SVG from the live layout; wide screens with JS only).
+   Sources (database / API / spreadsheet) -> validate (scanner, reject chute + tray) -> schedule (gate) -> log (stamp)
+   -> rise into the photo. Packets are .pk-* (shared with Contact). .hp-animate = first visit of the session: pieces
+   snap in with overshoot and flanges pop; .is-static (repeat visit, resize) shows the built pipes at once. */
+.hero { position: relative; }
+.hero > :not(.hero-pipes, .hero-drop, .ts-layer) { position: relative; z-index: 1; }
+.hero.has-pipes { padding-top: 64px; padding-bottom: 196px; }
+.hero-pipes { position: absolute; inset: 0; width: 100%; height: 100%; z-index: 0; pointer-events: none; overflow: visible; }
+.hero-pipes .hp-route { fill: none; stroke: none; }
+.hero-pipes .hp-edge  { fill: none; stroke: color-mix(in srgb, var(--accent) 40%, var(--bg)); stroke-width: 19; }
+.hero-pipes .hp-core  { fill: none; stroke: var(--bg); stroke-width: 14; }
+.hero-pipes .hp-flange { fill: var(--accent); }
+.hero-pipes .hp-source { fill: var(--surface); stroke: color-mix(in srgb, var(--accent) 40%, var(--bg)); stroke-width: 1.5; }
+.hero-pipes .hp-icon { fill: none; stroke: var(--accent); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.hero-pipes .hp-icon-top { fill: var(--surface); }
+.hero-pipes .hp-icon-grid { stroke-width: 1; }
+.hero-pipes .hp-icon-head { fill: var(--accent-bg); }
+.hero-pipes .hp-station { fill: color-mix(in srgb, var(--accent-bg) 70%, transparent); stroke: var(--accent); stroke-width: 2; }
+.hero-pipes .hp-step  { fill: var(--fg); font: 700 12px var(--sans); text-anchor: middle; letter-spacing: 0.04em; }
+.hero-pipes .hp-scan  { stroke: var(--accent-2); stroke-width: 2; stroke-linecap: round; animation: hp-scan 1.1s ease-in-out infinite alternate; }
+.hero-pipes .hp-gate  { fill: var(--accent); }
+.hero-pipes .hp-stamp { fill: var(--accent-2); }
+.hero-pipes .hp-tray  { fill: none; stroke: color-mix(in srgb, var(--accent) 40%, var(--bg)); stroke-width: 3; stroke-linecap: round; stroke-linejoin: round; }
+@keyframes hp-scan { from { transform: translateX(-22px); } to { transform: translateX(22px); } }
+/* Visitor's own packet: a quiet text button under the stations (keyboard path for "click any empty spot"). */
+.hero-drop {
+  position: absolute; z-index: 2; padding: 3px 12px; border: 1px dashed color-mix(in srgb, var(--accent) 50%, var(--bg));
+  border-radius: 999px; background: var(--bg); color: var(--accent); font: 500 0.78rem var(--sans); cursor: pointer; text-align: left;
+}
+.hero-drop:hover { border-style: solid; border-color: var(--accent-2); color: var(--accent-2); }
+.hero-drop:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.hp-animate .hero-pipes:not(.is-static) .hp-piece  { animation: hp-snap 0.5s cubic-bezier(0.34, 1.7, 0.64, 1) var(--d) both; }
+.hp-animate .hero-pipes:not(.is-static) .hp-flange { transform-box: fill-box; transform-origin: center; animation: hp-pop 0.3s cubic-bezier(0.34, 1.8, 0.64, 1) var(--d) both; }
+.hp-animate .hero-dots i { animation: hp-pop 0.45s cubic-bezier(0.34, 1.8, 0.64, 1) 1.7s both; }
+.hp-animate .hero-dots i:nth-child(2) { animation-delay: 1.8s; }
+.hp-animate .hero-dots i:nth-child(3) { animation-delay: 1.9s; }
+@keyframes hp-snap  { from { opacity: 0; transform: translate(var(--dx), var(--dy)); } }
+@keyframes hp-pop   { from { scale: 0; } }
+@keyframes hp-pulse { 50% { scale: 1.06; } }
+@media (prefers-reduced-motion: reduce) { .hero-pipes .hp-scan { animation: none; } }
+
+/* Hero text assembly (src/lib/scatter-text.ts): the real headline and title stay in place but transparent while
+   per-character clones in .ts-layer fly in from scattered poses. .ts-pending (set before first paint) hides them
+   until the script starts; if the script never runs, the timed fallback shows the text after 4s. */
+.ts-pending .hero-statement { color: transparent; animation: ts-reveal-fg 0s 4s forwards; }
+.ts-pending .hero-role > .mono { color: transparent; animation: ts-reveal-muted 0s 4s forwards; }
+@keyframes ts-reveal-fg { to { color: var(--fg); } }
+@keyframes ts-reveal-muted { to { color: var(--muted); } }
+.hero .ts-hide { color: transparent; }
+.ts-layer { position: absolute; inset: 0; z-index: 3; pointer-events: none; overflow: clip; }
+.ts-layer span { position: absolute; white-space: pre; transform-origin: center; will-change: transform; }
+
+/* ---------- Home pipeline view (components/PipelineView.astro) ---------- */
+/* Opened from the hero; the Home sections morph into DAG nodes (View Transitions), edges grow, the DAG runs. */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; border: 0; }
+.pv-open { display: inline-flex; align-items: center; gap: 8px; background: none; font: inherit; font-size: 0.9rem; font-weight: 500; cursor: pointer; }
+.pv-open[hidden] { display: none; }
+.pv-open svg { width: 18px; height: 18px; }
+.pv-open svg path { fill: none; stroke: var(--accent); stroke-width: 1.6; }
+.pv-open svg circle { fill: var(--accent); }
+.pv-open svg circle:first-of-type { fill: var(--accent-2); }
+.pv-open:focus-visible, .pv-run:focus-visible, .pv-close:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pv-landed { outline: 2px solid var(--accent-2); outline-offset: 6px; border-radius: var(--radius); }
+
+.pv {
+  position: fixed; inset: 0; width: 100%; height: 100%; max-width: none; max-height: none; margin: 0; padding: 0; border: 0;
+  background: var(--bg); color: var(--fg); overflow: auto; overscroll-behavior: contain;
+}
+.pv::backdrop { background: transparent; }
+.pv-inner { max-width: 1180px; margin: 0 auto; padding: 24px 24px 48px; }
+.pv-bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px 24px; padding-bottom: 16px; border-bottom: 1px solid var(--line); }
+.pv-title { font-size: 1.3rem; }
+.pv-hint { margin: 4px 0 0; color: var(--muted); font-size: 0.85rem; }
+.pv-actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.pv-actions .btn { font: inherit; font-size: 0.9rem; font-weight: 500; cursor: pointer; background: none; }
+.pv-actions .btn.primary { background: var(--fg); }
+.pv-run { display: inline-flex; align-items: center; gap: 8px; }
+.pv-run svg { width: 11px; height: 11px; fill: currentColor; }
+
+.pv-canvas {
+  position: relative; display: grid; align-items: center; margin-top: 28px;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr) minmax(0, 1.25fr) minmax(0, 0.85fr); column-gap: 72px;
+}
+.pv-edges { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; pointer-events: none; }
+.pv-col { position: relative; z-index: 1; display: grid; gap: 12px; align-content: center; }
+.pv-col-name { margin: 0; font-size: 0.7rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--accent-2); }
+.pv-lane { display: grid; gap: 10px; }
+.pv-lane + .pv-lane { margin-top: 10px; }
+.pv-lane-name { margin: 0; font-size: 0.78rem; font-weight: 700; color: var(--muted); }
+.pv-rail {
+  position: relative; z-index: 1; grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 14px;
+  margin-top: 32px; padding: 10px 14px; border: 1px dashed color-mix(in srgb, var(--accent) 40%, var(--bg)); border-radius: var(--radius);
+}
+.pv-rail ul { list-style: none; display: flex; flex-wrap: wrap; gap: 8px; margin: 0; padding: 0; }
+.pv-rail li { padding: 3px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 0.78rem; color: var(--muted); }
+
+.pv-node {
+  position: relative; display: flex; align-items: center; gap: 12px; width: 100%; padding: 10px 12px 13px; overflow: hidden;
+  background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--radius);
+  color: var(--fg); font: inherit; text-align: left; cursor: pointer; transition: border-color 0.2s, opacity 0.2s, transform 0.2s;
+}
+.pv-node:hover { transform: translateY(-2px); }
+.pv-node:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.pv-node[data-building] { border-style: dashed; border-left-style: solid; }
+.pv-node-body { display: grid; justify-items: start; gap: 4px; min-width: 0; }
+.pv-node-title { font-weight: 700; font-size: 0.9rem; line-height: 1.35; color: var(--accent); }
+.pv-node-src .pv-node-title, .pv-node-sink .pv-node-title { color: var(--fg); }
+.pv-node-sub { font-size: 0.74rem; line-height: 1.45; color: var(--muted); overflow-wrap: anywhere; }
+.pv-avatar { flex: none; width: 46px; height: 46px; border-radius: 50%; overflow: hidden; background: var(--blob); }
+.pv-avatar img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: 50% 30%; }
+.pv-sink-mark { flex: none; width: 36px; height: 36px; }
+.pv-status { padding: 1px 8px; border: 1px solid var(--line); border-radius: 999px; font: 600 0.68rem var(--mono); color: var(--muted); }
+.pv-node[data-s="running"] .pv-status  { color: var(--yellow); background: var(--yellow-bg); border-color: transparent; }
+.pv-node[data-s="done"] .pv-status     { color: var(--green); background: var(--green-bg); border-color: transparent; }
+.pv-node[data-s="building"] .pv-status { color: var(--accent); border: 1px dashed var(--accent); }
+.pv-node[data-s="done"] { border-color: color-mix(in srgb, var(--accent) 55%, var(--line)); }
+.pv-progress { position: absolute; left: 0; right: 0; bottom: 0; height: 3px; }
+.pv-progress i { display: block; width: 0; height: 100%; background: var(--accent); }
+.pv-node:is([data-s="running"], [data-s="done"], [data-s="building"]) .pv-progress i { width: 100%; }
+.pv-node[data-s="running"] .pv-progress i { transition: width var(--dur, 1s) linear; }
+
+.pv-edge-shell { fill: none; stroke: color-mix(in srgb, var(--accent) 35%, var(--bg)); stroke-width: 10; transition: stroke 0.25s, opacity 0.25s; }
+.pv-edge-core  { fill: none; stroke: var(--bg); stroke-width: 6; transition: stroke 0.25s, opacity 0.25s; }
+.pv-edge-core.is-done { stroke: var(--accent-bg); }
+.pv-edge-shell.is-building { stroke-dasharray: 0.02 0.015; }
+.pv-edge-shell.is-lit { stroke: var(--accent); }
+.pv-canvas.has-trace .pv-node:not(.is-lit) { opacity: 0.3; }
+.pv-canvas.has-trace :is(.pv-edge-shell, .pv-edge-core):not(.is-lit) { opacity: 0.15; }
+.pv-edges.is-waiting { opacity: 0; }
+.pv-edges.is-growing :is(.pv-edge-shell, .pv-edge-core) { stroke-dasharray: 1; animation: pv-grow 0.6s cubic-bezier(0.22, 1, 0.36, 1) both; }
+@keyframes pv-grow { from { stroke-dashoffset: 1; } }
+
+/* The morph itself: only while the pipeline view opens or closes (html.pv-morph). Per-element delays are added
+   by the script so sections land one after another. */
+:root.pv-morph::view-transition-group(*) { animation-duration: 0.6s; animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1); }
+:root.pv-morph::view-transition-old(root), :root.pv-morph::view-transition-new(root) { animation-duration: 0.35s; }
+:root.pv-morph::view-transition-image-pair(*) { overflow: clip; border-radius: var(--radius); }
+
+@media (max-width: 760px) {
+  .pv-inner { padding: 16px 16px 40px; }
+  .pv-canvas { grid-template-columns: minmax(0, 1fr); row-gap: 40px; }
+  .pv-rail { margin-top: 0; }
+}
+
+/* Packets (src/lib/pipe-packets.ts), shared by the Home hero and Contact: raw = irregular shapes in muted tones
+   (data before cleaning); .is-clean morphs into a stamped seal; .is-mine = the visitor's packet; .is-rejected fades. */
+.pk-raw { fill: var(--muted); transform-box: fill-box; transform-origin: center; transition: transform 0.22s ease-in, opacity 0.22s ease-in; }
+.pk-clean { transform-box: fill-box; transform-origin: center; transform: scale(0); transition: transform 0.4s cubic-bezier(0.34, 1.9, 0.64, 1) 0.1s; }
+.pk-seal { fill: var(--accent); }
+.pk-core { fill: var(--bg); }
+.pk.is-clean .pk-raw { transform: scale(0) rotate(120deg); opacity: 0; }
+.pk.is-clean .pk-clean { transform: none; }
+.pk.is-mine .pk-raw, .pk.is-mine .pk-seal { fill: var(--accent-2); }
+.pk.is-rejected .pk-raw { opacity: 0.4; }
+@media (prefers-reduced-motion: reduce) { .pk-raw, .pk-clean { transition: none; } }
 
 /* ---------- Sections ---------- */
 .section { padding: 56px 0 0; }
@@ -231,6 +387,19 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .impact-company:has(.impact-card[data-area="drop-order"]:is(:hover, :focus-within))  .area:not([data-area="drop-order"]),
 .impact-company:has(.impact-card[data-area="account"]:is(:hover, :focus-within))     .area:not([data-area="account"]),
 .impact-company:has(.impact-card[data-area="noise-enforcement"]:is(:hover, :focus-within)) .area:not([data-area="noise-enforcement"]) { opacity: 0.2; }
+/* Map -> card: hovering an area lights its card and dims the other areas (script in ImpactMap.astro). */
+.system-map .area.is-linked { cursor: pointer; }
+.impact-company.has-hot .area:not(.is-hot) { opacity: 0.2; }
+.impact-card > a { transition: border-color 0.2s, transform 0.2s; }
+.impact-card.is-hot > a { border-color: var(--accent); transform: translateY(-4px); }
+@media (prefers-reduced-motion: reduce) { .impact-card.is-hot > a { transform: none; } }
+/* First view: areas light up and cards arrive in the map's left-to-right order (--i, one step = 0.35s; keep in step
+   with STEP_MS). Only under .motion-ok, so no-JS and reduced-motion readers get the static, fully lit map. */
+.motion-ok .impact-company:not(.is-in) .system-map .area { opacity: 0.08; }
+.motion-ok .impact-company:not(.is-in) .impact-card { opacity: 0; transform: translateY(14px); }
+.motion-ok .impact-card { transition: opacity 0.5s ease-out, transform 0.6s cubic-bezier(0.22, 1, 0.36, 1); }
+.motion-ok .impact-company.is-in:not(.is-settled) .system-map .area { transition: opacity 0.5s ease-out calc(var(--i, 0) * 0.35s); }
+.motion-ok .impact-company.is-in:not(.is-settled) .impact-card { transition-delay: calc(var(--i, 0) * 0.35s + 0.15s); }
 .impact-toolbar { display: flex; align-items: center; gap: 10px; margin: 0 0 14px; }
 .impact-map-company { color: var(--muted); font-weight: 600; }
 /* 2-4 companies: pill tabs. */
@@ -310,6 +479,56 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 /* Home intro: "more about me" and the off-the-clock hook on their own lines. */
 .intro-links { display: flex; flex-direction: column; gap: 6px; }
 @media (max-width: 640px) { .life-gallery { grid-template-columns: 1fr; } }
+/* Off the Clock as one descent: sky -> sea level -> underwater, each a band that deepens in tint (no numbers).
+   A gauge line runs down the left; each zone's label sits on it and stays in view while its photos scroll past.
+   With JS (.motion-ok) the gauge fills with scroll, the zone in view lights its label, and photos settle in
+   from the direction of travel (sky from above, underwater from below). Static view = fully drawn. */
+.life-depth { --gauge-x: 20px; position: relative; margin-top: 24px; border-radius: var(--radius); overflow: clip; border: 1px solid var(--line); }
+.life-depth::before, .life-depth::after {
+  content: ""; position: absolute; left: var(--gauge-x); top: 0; bottom: 0; width: 2px; background: var(--line); z-index: 1;
+}
+.life-depth::after { background: var(--accent); transform-origin: top; transform: scaleY(var(--progress, 1)); }
+.motion-ok .life-depth::after { transform: scaleY(var(--progress, 0)); }
+.life-zone { position: relative; display: grid; grid-template-columns: 120px minmax(0, 1fr); gap: 0 20px; padding: 32px 24px 32px 0; }
+.zone-sky        { background: var(--surface); }
+.zone-surface    { background: color-mix(in srgb, var(--accent) 7%, var(--bg)); }
+.zone-underwater { background: color-mix(in srgb, var(--accent) 15%, var(--bg)); }
+.life-zone-label {
+  grid-column: 1; align-self: start; position: sticky; top: 80px; z-index: 2; margin: 0;
+  padding-left: calc(var(--gauge-x) + 16px); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted);
+  transition: color 0.3s;
+}
+.life-zone-label::before {
+  content: ""; position: absolute; left: calc(var(--gauge-x) - 4px); top: 50%; width: 10px; height: 10px; margin-top: -5px;
+  border-radius: 50%; background: var(--bg); border: 2px solid var(--accent); box-sizing: border-box; transition: background 0.3s, border-color 0.3s;
+}
+.life-zone.is-current .life-zone-label { color: var(--accent-2); }
+.life-zone.is-current .life-zone-label::before { background: var(--accent-2); border-color: var(--accent-2); }
+.life-zone .life-gallery { grid-column: 2; margin: 0; }
+.zone-sky .life-gallery, .zone-surface .life-gallery { grid-template-columns: minmax(0, 1fr); }
+.zone-sky .life-gallery { max-width: 560px; }
+.zone-underwater .life-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.life-zone figcaption { color: var(--fg); }
+/* Sea level: a wave drawn as a flow line (same dashes as the system map), riding the top edge of the surface band. */
+.life-sea { position: absolute; left: 0; top: -6px; width: 100%; height: 12px; overflow: visible; z-index: 1; }
+.life-sea path {
+  fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke;
+  stroke-dasharray: 6 5; animation: map-flow 1.4s linear infinite;
+}
+.motion-ok .life-zone .life-gallery > li { transition: opacity 0.7s ease-out, transform 0.8s cubic-bezier(0.22, 1, 0.36, 1); }
+.motion-ok .life-zone .life-gallery > li:nth-child(2) { transition-delay: 0.1s; }
+.motion-ok .life-zone .life-gallery > li:not(.is-in) { opacity: 0; }
+.motion-ok .zone-sky .life-gallery > li:not(.is-in)        { transform: translateY(-32px); }
+.motion-ok .zone-surface .life-gallery > li:not(.is-in)    { transform: scale(0.97); }
+.motion-ok .zone-underwater .life-gallery > li:not(.is-in) { transform: translateY(32px); }
+@media (prefers-reduced-motion: reduce) { .life-sea path { animation: none; } }
+@media (max-width: 640px) {
+  .life-depth { --gauge-x: 16px; }
+  .life-zone { grid-template-columns: 28px minmax(0, 1fr); gap: 0 10px; padding: 24px 12px 24px 0; }
+  .life-zone-label { writing-mode: vertical-rl; padding: 18px 0 0 calc(var(--gauge-x) - 6px); letter-spacing: 0.12em; }
+  .life-zone-label::before { top: 0; margin-top: 0; }
+  .zone-underwater .life-gallery { grid-template-columns: minmax(0, 1fr); }
+}
 
 /* ---------- Per-project accent (frontmatter `accent`) ---------- */
 /* Only --accent changes; red/yellow/green badge semantics stay the same on every page. */
@@ -402,15 +621,42 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
           mask-image: radial-gradient(ellipse at center, #000 55%, transparent 85%);
 }
 .stage-pipe { flex: 1; align-self: stretch; min-width: 0; height: auto; overflow: visible; }
-.stage-pipe path {
+.stage-pipe:not(.is-tube) path {
   fill: none; stroke: var(--accent); stroke-width: 2; vector-effect: non-scaling-stroke;
   stroke-dasharray: 6 5; animation: reach-flow 1.8s linear infinite;
 }
 @keyframes reach-flow { to { stroke-dashoffset: -22; } }
-@media (prefers-reduced-motion: reduce) { .stage-pipe path { animation: none; } }
+@media (prefers-reduced-motion: reduce) { .stage-pipe:not(.is-tube) path { animation: none; } }
+/* Enhanced pipes (script in contact.astro): real tubes at pixel size carrying the same .pk-* packets as Home.
+   .cs-animate = first visit of the session: reach in from outside, pause short of the card, snap on (flange + node
+   pop), then raw packets stream in from the left and are sealed at the coupling. A copy click sends a sealed
+   packet out along the right pipes. .cs-built = same end state without the entrance. */
+.stage-pipe.is-tube .cs-edge  { fill: none; stroke: color-mix(in srgb, var(--accent) 40%, var(--bg)); stroke-width: 19; }
+.stage-pipe.is-tube .cs-core  { fill: none; stroke: var(--bg); stroke-width: 14; }
+.stage-pipe.is-tube .cs-route { fill: none; stroke: none; }
+.stage-pipe .cs-flange { fill: var(--accent); }
+.cs-animate .stage-pipe.is-left  { animation: cs-reach-l 1.6s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both; }
+.cs-animate .stage-pipe.is-right { animation: cs-reach-r 1.6s cubic-bezier(0.22, 1, 0.36, 1) 0.2s both; }
+.cs-animate .stage-pipe .cs-flange { transform-box: fill-box; transform-origin: center; animation: hp-pop 0.35s cubic-bezier(0.34, 1.8, 0.64, 1) 1.55s both; }
+.cs-animate .stage-node { animation: hp-pop 0.4s cubic-bezier(0.34, 1.8, 0.64, 1) 1.6s both; }
+.cs-animate .contact-card { animation: cs-latch 0.35s ease-out 1.6s both; }
+.stage-node.is-sending { animation: hp-pulse 0.5s cubic-bezier(0.34, 1.6, 0.64, 1); }
+/* Reach: grow to just short of the card (keyframe 70%), hold, then close the gap with a snap. */
+@keyframes cs-reach-l {
+  0% { clip-path: inset(-20px 100% -20px -20px); }
+  70%, 85% { clip-path: inset(-20px 14% -20px -20px); }
+  100% { clip-path: inset(-20px -20px -20px -20px); }
+}
+@keyframes cs-reach-r {
+  0% { clip-path: inset(-20px -20px -20px 100%); }
+  70%, 85% { clip-path: inset(-20px -20px -20px 14%); }
+  100% { clip-path: inset(-20px -20px -20px -20px); }
+}
+@keyframes cs-latch { 40% { scale: 1.012; } }
 .contact-card {
   position: relative; flex: 0 1 560px; min-width: 0; padding: 32px 36px 28px;
   background: var(--surface); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow);
+  z-index: 1;   /* the side nodes sit above the pipes */
 }
 .stage-node {
   position: absolute; top: 50%; width: 14px; height: 14px; margin-top: -7px; border-radius: 50%;

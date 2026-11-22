@@ -80,3 +80,153 @@ const sources = [
   </section>
 </Base>
 
+<script>
+  // Contact pipes, enhanced (wide screens, JS only; without JS the dashed pipes above stay as they are).
+  // Same packet language as the Home hero (src/lib/pipe-packets.ts). Tubes are rebuilt at their real pixel size.
+  // First visit of a session: both pipes reach in from the outside -> stop just short of the card -> snap on, then
+  // raw packets stream in from the left and are sealed at the coupling before entering the card (the left node
+  // springs on each one). Pressing "copy" sends a sealed packet out of the card along each right-hand pipe.
+  // Later visits / resize: built at once and pre-warmed. Reduced motion: a still frame, no packet on copy.
+  import { svg_el as el, make_packet, place, set_clean, rand, Route } from "../../lib/pipe-packets";
+
+  const stage  = document.querySelector<HTMLElement>(".contact-stage");
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const SPAWN_S = 0.55, GAP = 18, SEAL_AT = 34, MAX_LANE = 7, SNAPPED_MS = 1850;
+
+  interface Packet { g: SVGGElement; s: number; v: number; a: number; spin: number; clean: boolean }
+  interface Lane { route: Route; layer: Element; q: Packet[] }
+  let lanes: Lane[] = [], outs: Lane[] = [];
+  let spawn_t = 0, lane_i = 0, last_pulse = 0;
+
+  function build() {
+    if (!stage) return;
+    lanes = []; outs = [];
+    for (const svg of stage.querySelectorAll<SVGSVGElement>(".stage-pipe")) {
+      const { width: w, height: h } = svg.getBoundingClientRect();
+      if (!w || !h) continue;                              // hidden on narrow screens
+      const left = svg.classList.contains("is-left");
+      const a = h * 0.22, b = h * 0.78, m = h * 0.5;
+      const ds = left
+        ? [`M0 ${a} C${w * 0.6} ${a} ${w * 0.4} ${m} ${w} ${m}`, `M0 ${b} C${w * 0.6} ${b} ${w * 0.4} ${m} ${w} ${m}`]
+        : [`M${w} ${a} C${w * 0.4} ${a} ${w * 0.6} ${m} 0 ${m}`, `M${w} ${b} C${w * 0.4} ${b} ${w * 0.6} ${m} 0 ${m}`];
+      svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
+      svg.removeAttribute("preserveAspectRatio");
+      svg.classList.add("is-tube");
+      svg.replaceChildren();
+      for (const d of ds) el("path", { d, class: "cs-edge" }, svg);
+      for (const d of ds) el("path", { d, class: "cs-core" }, svg);
+      const layer = el("g", {}, svg);
+      const fx = left ? w - 10 : 10;                        // flange where the pipe couples onto the card
+      el("rect", { x: fx - 3.5, y: m - 14, width: 7, height: 28, rx: 1.5, class: "cs-flange" }, svg);
+      for (const d of ds) {
+        const lane = { route: new Route(el("path", { d, class: "cs-route" }, svg) as SVGPathElement), layer, q: [] };
+        (left ? lanes : outs).push(lane);
+      }
+    }
+  }
+
+  function spawn() {
+    const lane = lanes[lane_i++ % Math.max(lanes.length, 1)];
+    if (!lane || lane.q.length >= MAX_LANE) return;
+    lane.q.push({ g: make_packet(lane.layer), s: 0, v: rand(70, 130), a: rand(0, 360), spin: rand(-220, 220), clean: false });
+  }
+
+  function step(dt: number, quiet: boolean) {
+    spawn_t += dt;
+    if (spawn_t >= SPAWN_S) { spawn_t = 0; spawn(); }
+    for (const lane of lanes) {
+      const len = lane.route.length;
+      for (let k = 0; k < lane.q.length; k++) {
+        const p = lane.q[k];
+        const limit = k === 0 ? len : lane.q[k - 1].s - GAP;
+        p.s = Math.max(p.s, Math.min(p.s + p.v * dt, limit));
+        if (!p.clean) p.a += p.spin * dt;
+        if (!p.clean && p.s >= len - SEAL_AT) { p.clean = true; p.a = 0; set_clean(p.g); }
+        if (p.s >= len - 0.5) {
+          p.g.remove();
+          lane.q.splice(k--, 1);
+          const now = performance.now();
+          if (!quiet && now - last_pulse > 180) {
+            last_pulse = now;
+            stage?.querySelector(".stage-node.is-left")?.animate([{ scale: "1" }, { scale: "1.35" }, { scale: "1" }],
+              { duration: 320, easing: "cubic-bezier(0.34, 1.6, 0.64, 1)" });
+          }
+        }
+      }
+    }
+  }
+
+  function render() {
+    for (const lane of lanes) for (const p of lane.q) { const pt = lane.route.at(p.s); place(p.g, pt.x, pt.y, p.a); }
+  }
+
+  function still_frame() {
+    for (const lane of lanes) {
+      const len = lane.route.length;
+      [0.62, 0.36, 0.12].forEach((f) => lane.q.push({ g: make_packet(lane.layer), s: len * f, v: 0, a: rand(0, 360), spin: 0, clean: false }));
+      const sealed = { g: make_packet(lane.layer), s: len - SEAL_AT + 6, v: 0, a: 0, spin: 0, clean: true };
+      set_clean(sealed.g);
+      lane.q.unshift(sealed);
+    }
+    render();
+  }
+
+  // One sealed packet per right-hand pipe, from the card outwards (paths run outside -> card, so walk backwards).
+  function send() {
+    if (reduce) return;
+    const node = stage?.querySelector<HTMLElement>(".stage-node.is-right");
+    node?.classList.remove("is-sending"); void node?.offsetWidth; node?.classList.add("is-sending");
+    for (const lane of outs) {
+      const g = make_packet(lane.layer, true);
+      set_clean(g);
+      const len = lane.route.length, start = performance.now(), MS = 950;
+      const frame = (now: number) => {
+        const p = Math.min((now - start) / MS, 1);
+        const pt = lane.route.at(len * (1 - p * p));           // ease-in: leaves the card slowly, speeds away
+        place(g, pt.x, pt.y, 0);
+        g.style.opacity = String(p < 0.8 ? 1 : (1 - p) / 0.2);
+        if (p < 1) requestAnimationFrame(frame); else g.remove();
+      };
+      requestAnimationFrame(frame);
+    }
+  }
+
+  let raf = 0, last = 0, running = false, live = false, on_screen = true;
+  function frame(now: number) {
+    step(Math.min((now - last) / 1000, 0.05), false);
+    last = now;
+    render();
+    raf = requestAnimationFrame(frame);
+  }
+  function sync() {
+    const go = live && on_screen && !document.hidden && !reduce;
+    if (go && !running) { running = true; last = performance.now(); raf = requestAnimationFrame(frame); }
+    else if (!go && running) { running = false; cancelAnimationFrame(raf); }
+  }
+  function prewarm() { for (let i = 0; i < 200; i++) step(1 / 60, true); render(); }
+
+  if (stage) {
+    let first = !reduce;
+    try {
+      if (sessionStorage.getItem("contact-run")) first = false;
+      else sessionStorage.setItem("contact-run", "1");
+    } catch { /* storage blocked: the entrance plays every time */ }
+    build();
+    stage.classList.add(first ? "cs-animate" : "cs-built");
+    if (reduce) still_frame();
+    else if (first) setTimeout(() => { live = true; sync(); }, SNAPPED_MS);
+    else { prewarm(); live = true; sync(); }
+
+    let last_w = stage.getBoundingClientRect().width;
+    new ResizeObserver(() => {
+      const w = stage.getBoundingClientRect().width;
+      if (Math.abs(w - last_w) <= 1) return;
+      last_w = w;
+      build();
+      if (reduce) still_frame(); else if (live) prewarm();
+    }).observe(stage);
+    new IntersectionObserver(([e]) => { on_screen = e.isIntersecting; sync(); }).observe(stage);
+    document.addEventListener("visibilitychange", sync);
+    stage.querySelector(".copy-email")?.addEventListener("click", send);
+  }
+</script>

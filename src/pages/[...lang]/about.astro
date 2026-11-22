@@ -11,6 +11,14 @@ export const getStaticPaths = lang_static_paths;
 const lang    = lang_from_param(Astro.params.lang);
 const profile = get_profile(lang);
 const t       = use_translations(lang);
+
+// Off the Clock reads top to bottom as one descent: sky -> sea level -> underwater. Each photo's zone is set in
+// profile.ts; photos keep their data order inside a zone. No altitudes or depths are shown (Peter's choice).
+const ZONES = ["sky", "surface", "underwater"] as const;
+const life_zones = ZONES.map((zone) => ({
+  zone,
+  photos: profile.life.photos.map((photo, i) => ({ ...photo, i })).filter((photo) => photo.zone === zone),
+})).filter((z) => z.photos.length);
 ---
 
 <Base title="About" lang={lang}>
@@ -107,23 +115,35 @@ const t       = use_translations(lang);
   <section class="section" id="off-the-clock">
     <h2 class="section-title"><span class="mono">05</span> Off the Clock</h2>
     <p class="prose-block">{profile.life.intro}</p>
-    <ul class="life-gallery">
-      {profile.life.photos.map((photo, i) => (
-        <li class={i === 0 || photo.video ? "is-wide" : ""}>
-          <figure>
-            {photo.video ? (
-              /* Controls by default so it works without JS; the script below swaps them for muted autoplay. */
-              <video class="life-video" src={url(photo.video)} poster={url(photo.src)} aria-label={photo.alt}
-                     controls muted loop playsinline preload="none" width="1280" height="720"></video>
-            ) : (
-              <img src={url(photo.src)} alt={photo.alt} loading="lazy" decoding="async"
-                   width={i === 0 ? 1600 : 1000} height={i === 0 ? 900 : 750} />
-            )}
-            <figcaption><span class="mono">{photo.place}</span> {photo.caption}</figcaption>
-          </figure>
-        </li>
+    <div class="life-depth">
+      {life_zones.map((z) => (
+        <div class={`life-zone zone-${z.zone}`} data-zone={z.zone}>
+          {z.zone === "surface" && (
+            <svg class="life-sea" viewBox="0 0 240 12" preserveAspectRatio="none" aria-hidden="true">
+              <path d="M0 6 Q15 0 30 6 T60 6 T90 6 T120 6 T150 6 T180 6 T210 6 T240 6" />
+            </svg>
+          )}
+          <p class="life-zone-label mono"><span>{t(`about.zone_${z.zone}`)}</span></p>
+          <ul class="life-gallery">
+            {z.photos.map((photo) => (
+              <li class={photo.i === 0 || photo.video ? "is-wide" : ""}>
+                <figure>
+                  {photo.video ? (
+                    /* Controls by default so it works without JS; the script below swaps them for muted autoplay. */
+                    <video class="life-video" src={url(photo.video)} poster={url(photo.src)} aria-label={photo.alt}
+                           controls muted loop playsinline preload="none" width="1280" height="720"></video>
+                  ) : (
+                    <img src={url(photo.src)} alt={photo.alt} loading="lazy" decoding="async"
+                         width={photo.i === 0 ? 1600 : 1000} height={photo.i === 0 ? 900 : 750} />
+                  )}
+                  <figcaption><span class="mono">{photo.place}</span> {photo.caption}</figcaption>
+                </figure>
+              </li>
+            ))}
+          </ul>
+        </div>
       ))}
-    </ul>
+    </div>
   </section>
 </Base>
 
@@ -186,15 +206,38 @@ const t       = use_translations(lang);
     }
   }
 
+  // Off the Clock: the depth gauge fills with scroll, the zone in view lights its label, photos settle in once.
+  const depth = document.querySelector<HTMLElement>(".life-depth");
+  function update_depth() {
+    if (!depth) return;
+    const vh = window.innerHeight, rect = depth.getBoundingClientRect();
+    // The section sits just above the footer, so the line's tip can never reach its bottom by scrolling alone:
+    // map the scroll range [tip meets the top, tip meets the bottom or the page ends] onto 0..1.
+    const top_y   = window.scrollY + rect.top;
+    const start_y = top_y - vh * LINE_AT;
+    const end_y   = Math.min(top_y + rect.height - vh * LINE_AT, document.documentElement.scrollHeight - vh);
+    const progress = Math.min(Math.max((window.scrollY - start_y) / Math.max(end_y - start_y, 1), 0), 1);
+    depth.style.setProperty("--progress", String(progress));
+    const tip = progress * rect.height;
+    depth.querySelectorAll<HTMLElement>(".life-zone").forEach((zone) => {
+      const top = zone.offsetTop, bottom = top + zone.offsetHeight;
+      zone.classList.toggle("is-current", tip >= top && (tip < bottom || (progress === 1 && !zone.nextElementSibling)));
+    });
+    depth.querySelectorAll<HTMLElement>(".life-gallery > li:not(.is-in)").forEach((li) => {
+      if (li.getBoundingClientRect().top < vh * 0.9) li.classList.add("is-in");
+    });
+  }
+
   if (root.classList.contains("motion-ok")) {
     let queued = false;
     const on_scroll = () => {
       if (queued) return;
       queued = true;
-      requestAnimationFrame(() => { queued = false; update(); });
+      requestAnimationFrame(() => { queued = false; update(); update_depth(); });
     };
     window.addEventListener("scroll", on_scroll, { passive: true });
     window.addEventListener("resize", on_scroll);
     update();
+    update_depth();
   }
 </script>
