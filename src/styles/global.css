@@ -179,6 +179,14 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .keyword-strip ul { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 8px; }
 .keyword-strip li { padding: 3px 12px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); font-size: 0.85rem; }
 .keyword-strip li.mono { font-size: 0.78rem; color: var(--muted); }
+/* Focus terms grouped into capability themes: name + project count, terms as one quiet line underneath. */
+.keyword-strip ul.focus-groups { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.keyword-strip .focus-groups li { padding: 10px 14px; border-radius: var(--radius); font-size: 0.9rem; }
+.keyword-strip .focus-groups p { margin: 0; }
+.focus-name { font-weight: 700; }
+.focus-terms { margin-top: 4px !important; font-size: 0.78rem; color: var(--muted); line-height: 1.5; }
+.focus-terms span { white-space: nowrap; }
+@media (max-width: 760px) { .keyword-strip ul.focus-groups { grid-template-columns: 1fr; } }
 .hero-role { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; margin: 16px 0 0; color: var(--muted); }
 .open-to-work {
   display: inline-flex; align-items: center; gap: 8px; padding: 3px 12px; border-radius: 999px;
@@ -902,7 +910,8 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .system-map .node-layer { fill: var(--bg); stroke-dasharray: 6 4; }
 .system-map .flow { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-dasharray: 6 5; animation: map-flow 1.4s linear infinite; }
 .system-map .arrow { fill: var(--muted); stroke: none; }
-.system-map[data-focus="drop-order"] .area[data-area="drop-order"] .arrow { fill: var(--accent); }
+.system-map[data-focus="drop-order"] .area[data-area="drop-order"] .arrow,
+.system-map[data-focus="credit-card"] .area[data-area="credit-card"] .arrow { fill: var(--accent); }
 .system-map .area { opacity: 0.35; transition: opacity 0.2s; }
 .system-map[data-focus="noise-enforcement"] .area[data-area="noise-enforcement"],
 .system-map[data-focus="ticket"]      .area[data-area="ticket"],

@@ -17,7 +17,7 @@ const t       = use_translations(lang);
 // Home = a 30-second pitch: value statement + first intro paragraph -> keyword strip -> impact map
 // (company map + one card per project) -> contact card. Project cards and numbers come from the project files (see ImpactMap.astro).
 const { email } = profile.contact;
-const keywords  = await get_keywords();
+const keywords  = await get_keywords(lang);
 ---
 
 <Base lang={lang}>
@@ -45,7 +45,12 @@ const keywords  = await get_keywords();
   <!-- Keywords recruiters scan for; computed from the projects (see get_keywords). -->
   <section class="keyword-strip" aria-label={t("home.keywords")}>
     <dl>
-      <div><dt class="mono">{t("home.skills")}</dt><dd><ul>{keywords.focus.map((k) => <li>{k}</li>)}</ul></dd></div>
+      <div><dt class="mono">{t("home.skills")}</dt><dd><ul class="focus-groups">{keywords.groups.map((g) => (
+        <li>
+          <p class="focus-name">{g.label}</p>
+          <p class="focus-terms">{g.terms.map((k, i) => <><span>{k}{i < g.terms.length - 1 && " ·"}</span>{" "}</>)}</p>
+        </li>
+      ))}</ul></dd></div>
       <div><dt class="mono">{t("home.tools")}</dt><dd><ul>{keywords.tools.map((k) => <li class="mono">{k}</li>)}</ul></dd></div>
     </dl>
   </section>

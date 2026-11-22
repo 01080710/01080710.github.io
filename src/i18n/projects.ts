@@ -5,6 +5,7 @@
 import { getCollection, type CollectionEntry } from "astro:content";
 import type { Lang } from "./ui";
 import { map_area_order } from "../data/system-maps";
+import { focus_groups } from "../data/focus-groups";
 
 export interface LocalizedProject {
   id:   string;
@@ -14,15 +15,26 @@ export interface LocalizedProject {
 }
 
 // Home keyword strip, derived from the project files so it never needs hand upkeep:
-// focus = union of every project's `focus` (recruiter search terms); tools = `stack` items used in 2+ projects,
-// most used first. Language-independent (focus and stack are only written in the zh files).
-export async function get_keywords(): Promise<{ focus: string[]; tools: string[] }> {
+// focus terms are shown in the capability groups of data/focus-groups.ts;
+// tools = `stack` items used in 3+ projects, most used first, so only the signature tools remain.
+export interface KeywordGroup { label: string; terms: string[] }
+
+export async function get_keywords(lang: Lang): Promise<{ groups: KeywordGroup[]; tools: string[] }> {
   const projects = await get_projects("zh");
-  const focus = [...new Set(projects.flatMap((p) => p.data.focus ?? []))];
+  const used = new Set(projects.flatMap((p) => p.data.focus ?? []));
+  const grouped = new Set(focus_groups.flatMap((g) => g.focus));
+  const missing = [...used].filter((f) => !grouped.has(f));
+  if (missing.length) throw new Error(`focus not in any group of src/data/focus-groups.ts: ${missing.join(", ")}`);
+  const groups = focus_groups
+    .map((g) => ({
+      label: g[lang],
+      terms: g.focus.filter((f) => used.has(f)),
+    }))
+    .filter((g) => g.terms.length > 0);
   const count = new Map<string, number>();
   for (const tool of projects.flatMap((p) => p.data.stack)) count.set(tool, (count.get(tool) ?? 0) + 1);
-  const tools = [...count].filter(([, n]) => n >= 2).sort((a, b) => b[1] - a[1]).map(([tool]) => tool);
-  return { focus, tools };
+  const tools = [...count].filter(([, n]) => n >= 3).sort((a, b) => b[1] - a[1]).map(([tool]) => tool);
+  return { groups, tools };
 }
 
 // Home impact map: every project drawn on a company system map, finished ones first, in the map's left-to-right order
