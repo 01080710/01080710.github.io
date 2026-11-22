@@ -7,6 +7,18 @@ metric_labels:
   - "Drop-order detection interval (previously manual checks twice a day each for Deposit and Withdrawal)"
   - "Manual monitoring hours saved through 2026/11/17 (estimate)"
   - "Drop-order cases surfaced automatically through 2026/11/17"
+story:
+  - { label: "Map", line: "After a client places an order in the Client Portal, deposits and withdrawals go to CPS, which works with channels in each country to actually move the money; CRM keeps what the client sees: for a deposit, CPS sends a deposit order to CRM; for a withdrawal, CRM sends a payout order to CPS." }
+  - { label: "Write-back", line: "Only CPS knows whether money actually moved, so every order's result has to be written back to CRM. Take two real orders from India: a 9,301 INR deposit via UPI and a 55,704 INR withdrawal via local bank transfer. Normally the channel calls back CPS, and CPS writes back to CRM." }
+  - { label: "Drop order", line: "The trouble starts when a channel's callback fails: operations set CPS to success or failure by hand, but that manual change is not written back to CRM. So the deposit client paid and was not credited, and the withdrawal never went out while CRM shows it as completed and nothing was returned." }
+  - { label: "Why it's hard to see", line: "The catch is that each side looks fine on its own: CPS says the order was handled, and CRM says it is in progress or done. A drop order only shows when the same order's status on both sides is put side by side." }
+  - { label: "Rules", line: "So operations and I agreed, rule by rule, on which status combinations count as a drop order, covering deposits, three kinds of ordinary withdrawals and card withdrawals." }
+  - { label: "Worked example", line: "Back to the two orders: the deposit has CPS at Success (manual) and CRM at Audit; the withdrawal has CRM at Completed and CPS at Failed (manual). Both match the rules and are flagged as drop orders." }
+  - { label: "Solution", line: "CRM has no database access, so the pipeline downloads its reports with an operations account and queries CPS directly, comparing every hour; each order is assigned once, and a heartbeat row is written even when nothing is new, proving monitoring never stopped." }
+  - { label: "Screens", line: "These are the LarkSheet case sheets as they really look, one per case type: a Handler marks Status as Done or Reversed; a period with nothing new still gets a heartbeat row every hour." }
+  - { label: "Running for real", line: "This is a real run at 03:00 on 2026-11-18: query CPS, download the CRM reports and lookup tables, then compare by the five case types and write only new cases; a type with nothing new gets a heartbeat row." }
+  - { label: "Output", line: "Cases in LarkSheet look like this: a deposit is marked done once a Handler credits it, a withdrawal reversed once it is reversed; the last row is a heartbeat, meaning that run found nothing new." }
+  - { label: "Result", line: "When an upstream system failed on 2026/11/6, callbacks failed en masse; the 10:00 and 11:00 runs alone surfaced 933 deposit drop orders, against at most 75 in a single run on other days. Twice-daily manual checks could never have kept up." }
 impact:
   before: "Manual spot checks; drop orders often surfaced only after complaints"
   after: "Statuses are compared automatically and drop orders go straight out as cases"
@@ -21,11 +33,11 @@ tldr:
 <hr data-slide="Background and terms">
 
 - When a client deposits or withdraws, the order passes through two systems: **CPS** connects to channels in each country and actually collects and pays out, and the **CRM** records the client's account and transaction status.
-- CPS results have to be written back to the CRM. When that write-back breaks (most often because a channel callback failed or an upstream system had an outage), it becomes a **drop order**: for a deposit, CPS has succeeded but the CRM is still in review or processing, so the client paid but was not credited; for a withdrawal, the CRM shows completed but CPS actually failed, so the money neither went out nor came back.
+- CPS results have to be written back to the CRM. When a channel's callback to CPS fails (for example during an upstream outage), operations update the CPS status by hand, but **a manual update is not written back to the CRM**, and that becomes a **drop order**: for a deposit, CPS has succeeded but the CRM is still in review or processing, so the client paid but was not credited; for a withdrawal, the CRM shows completed but CPS actually failed, so the money neither went out nor came back.
 - Drop orders sit late in the process, so clients often notice first and then ask through CS, Sales or Finance.
 
 <details class="glossary-details">
-<summary>Glossary<span class="mono">13 terms · click to expand</span></summary>
+<summary>Glossary<span class="mono">14 terms · click to expand</span></summary>
 <table>
 <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
 <tbody>
@@ -33,6 +45,7 @@ tldr:
 <tr><td>CRM</td><td>Internal system that manages client accounts and transaction records; the order status clients and operations see comes from here</td></tr>
 <tr><td>CPS</td><td>Internal payment system that connects to banks and payment channels in each country and actually collects and pays out</td></tr>
 <tr><td>Channel</td><td>The external route that actually moves the money, such as local bank transfer, QR, e-wallet, crypto or credit card</td></tr>
+<tr><td>Callback</td><td>The channel telling CPS the result once it has handled the money</td></tr>
 <tr><td>Drop order</td><td>The CRM and CPS disagree on the status of the same order, and it is not synced back automatically</td></tr>
 <tr><td>LBT</td><td>Local Bank Transfer withdrawal</td></tr>
 <tr><td>IBT</td><td>International Bank Transfer withdrawal</td></tr>
@@ -45,6 +58,19 @@ tldr:
 </tbody>
 </table>
 </details>
+
+<hr data-slide="An order's journey">
+
+Only CPS knows whether money actually moved, yet the client looks at the CRM. So once CPS has handled an order, its result has to be **written back** to the CRM. Take two real orders from India: a 9,301 INR deposit via UPI and a 55,704 INR withdrawal via local bank transfer.
+
+Normally the channel sends a **callback** to CPS when it is done, and CPS writes the result back to the CRM. The trouble comes when the callback fails: operations set CPS to "Success (manual)" or "Failed (manual)" by hand, but a manual change is not written back to the CRM, so the two systems are left in different states:
+
+<figure class="split-figure">
+<div class="split-scroll">
+<svg viewBox="0 0 760 310" role="img" aria-labelledby="jr-title"><title id="jr-title">An order's journey: deposit and withdrawal results must be written back from CPS to CRM, and manual fixes after a failed callback are not</title><defs><marker id="jr-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="sf-head" d="M0,0 L8,4 L0,8 z"/></marker></defs><g data-b="lanes"><text class="sf-s" x="95" y="22">CRM (what the client sees)</text><text class="sf-s" x="410" y="22">CPS (actual payment)</text><text class="sf-s" x="665" y="22">Channel</text><text class="sf-h sf-start" x="20" y="50">Deposit · 9,301 INR · UPI</text><rect class="sf-node" x="20" y="60" width="150" height="48" rx="6"/><text class="sf-t" x="95" y="89">CRM</text><rect class="sf-node" x="335" y="60" width="150" height="48" rx="6"/><text class="sf-t" x="410" y="89">CPS</text><rect class="sf-node" x="590" y="60" width="150" height="48" rx="6"/><text class="sf-t" x="665" y="89">UPI</text><line class="sf-sep" x1="20" y1="166" x2="740" y2="166"/><text class="sf-h sf-start" x="20" y="194">Withdrawal · 55,704 INR · local bank transfer</text><rect class="sf-node" x="20" y="204" width="150" height="48" rx="6"/><text class="sf-t" x="95" y="233">CRM</text><rect class="sf-node" x="335" y="204" width="150" height="48" rx="6"/><text class="sf-t" x="410" y="233">CPS</text><rect class="sf-node" x="590" y="204" width="150" height="48" rx="6"/><text class="sf-t" x="665" y="233">Local bank</text></g><g data-b="d-flow"><path class="sf-line" d="M590 84 H491" marker-end="url(#jr-arrow)"/><path class="sf-line" d="M335 84 H176" marker-end="url(#jr-arrow)"/><text class="sf-s" x="540" y="77">callback</text><text class="sf-s" x="255" y="77">write-back</text><text class="sf-s" x="665" y="128">Money received</text></g><g data-b="d-cb"><text class="sf-miss" x="540" y="102">✕ callback failed</text></g><g data-b="d-manual"><text class="sf-s" x="410" y="128">Set by hand to</text><text class="sf-link" x="410" y="146">Success (manual)</text></g><g data-b="d-stuck"><text class="sf-miss" x="255" y="102">✕ not written back</text><text class="sf-miss" x="95" y="128">Still at Audit</text><text class="sf-bad-t sf-small" x="95" y="146">Paid, not credited</text></g><g data-b="w-flow"><path class="sf-line" d="M170 220 H329" marker-end="url(#jr-arrow)"/><path class="sf-line" d="M485 220 H584" marker-end="url(#jr-arrow)"/><path class="sf-line" d="M590 240 H491" marker-end="url(#jr-arrow)"/><path class="sf-line" d="M335 240 H176" marker-end="url(#jr-arrow)"/><text class="sf-s" x="255" y="214">payout order</text><text class="sf-s" x="540" y="214">pay out</text><text class="sf-s" x="540" y="256">callback</text><text class="sf-s" x="255" y="256">write-back</text><text class="sf-s" x="95" y="276">Completed (deducted)</text><text class="sf-s" x="665" y="276">Transfer failed</text></g><g data-b="w-cb"><text class="sf-miss" x="540" y="274">✕ callback failed</text></g><g data-b="w-manual"><text class="sf-s" x="410" y="276">Set by hand to</text><text class="sf-link" x="410" y="294">Failed (manual)</text></g><g data-b="w-stuck"><text class="sf-miss" x="255" y="274">✕ not written back</text><text class="sf-bad-t sf-small" x="95" y="294">Not paid out, not returned</text></g></svg>
+</div>
+<figcaption>Figure 1　An order's journey: when a channel's callback to CPS fails, operations fix the CPS status by hand, but that manual fix is not written back to CRM, so a drop order forms (both are real cases from the public CSV on this page)</figcaption>
+</figure>
 
 <hr data-slide="Drop-order rules">
 
@@ -60,19 +86,19 @@ First, operations and I agreed rule by rule on "which status combinations count 
 
 <hr data-slide="Worked example">
 
-One real case for each of the five case types, comparing the status in CRM and CPS:
+One real case for each of the five case types, comparing the status in CRM and CPS; the first two rows are the two orders in Figure 1:
 
 | Case type | CRM status | CPS transaction / payout status | Amount | Handling |
 |---|---|---|---|---|
-| Deposit | Audit | Success | 9,641 INR | Deposit credited (done) |
+| Deposit | Audit | Success (manual) | 9,301 INR | Deposit credited (done) |
 | Withdraw-LBT | Completed | Completed / Failed (manual) | 55,704 INR | Reverse (reversed) |
 | Withdraw-Crypto&Wallet | Completed | Submission rejected | (blank) | Reverse (reversed) |
 | Withdraw-CreditCard | Success | Completed / Failed (manual) | 50 EUR | Reverse (reversed) |
 | Withdraw-IBT | Completed | Review rejected / Review rejected | 461.82 USD | Reverse (reversed) |
 
-*Real cases from the public CSV on this page (March and September 2026; CPS statuses translated, the CSV keeps the source system's Chinese). The Crypto&Wallet case has no amount in the source data; the CC_ and IBT_ currency prefixes are dropped.*
+*Real cases from the public CSV on this page (April and September 2026; CPS statuses translated, the CSV keeps the source system's Chinese). The Crypto&Wallet case has no amount in the source data; the CC_ and IBT_ currency prefixes are dropped.*
 
-- **Deposit**: CPS collected the money, but CRM is still at Audit, so the client paid and was not credited.
+- **Deposit**: operations set CPS to success by hand, but CRM is still at Audit, so the client paid and was not credited.
 - **The four withdrawal types**: CRM shows completed or success, but CPS actually failed or rejected it, so the money neither went out nor came back; a Handler reverses it in CRM.
 
 <hr data-slide="Pain points and evidence">
@@ -127,7 +153,7 @@ One real case for each of the five case types, comparing the status in CRM and C
 </div>
 </section>
 </div>
-<figcaption>Figure 1　Three pain points in the original process (hours are estimates; coverage from the public CSV on this page)</figcaption>
+<figcaption>Figure 2　Three pain points in the original process (hours are estimates; coverage from the public CSV on this page)</figcaption>
 </figure>
 
 <hr data-slide="Why it was worth solving">
@@ -135,8 +161,8 @@ One real case for each of the five case types, comparing the status in CRM and C
 **Why it was worth solving:**
 
 1. **Drop orders are routine, not rare**: after Deposit went live, 220 of 233 days had drop orders; for Withdrawal, 67 of 70 days.
-2. **Upstream failures cause sudden spikes**: on 2026/11/6 an upstream system failed and many client orders got stuck (Figure 2). The 10:00 and 11:00 runs alone surfaced 933 deposit drop orders across 85 channels and 61 countries; manual checks twice a day could not have seen something this big in time.
-3. **Manual cost can't scale with frequency**: each check takes about 1 hour (Figure 1); checking N times as often needs N times the staff.
+2. **Upstream failures cause sudden spikes**: on 2026/11/6 an upstream system failed and many client orders got stuck (Figure 3). The 10:00 and 11:00 runs alone surfaced 933 deposit drop orders across 85 channels and 61 countries; manual checks twice a day could not have seen something this big in time.
+3. **Manual cost can't scale with frequency**: each check takes about 1 hour (Figure 2); checking N times as often needs N times the staff.
 
 <figure class="bar-figure">
 <ul class="bar-list">
@@ -145,14 +171,14 @@ One real case for each of the five case types, comparing the status in CRM and C
 <li style="--v: 16%"><span class="bar-label">Largest single run on any other day</span><span class="bar"></span><span class="bar-value">75</span></li>
 <li style="--v: 4%"><span class="bar-label">Other 22 runs on 11/6 combined</span><span class="bar"></span><span class="bar-value">18</span></li>
 </ul>
-<figcaption>Figure 2　Deposit drop orders surfaced per run during the 2026/11/6 upstream failure (from the public CSV on this page)</figcaption>
+<figcaption>Figure 3　Deposit drop orders surfaced per run during the 2026/11/6 upstream failure (from the public CSV on this page)</figcaption>
 </figure>
 
 ## Solution Design
 
 <hr data-slide="Pain points and solutions">
 
-**Pain point → solution** (matches the architecture in Figure 3):
+**Pain point → solution** (matches the architecture in Figure 4):
 
 - **Found late** → an hourly scheduled comparison; a new drop order appears on the next top-of-the-hour run.
 - **Tracing layer by layer** → pull the CRM report, CPS data and credit card details together and apply the drop-order rules (see Problem); withdrawal cases automatically carry the reason category and status trail.
@@ -193,7 +219,7 @@ Four options were evaluated at the time; the first three were the alternatives:
 The full hourly flow:
 
 ```mermaid
-flowchart TB
+flowchart LR
     SCH["Schedule<br/>cron at the top of every hour"] --> CPS["CPS Database<br/>deposits, withdrawals · last 7 days"]
     SCH --> CRM["CRM deposit/withdrawal report<br/>4 regulators · last 4 days"]
     SCH --> CC["CRM credit card details<br/>last 7 days"]
@@ -210,19 +236,62 @@ flowchart TB
     OPS --> REV["Checker review"]
 ```
 
-*Figure 3　Deposit and withdrawal drop-order monitoring pipeline (summarized from the project code)*
+*Figure 4　Deposit and withdrawal drop-order monitoring pipeline (summarized from the project code)*
 
 <hr data-slide="Design notes">
 
 **Design notes:**
 
 - **De-duplication**: Order Number is the unique key (Merchant Order + Deposit Order Number for credit cards). Each run first reads the orders already in LarkSheet and appends only new cases, so each drop order is assigned once.
+- **Orders still being written back**: there is no waiting period before the check, so an order that has just succeeded but not yet been written back can be flagged too; a Handler confirms and skips it.
 - **Heartbeat row**: when a case type has no new drop orders, a row with only the detection time is still written, so the sheet shows the difference between "no new cases" and "the pipeline stopped".
 - **Status trail and reason**: withdrawal cases chain the CRM and CPS statuses into one Status Workflow (for example `Risk Audit -> Accepted -> Completed -> Processed -> Failed (manual)`), and the Reason Table adds the reason category and subcategory, so Handlers can reply to the client by reason without opening both back offices.
 - **Traceability**: each run gets a `uid`, and JSON logs carry `service`, `stage` and `status`; raw CPS data is backed up to Lark Drive on every run, so the data compared at the time can be audited later.
 - **Access scope**: the CRM is accessed with an existing operations account (with 2FA), only downloading reports and never writing; CPS runs only SELECT queries; Lark writes to the case sheet and backup folder through a self-built app. CRM and CPS credentials are read from a read-only mounted config file, not written in code. TODO: add who approved the account use.
 
 ## Result
+
+<hr data-slide="Screens">
+
+### Screens: the LarkSheet case sheets
+
+There is one sheet per case type. Once a Handler is done, `Status` is set to Done (credited) or Reversed (returned), and withdrawals also carry the reason sent to the client; a period with no new case still gets a heartbeat row each hour, holding only the detection time:
+
+<figure class="shot-gallery">
+<div class="shot-strip">
+<div class="shot-item">
+<p class="shot-label"><span class="mono">1 / 5</span>Deposit: marked Done once a Handler credits it</p>
+
+![Deposit sheet: one deposit drop order per row, Status Done](../../assets/projects/drop-order-monitor/larksheet-deposit.png)
+
+</div>
+<div class="shot-item">
+<p class="shot-label"><span class="mono">2 / 5</span>Withdraw - Crypto&Wallet: marked Reversed, with the reason sent to the client</p>
+
+![Crypto&Wallet sheet: Status Reversed, with the reply to the client on the right](../../assets/projects/drop-order-monitor/larksheet-crypto-wallet.png)
+
+</div>
+<div class="shot-item">
+<p class="shot-label"><span class="mono">3 / 5</span>Withdraw - LBT: many cases in one hour, each reversed</p>
+
+![LBT sheet: several Failed (manual) transactions in the same period, all Reversed](../../assets/projects/drop-order-monitor/larksheet-lbt.png)
+
+</div>
+<div class="shot-item">
+<p class="shot-label"><span class="mono">4 / 5</span>Withdraw - CreditCard: one case among heartbeat rows</p>
+
+![CreditCard sheet: one Refunded case, the rest are hourly heartbeat rows](../../assets/projects/drop-order-monitor/larksheet-creditcard.png)
+
+</div>
+<div class="shot-item">
+<p class="shot-label"><span class="mono">5 / 5</span>Withdraw - IBT: with no new case, a heartbeat row every hour</p>
+
+![IBT sheet: the whole page is heartbeat rows with only the detection time](../../assets/projects/drop-order-monitor/larksheet-ibt.png)
+
+</div>
+</div>
+<figcaption>Figure 5　The LarkSheet case sheets as they really look (swipe to see all 5 sheets; browser and document path cropped; client IDs, account numbers, order numbers and Handler names blurred; click an image to enlarge)</figcaption>
+</figure>
 
 <hr data-slide="One real run">
 
@@ -282,18 +351,18 @@ What this log shows:
 
 ### Output format
 
-Cases are written to LarkSheet, one sheet per case type. Below are real cases from 2026/11 plus one heartbeat row. Columns match the public CSV; status and reason values are translated here (the CSV keeps the source system's Simplified Chinese). Client IDs, account numbers, order numbers and staff names are removed:
+Cases are written to LarkSheet, one sheet per case type. Below are real cases from 2026/11 plus one heartbeat row, with client IDs, account numbers, order numbers and staff names removed. The table shows only the statuses used for the check and the handling result; detection time, channel and amount are in the public CSV below (status and reason values are translated here; the CSV keeps the source system's Simplified Chinese):
 
-| Case Type | Comparison Time | Channel Type | CRM Status | CPS Tx Status | CPS Payout Status | Amount | Reason Category | Subcategory | Handling Status |
-|---|---|---|---|---|---|---|---|---|---|
-| Deposit | 2026-11-01 09:10:34 | Thailand-QR-CPS-APP | Processing | Success | | 1,692 THB | | | done |
-| Withdraw-LBT | 2026-11-01 01:11:15 | Philippines-CPS | Completed | Processed | Failed (manual) | 28,395 PHP | Channel issue | Limit issue | reversed |
-| Withdraw-CreditCard | 2026-11-01 06:10:17 | ApplePay-Payabl-CPS | Success | Processed | Failed (manual) | 65 GBP | Client issue | Bank-side transaction failed | reversed |
-| Withdraw-IBT | 2026-11-03 10:10:30 | IBT-International-CPS | Completed | Processed | Failed (manual) | 7,825.5 HKD | Client issue | SWIFT error | reversed |
-| Withdraw-IBT | 2026-11-17 23:11:40 | - | - | - | - | - | - | - | |
+| Case Type | CRM Status | CPS Status (tx / payout) | Reason (category / sub) | Handling |
+|---|---|---|---|---|
+| Deposit | Processing | Success | — | done |
+| Withdraw-LBT | Completed | Processed / Failed (manual) | Channel / Limit issue | reversed |
+| Withdraw-CreditCard | Success | Processed / Failed (manual) | Client / Bank-side failure | reversed |
+| Withdraw-IBT | Completed | Processed / Failed (manual) | Client / SWIFT error | reversed |
+| Withdraw-IBT | - | - | Detection time only: 2026-11-17 23:11:40 | |
 
 - The last row is a heartbeat row: that run found no new case and only left the detection time.
-- `Handling Status` is filled in by the Handler: done (credited) for deposits, reversed (returned) for withdrawals.
+- `Handling` is filled in by the Handler: done (credited) for deposits, reversed (returned) for withdrawals.
 
 <hr data-slide="Failure reasons">
 
@@ -310,7 +379,7 @@ Withdrawal cases get a reason category from the Reason Table, and Handlers reply
 <li style="--v: 0.1%"><span class="bar-label">CPS issue, internal error</span><span class="bar"></span><span class="bar-value">7</span></li>
 <li style="--v: 21.7%"><span class="bar-label">Uncategorized (reason blank)</span><span class="bar"></span><span class="bar-value">1,444</span></li>
 </ul>
-<figcaption>Figure 4　Withdrawal failure reason categories (Withdrawal 2026-09-09 ~ 11-17, from the public CSV on this page)</figcaption>
+<figcaption>Figure 6　Withdrawal failure reason categories (Withdrawal 2026-09-09 ~ 11-17, from the public CSV on this page)</figcaption>
 </figure>
 
 - **Client issue** subcategories are mostly bank-side transaction failures, wrong account numbers, invalid accounts and wrong names.
@@ -355,7 +424,7 @@ Source: the full records the pipeline wrote to LarkSheet (public CSV). A "case" 
 <div class="ba-row"><p class="ba-item">Coverage</p><p class="ba-before">Manual Excel comparison, volume not recorded</p><p class="ba-after">Each run compares about 195,000 CPS deposits and about 322,000 CRM deposit/withdrawal records<small>Basis: run log in Result</small></p></div>
 <div class="ba-row"><p class="ba-item">Monitoring continuity</p><p class="ba-before">Depends on shifts; gaps during leave and handovers</p><p class="ba-after">Every run leaves a record: cases when there are new ones, a heartbeat row when not, 6,314 heartbeat rows in total<small>Basis: rows with Tx = - in the public CSV</small></p></div>
 </div>
-<figcaption>Figure 5　Before / After (manual hours are estimates)</figcaption>
+<figcaption>Figure 7　Before / After (manual hours are estimates)</figcaption>
 </figure>
 
 <hr data-slide="Not yet quantified">

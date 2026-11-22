@@ -20,6 +20,75 @@ tldr:
   problem: "OP 確認客戶帳戶狀態時，要在多個 CRM 後台之間切換 regulator、逐筆查詢；整批案件出現時，人力撐不住。"
   approach: "把共通的查詢流程做成以 LarkSheet 為入口的批量引擎：先驗證輸入，再由排程自動查詢，成功與失敗都留紀錄。"
   result: "OP 填完名單就能自行送件，查詢不再佔用人力；每一次申請都可以追溯。"
+story:
+  - label: "地圖"
+    at: "map"
+    beats:
+      - "[data-b=\"acc-mt\"]"
+      - "[data-b=\"acc-bo\"]"
+    line: "客戶的資料在 CRM，交易帳戶在 MetaTrader；每個帳戶的餘額、保證金與損益，要到各 regulator 自己的 CRM 後台才查得到，總共有 4 套。"
+  - label: "為什麼要查"
+    at: "ch-1-2"
+    pick: ":scope > p"
+    line: "清退高風險客戶、或把客戶轉歸屬到另一個業務名下，都會動到客戶的錢。所以執行前，OP 必須先確認名單上每個帳戶的狀態。"
+  - label: "帳戶分散"
+    at: "ch-1-2"
+    pick: ".split-figure"
+    dim: "[data-b=\"manual\"], [data-b=\"engine\"]"
+    beats:
+      - "[data-b=\"client\"]"
+      - "[data-b=\"backends\"]"
+      - "[data-b=\"accounts\"]"
+    line: "難的是，一個客戶常常有好幾個帳戶：每個 regulator 各有一套後台，客戶在哪裡開戶，帳戶就散在哪裡。"
+  - label: "人工與引擎"
+    at: "ch-1-2"
+    pick: ".split-figure"
+    beats:
+      - "[data-b=\"manual\"]"
+      - "[data-b=\"engine\"]"
+    line: "人工只能一個後台、一個帳戶地切換查詢；引擎則是收下整份名單，一次跨後台查回。"
+  - label: "引擎流程"
+    at: "ch-1-3"
+    pick: ".mermaid"
+    beats:
+      - "[id*=\"-flowchart-OP-\"], [id*=\"-flowchart-SCH-\"], [id*=\"-L_OP_\"], [data-id^=\"L_OP_\"]"
+      - "[id*=\"-flowchart-VAL-\"], [id*=\"-flowchart-REC_F-\"], [id*=\"-L_SCH_\"], [data-id^=\"L_SCH_\"], [id*=\"-L_VAL_REC_F\"], [data-id^=\"L_VAL_REC_F\"]"
+      - "[id*=\"-flowchart-QRY-\"], [id*=\"-flowchart-SRC-\"], [id*=\"-L_VAL_QRY\"], [data-id^=\"L_VAL_QRY\"], [id*=\"-L_QRY_\"], [data-id^=\"L_QRY_\"]"
+      - "[id*=\"-flowchart-NORM-\"], [id*=\"-flowchart-REC-\"], [id*=\"-flowchart-OUT-\"], [id*=\"-L_SRC_\"], [data-id^=\"L_SRC_\"], [id*=\"-L_NORM_\"], [data-id^=\"L_NORM_\"]"
+      - "[id*=\"-flowchart-CLR-\"], [id*=\"-L_REC_CLR\"], [data-id^=\"L_REC_CLR\"], [id*=\"-L_OUT_CLR\"], [data-id^=\"L_OUT_CLR\"]"
+    line: "各團隊的需求看起來不同，其實都是「給名單、回傳同一組欄位」。所以我把它做成引擎：OP 填表、排程撿取，先驗證、再用 API 逆向工程跨後台查詢，成功與失敗都寫進 Record。"
+  - label: "對照範例"
+    at: "ch-1-4"
+    pick: "table"
+    beats:
+      - "tbody tr:nth-child(1)"
+      - "tbody tr:nth-child(2)"
+      - "tbody tr:nth-child(3)"
+      - "tbody tr:nth-child(4)"
+      - "tbody tr:nth-child(5)"
+    line: "看一次真實申請：68 個客戶展開成 322 個帳戶，平均一人將近 5 個，散在 2 個 regulator、33 個 Server，引擎一次查完。"
+  - label: "實際運作"
+    at: "ch-5-1"
+    pick: ".video-figure"
+    beats:
+      - ".video-item:nth-child(1)"
+      - ".video-item:nth-child(2)"
+    line: "先看同一類查詢的實際操作：左邊是人工在 CRM 後台逐筆切換查詢；右邊是 OP 填完名單，交給引擎執行。"
+  - label: "執行紀錄"
+    at: "ch-5-2"
+    pick: "pre"
+    beats:
+      - ".line:nth-child(n+1):nth-child(-n+2)"
+      - ".line:nth-child(n+3)"
+    line: "每次申請都會在 Record 留下一列：成功的寫出查了多少帳戶、涵蓋多少國家；缺欄位的申請在查詢前就被攔下，並寫明缺什麼。"
+  - label: "成果"
+    at: "ch-5-4"
+    pick: ".bar-figure"
+    beats:
+      - "li:nth-child(-n+2)"
+      - "li:nth-child(3), li:nth-child(4)"
+      - "li:nth-child(n+5)"
+    line: "上線後，各團隊每個月都自行送件，不再需要工程師；10 月是使用量最高的月份。"
 tags: ["System Architecture", "Automation", "Product Thinking"]
 categories: ["Automation"]
 home: true
@@ -56,10 +125,18 @@ accent: ocean
 
 <hr data-slide="要查的是什麼">
 
-**先理解兩件事：**
+清退（關閉高風險客戶的帳戶並結清）與轉歸屬（把客戶轉到另一個 IB 或業務名下）都會動到客戶的資金或歸屬，所以執行前，OP 必須先確認名單上每個帳戶的 Balance、Margin、Profit 等狀態。
 
-- **一個客戶，多個帳戶**：一個客戶（UID）常有多個交易帳戶，分散在不同 regulator 的 CRM 後台與不同的交易伺服器（Server）；查一個客戶，往往要切好幾個後台。
-- **為什麼要先查**：清退（關閉高風險客戶的帳戶並結清）與轉歸屬（把客戶轉到另一個 IB 或業務名下）都會動到客戶的資金或歸屬，執行前必須先確認名單上每個帳戶的 Balance、Margin、Profit 等狀態。
+難的是帳戶並不集中：每個 regulator 各有一套 CRM 後台，客戶在哪個 regulator、哪台交易伺服器（Server）開戶，帳戶就落在哪裡。一個客戶（UID）常有好幾個帳戶，人工只能逐一切換後台、逐筆查詢（耗時見痛點與證據）：
+
+<figure class="split-figure">
+<div class="split-scroll">
+<svg viewBox="0 0 760 340" role="img" aria-labelledby="ac-title"><title id="ac-title">一個客戶，多個帳戶：帳戶散在不同 regulator 的後台，人工要逐一切換，引擎一次查回</title><defs><marker id="ac-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="sf-head" d="M0,0 L8,4 L0,8 z"/></marker></defs><g data-b="client"><rect class="sf-parent" x="20" y="100" width="140" height="60" rx="8"/><text class="sf-t" x="90" y="126">客戶</text><text class="sf-s" x="90" y="146">一個 UID</text></g><g data-b="backends"><rect class="sf-box" x="220" y="30" width="125" height="170" rx="8"/><text class="sf-t" x="282" y="52">Regulator A</text><text class="sf-s" x="282" y="68">CRM 後台</text><rect class="sf-box" x="355" y="30" width="125" height="170" rx="8"/><text class="sf-t" x="417" y="52">Regulator B</text><text class="sf-s" x="417" y="68">CRM 後台</text><rect class="sf-box" x="490" y="30" width="125" height="170" rx="8"/><text class="sf-t" x="552" y="52">Regulator C</text><text class="sf-s" x="552" y="68">CRM 後台</text><rect class="sf-box" x="625" y="30" width="125" height="170" rx="8"/><text class="sf-t" x="687" y="52">Regulator D</text><text class="sf-s" x="687" y="68">CRM 後台</text><text class="sf-s" x="552" y="120">（這個客戶沒有）</text></g><g data-b="accounts"><path class="sf-line sf-thin" d="M160 130 C 190 130, 200 98, 228 98"/><path class="sf-line sf-thin" d="M160 130 C 190 130, 200 142, 228 142"/><path class="sf-line sf-thin" d="M160 130 C 190 130, 335 98, 363 98"/><path class="sf-line sf-thin" d="M160 130 C 190 130, 605 98, 633 98"/><path class="sf-line sf-thin" d="M160 130 C 190 130, 605 142, 633 142"/><rect class="sf-child" x="230" y="80" width="105" height="36" rx="6"/><text class="sf-t sf-small-t" x="282" y="96">帳戶 #1</text><text class="sf-s" x="282" y="110">MT5</text><rect class="sf-child" x="230" y="124" width="105" height="36" rx="6"/><text class="sf-t sf-small-t" x="282" y="140">帳戶 #2</text><text class="sf-s" x="282" y="154">MT4</text><rect class="sf-child" x="365" y="80" width="105" height="36" rx="6"/><text class="sf-t sf-small-t" x="417" y="96">帳戶 #3</text><text class="sf-s" x="417" y="110">MT5</text><rect class="sf-child" x="635" y="80" width="105" height="36" rx="6"/><text class="sf-t sf-small-t" x="687" y="96">帳戶 #4</text><text class="sf-s" x="687" y="110">MT5</text><rect class="sf-child" x="635" y="124" width="105" height="36" rx="6"/><text class="sf-t sf-small-t" x="687" y="140">帳戶 #5</text><text class="sf-s" x="687" y="154">MT4</text></g><line class="sf-sep" x1="20" y1="222" x2="740" y2="222"/><g data-b="manual"><text class="sf-t sf-start" x="20" y="262">人工</text><rect class="sf-node" x="110" y="240" width="150" height="34" rx="6"/><text class="sf-t sf-small-t" x="185.0" y="262">切到後台 A · 查 2 個</text><path class="sf-line" d="M260 257 H282" marker-end="url(#ac-arrow)"/><rect class="sf-node" x="288" y="240" width="150" height="34" rx="6"/><text class="sf-t sf-small-t" x="363.0" y="262">切到後台 B · 查 1 個</text><path class="sf-line" d="M438 257 H460" marker-end="url(#ac-arrow)"/><rect class="sf-node" x="466" y="240" width="150" height="34" rx="6"/><text class="sf-t sf-small-t" x="541.0" y="262">切到後台 D · 查 2 個</text><text class="sf-s sf-start" x="644" y="262">逐一切換、逐筆查</text></g><g data-b="engine"><text class="sf-t sf-start" x="20" y="314">引擎</text><rect class="sf-parent" x="110" y="292" width="150" height="34" rx="6"/><text class="sf-t sf-small-t" x="185.0" y="314">收下整份名單</text><path class="sf-line" d="M260 309 H282" marker-end="url(#ac-arrow)"/><rect class="sf-parent" x="288" y="292" width="190" height="34" rx="6"/><text class="sf-t sf-small-t" x="383.0" y="314">一次跨後台批量查回</text><path class="sf-line" d="M478 309 H500" marker-end="url(#ac-arrow)"/><rect class="sf-parent" x="506" y="292" width="150" height="34" rx="6"/><text class="sf-t sf-small-t" x="581.0" y="314">Record／Output</text><text class="sf-s sf-start" x="684" y="314"></text></g></svg>
+</div>
+<figcaption>圖 1　一個客戶，多個帳戶：每個 regulator 各有一套 CRM 後台，帳戶落在客戶開戶的地方；人工要逐一切換後台查，引擎收下整份名單一次查回（示意）</figcaption>
+</figure>
+
+<hr data-slide="引擎流程">
 
 各團隊的需求看起來不同，其實都是「給一份 userId／Account 名單，回傳同一組帳戶欄位」。因此要解決的不是「查得不夠快」，而是**同一種查詢每次都由人工逐筆、逐個後台重做**。我把這個共通流程做成引擎：
 
@@ -77,7 +154,7 @@ flowchart LR
     OUT --> CLR
 ```
 
-*圖 1　引擎流程*
+*圖 2　引擎流程*
 
 <hr data-slide="對照範例">
 
@@ -150,7 +227,7 @@ flowchart LR
 </div>
 </section>
 </div>
-<figcaption>圖 2　原流程的三個痛點（人工步驟依 OP 作業整理；每帳戶 45 秒為估計值；批量數據取自引擎的 Record 工作表，2026-06-09 ~ 2026-11-16）</figcaption>
+<figcaption>圖 3　原流程的三個痛點（人工步驟依 OP 作業整理；每帳戶 45 秒為估計值；批量數據取自引擎的 Record 工作表，2026-06-09 ~ 2026-11-16）</figcaption>
 </figure>
 
 <hr data-slide="值得投入的理由">
@@ -158,7 +235,7 @@ flowchart LR
 **值得投入解決的理由：**
 
 1. **需求量是真的**：上線 24 週，每一週都有成功的批量申請（每月使用量見 Result）。
-2. **單批量級已經超過人工能力**：最大的一批（圖 2）人工逐筆查詢，大約要一個人 27 個工作天。
+2. **單批量級已經超過人工能力**：最大的一批（圖 3）人工逐筆查詢，大約要一個人 27 個工作天。
 3. **流程高度重複，適合通則化**：不同團隊的需求表面不同，但都是「給一份 userId／Account 名單，回傳同一組帳戶欄位」。OP 日常的帳戶查詢需求中，約 80% 可以用同一套流程涵蓋。
 
 ## Solution Design
@@ -166,7 +243,7 @@ flowchart LR
 依照三個痛點，拆成五個要解決的面向。下圖是 LarkSheet 上給使用者看的使用規則，表格的「對應」欄指向圖中的各列：
 
 ![帳務營運自動化引擎的使用規則：核心規則與四個標準程序步驟](../../assets/projects/account-automation-engine/rule-zh.png)
-*圖 3　LarkSheet 上的使用規則（節錄 Rule 工作表中文部分，英文版內容相同；點擊可放大）*
+*圖 4　LarkSheet 上的使用規則（節錄 Rule 工作表中文部分，英文版內容相同；點擊可放大）*
 
 | 痛點 | 解決方向 | 對應 |
 |---|---|---|
@@ -211,7 +288,7 @@ flowchart LR
 - **先驗證再查詢，失敗也留紀錄**：驗證不通過時不進入查詢，直接在 Record 寫入失敗原因（例如缺少 Requestor），申請人看紀錄就知道要補什麼（攔截次數見 Result）。
 - **查無資料不丟棄**：查不到的帳戶收集在 Record 的 `total_missing_list`，與成功的結果一起呈現。
 - **排隊獨佔**：Input 有資料時其他人不能覆蓋；Record 與 Output 都寫入成功後才清空 Input，避免申請被吃掉。
-- **單次上限**：規則上每次最多 2,000 筆，避免單一申請長時間佔住入口。
+- **單次上限**：規則上每次最多 2,000 筆（以輸入的 userId 列數計），避免單一申請長時間佔住入口；一個 userId 會展開成多個帳戶，所以一批的帳戶數可能超過 2,000。
 - **資料保留**：Output 明細只保留當天，隔天自動刪除；Record 只留摘要，作為長期的執行紀錄。
 - **權限範圍**：使用我的自動化帳號登入各 regulator 的 CRM 後台，權限為唯讀，不寫入任何資料。
 
@@ -234,7 +311,7 @@ flowchart LR
 <video controls muted playsinline preload="metadata" src="../../media/account-automation-engine/crm_system.mp4"></video>
 </div>
 </div>
-<figcaption>圖 4　實際操作錄影（點擊播放）</figcaption>
+<figcaption>圖 5　實際操作錄影（點擊播放）</figcaption>
 </figure>
 
 <hr data-slide="一次實際執行">
@@ -304,7 +381,7 @@ Output 每個帳戶一列，共 23 個欄位。以下兩列取自 2026-11-16 的
 <li class="is-peak" style="--v: 100%"><span class="bar-label">2026-10（207 次）</span><span class="bar"></span><span class="bar-value">113,659</span></li>
 <li style="--v: 26.8%"><span class="bar-label">2026-11（至 11/16，38 次）</span><span class="bar"></span><span class="bar-value">30,458</span></li>
 </ul>
-<figcaption>圖 5　每月驗證帳戶數（括號內為成功執行次數；取自 Record 工作表）</figcaption>
+<figcaption>圖 6　每月驗證帳戶數（括號內為成功執行次數；取自 Record 工作表）</figcaption>
 </figure>
 
 <hr data-slide="執行統計">
@@ -344,7 +421,7 @@ Output 每個帳戶一列，共 23 個欄位。以下兩列取自 2026-11-16 的
 <div class="ba-row"><p class="ba-item">使用方式</p><p class="ba-before">需要 OP 親自操作每一個後台</p><p class="ba-after">各團隊自行填表送件，排程每 5 分鐘自動執行<small>依據：Rule 工作表；每月使用量見 Result</small></p></div>
 <div class="ba-row"><p class="ba-item">錯誤輸入</p><p class="ba-before">無紀錄</p><p class="ba-after">不完整的申請在查詢前被攔下，並說明缺少的欄位<small>依據：Record 的 return_msg；攔截次數見 Result</small></p></div>
 </div>
-<figcaption>圖 6　Before / After 對照（工時與成本為估計值，計算基準見下方）</figcaption>
+<figcaption>圖 7　Before / After 對照（工時與成本為估計值，計算基準見下方）</figcaption>
 </figure>
 
 <hr data-slide="尚未量化的部分">
@@ -355,4 +432,4 @@ Output 每個帳戶一列，共 23 個欄位。以下兩列取自 2026-11-16 的
 - **帳戶數會重複計算**：累計驗證帳戶是各批次帳戶數的加總；同一個帳戶在不同批次被查詢，會各算一次，因為每次查詢都對應一次人工作業。
 - **80% 涵蓋率**：指 OP 日常帳戶查詢需求中可以用這套流程處理的比例，是依需求類型歸納的估計，沒有逐件統計。
 - **引擎執行時間**：Record 沒有記錄每批的執行耗時，因此本頁不寫「從 X 小時縮短到 Y 分鐘」。
-- **單次上限**：規則上每次最多 2,000 筆，但 Record 中有 65 批超過 2,000 個帳戶。TODO：確認 2,000 筆的計算單位（申請列數或 userId 數）。
+- **單次上限的單位**：2,000 筆指輸入的 userId 列數，不是帳戶數；一個 userId 會展開成多個帳戶，所以 Record 中有批次的帳戶數超過 2,000（見 Problem）。

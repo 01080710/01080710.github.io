@@ -7,6 +7,19 @@ metric_labels:
   - "Detection time once data is available (previously up to about 5 hours)"
   - "Manual comparison hours saved, Mar–Jul (estimate)"
   - "Automated reconciliation runs, Mar–Jul"
+story:
+  - { label: "Map", line: "Clients do everything in the Client Portal. A card recharge flows from Payabl through Bridger into CRM; a withdrawal goes the other way, with operations refunding to the card in Payabl." }
+  - { label: "Serial numbers", line: "As a payment passes through Bridger, every recharge gets a unique serial (PSP trx ID). Three recharges of 30, 40 and 30 USD get serials #1, #2 and #3." }
+  - { label: "Same-route rule", line: "Because every recharge has its own serial, a refund has to name the one it goes back to: the same-route rule. A 100 USD withdrawal (Parent) is split into 30→#1, 40→#2 and 30→#3 (Children)." }
+  - { label: "Data gap", line: "The catch: Bridger passes only the serial to Payabl, not the withdrawal. So CRM has the Parent and Children but no details, while Payabl has every refund's details but no idea which withdrawal they belong to." }
+  - { label: "Problem", line: "When operations split refunds by hand in Payabl, they can't see how the withdrawal should be split, so they may refund one too many (30, 40, 30, 30) or type a wrong amount (30, 40, 20)." }
+  - { label: "Matching rules", line: "So matching can't stop at the total; it has to go down to each Child Ticket: check the count, then each amount. Only what Payabl refunded but CRM doesn't match goes to operations." }
+  - { label: "Worked example", line: "Back to the example: the extra 30 and the mistyped 20 are both classed as D and sent straight to operations." }
+  - { label: "Solution", line: "But neither side has an API, and Payabl has no download button. So I use API reverse engineering to fetch both reports every hour, run the matching and write only new anomalies to LarkSheet." }
+  - { label: "Screens", line: "This is the LarkSheet case sheet as it really looks: a run with anomalies adds case rows that operations review right here; every hour without one still leaves a row with the comparison time." }
+  - { label: "Running for real", line: "This is a real run at 11:00 on 2026-03-16: log in to Payabl and fetch its report, download the CRM report day by day, run the matching, then write new cases to LarkSheet. This time both sides matched, so there was nothing new." }
+  - { label: "Output", line: "Transactions that don't match are written to LarkSheet: the first two rows exist on both sides with different amounts; the last one was refunded in Payabl with no record in CRM. Operations review them right on this sheet." }
+  - { label: "Result", line: "After launch, flagged transactions go to operations for review, and nearly all confirmed wrong refunds were reversed or had cancellation requested after detection." }
 impact:
   before: "Shift staff compared reports by hand; wrong refunds were found late"
   after: "A wrong refund is flagged on the next run"
@@ -24,14 +37,15 @@ tldr:
 - If the two amounts differ (wrong refund amount, duplicate refund, missing CRM record), company money has actually left without being recorded correctly.
 
 <details class="glossary-details">
-<summary>Glossary<span class="mono">13 terms · click to expand</span></summary>
+<summary>Glossary<span class="mono">14 terms · click to expand</span></summary>
 <table>
 <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
 <tbody>
 <tr><td>Deposit / Withdrawal</td><td>A client putting money in / taking money out</td></tr>
 <tr><td>PSP</td><td>Payment Service Provider, an external payment provider</td></tr>
-<tr><td>Payabl</td><td>The credit card PSP in this project; it actually processes recharges and refunds</td></tr>
-<tr><td>CRM</td><td>Internal system that manages clients and transaction records</td></tr>
+<tr><td>Payabl</td><td>The payment side: the credit card PSP in this project, which actually processes recharges and refunds; it has the details of every refund but can't tell which withdrawal a refund belongs to</td></tr>
+<tr><td>CRM</td><td>Internal system that manages clients and transaction records; it has Parent and Child Tickets but no transaction details</td></tr>
+<tr><td>Bridger</td><td>The interface between Payabl and CRM; it gives every recharge a unique serial number (PSP trx ID) and passes only that serial, not the withdrawal (Parent), to Payabl</td></tr>
 <tr><td>Recharge</td><td>A credit card deposit: the client pays by card in the Client Portal</td></tr>
 <tr><td>Refunded</td><td>A credit card withdrawal: the money goes back to the card used for the recharge</td></tr>
 <tr><td>Same-route rule</td><td>A credit card withdrawal must go back to the card used for the recharge and be tied to the original recharge order</td></tr>
@@ -47,14 +61,34 @@ tldr:
 
 <hr data-slide="What gets matched">
 
-Credit card withdrawals follow the **same-route rule**: money must go back to the card the client recharged with and be tied to the original recharge order, so one withdrawal request (Parent Ticket) is split by recharge record into several refunds (Child Tickets).
+Every time a client recharges, the payment picks up a unique serial number (PSP trx ID) as it passes through Bridger. If a client recharges three times, 30, 40 and 30 USD, there are three serials: #1, #2 and #3.
 
-When staff execute a refund in Payabl, Payabl shows only Child Ticket details while CRM has the Parent Ticket but no details, so the two are hard to cross-check. Two kinds of mistakes are common:
+Because every recharge has its own serial, credit card withdrawals follow the **same-route rule**: a refund has to name the serial it goes back to. When the client later asks to withdraw 100 USD, that withdrawal request is the **Parent Ticket**, and it has to be split into three refunds, 30→#1, 40→#2 and 30→#3, the three **Child Tickets**.
 
-- **The counts differ**: under the same Parent Ticket, the two sides have a different number of Child Tickets, so the refund was matched to the wrong Child Ticket (for example, a duplicate refund).
-- **The counts match, the amount does not**: both sides have the same number, but the refund amount was typed in wrong.
+<figure class="split-figure">
+<div class="split-scroll">
+<svg viewBox="0 0 760 220" role="img" aria-labelledby="sf1-title"><title id="sf1-title">Serial numbers and the same-route rule: each recharge has a serial, so a 100 USD withdrawal is split into three refunds</title><defs><marker id="sf-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="sf-head" d="M0,0 L8,4 L0,8 z"/></marker></defs><g data-b="recharge"><text class="sf-s" x="85" y="24">Recharges</text><rect class="sf-node" x="20" y="40" width="130" height="44" rx="6"/><text class="sf-t" x="85" y="67">30 USD</text><rect class="sf-node" x="20" y="100" width="130" height="44" rx="6"/><text class="sf-t" x="85" y="127">40 USD</text><rect class="sf-node" x="20" y="160" width="130" height="44" rx="6"/><text class="sf-t" x="85" y="187">30 USD</text></g><g data-b="trx"><text class="sf-s" x="228" y="24">Bridger issues serials</text><path class="sf-line" d="M150 62 H174" marker-end="url(#sf-arrow)"/><rect class="sf-trx" x="180" y="46" width="96" height="32" rx="16"/><text class="sf-trx-t" x="228" y="67">trx #1</text><path class="sf-line" d="M150 122 H174" marker-end="url(#sf-arrow)"/><rect class="sf-trx" x="180" y="106" width="96" height="32" rx="16"/><text class="sf-trx-t" x="228" y="127">trx #2</text><path class="sf-line" d="M150 182 H174" marker-end="url(#sf-arrow)"/><rect class="sf-trx" x="180" y="166" width="96" height="32" rx="16"/><text class="sf-trx-t" x="228" y="187">trx #3</text></g><g data-b="parent"><text class="sf-s" x="410" y="24">Withdrawal request</text><rect class="sf-parent" x="335" y="92" width="150" height="64" rx="6"/><text class="sf-t" x="410" y="120">Refund 100 USD</text><text class="sf-s" x="410" y="140">Parent Ticket</text></g><g data-b="split"><text class="sf-s" x="670" y="24">Split by the same-route rule</text><path class="sf-line" d="M485 124 C 540 124, 548 62, 594 62" marker-end="url(#sf-arrow)"/><path class="sf-line" d="M485 124 H594" marker-end="url(#sf-arrow)"/><path class="sf-line" d="M485 124 C 540 124, 548 182, 594 182" marker-end="url(#sf-arrow)"/><rect class="sf-child" x="600" y="40" width="140" height="44" rx="6"/><text class="sf-t" x="670" y="60">30 USD → #1</text><text class="sf-s" x="670" y="76">Child 1</text><rect class="sf-child" x="600" y="100" width="140" height="44" rx="6"/><text class="sf-t" x="670" y="120">40 USD → #2</text><text class="sf-s" x="670" y="136">Child 2</text><rect class="sf-child" x="600" y="160" width="140" height="44" rx="6"/><text class="sf-t" x="670" y="180">30 USD → #3</text><text class="sf-s" x="670" y="196">Child 3</text></g></svg>
+</div>
+<figcaption>Figure 1　Serial numbers and the same-route rule: every recharge gets a PSP trx ID, so a 100 USD withdrawal is split into three refunds, each returned against its own serial (illustration, amounts in USD)</figcaption>
+</figure>
 
-So the problem to solve is not "people make mistakes" but that **after a refund, nothing checks every Child Ticket under each Parent Ticket against both sides**. The matching rules follow the same-route rule and these two mistakes: the unit of comparison is every Child Ticket under a Parent Ticket, not the total of the whole report; compare the count first, then whether there is one or several, then the amounts, and put every Child Ticket into one of the classes A–E:
+<hr data-slide="What each side records">
+
+The trouble is that Bridger passes only the serial to Payabl, not the withdrawal (Parent) it belongs to, and the transaction details are not written back to CRM. So each side sees only half: CRM has the Parent and Child Tickets but no transaction details; Payabl has the details of every refund but can't tell which withdrawal it belongs to. When operations split refunds by hand in Payabl, they can't see how this withdrawal should be split, and two kinds of mistakes are common:
+
+- **The counts differ**: refunding 30, 40, 30, 30, one refund too many, which is a duplicate refund.
+- **The counts match, the amount does not**: refunding 30, 40, 20, the right number of refunds with a mistyped amount.
+
+<figure class="split-figure">
+<div class="split-scroll">
+<svg viewBox="0 0 760 380" role="img" aria-labelledby="sf2-title"><title id="sf2-title">What each side records: Bridger passes only the serial to Payabl, CRM and Payabl each miss half, and two common mistakes</title><defs><marker id="sf-arrow2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="sf-head" d="M0,0 L8,4 L0,8 z"/></marker></defs><g data-b="bridger"><rect class="sf-parent" x="305" y="80" width="150" height="56" rx="28"/><text class="sf-t" x="380" y="104">Bridger</text><text class="sf-s" x="380" y="122">trx ID only</text><path class="sf-line" d="M305 108 H278" marker-end="url(#sf-arrow2)"/><path class="sf-line" d="M455 108 H482" marker-end="url(#sf-arrow2)"/><text class="sf-s" x="380" y="160">No Parent sent to Payabl</text></g><g data-b="crm"><rect class="sf-box" x="20" y="40" width="250" height="140" rx="8"/><text class="sf-t sf-start" x="36" y="64">CRM (internal)</text><text class="sf-k sf-start" x="36" y="92">Parent</text><text class="sf-good sf-start" x="130" y="92">Refund 100 USD</text><text class="sf-k sf-start" x="36" y="120">Child</text><text class="sf-good sf-start" x="130" y="120">#1, #2, #3</text><text class="sf-k sf-start" x="36" y="148">Details</text><text class="sf-miss sf-start" x="130" y="148">Missing</text></g><g data-b="payabl"><rect class="sf-box" x="490" y="40" width="250" height="140" rx="8"/><text class="sf-t sf-start" x="506" y="64">Payabl (payment side)</text><text class="sf-k sf-start" x="506" y="92">Parent</text><text class="sf-miss sf-start" x="600" y="92">Missing</text><text class="sf-k sf-start" x="506" y="120">Child</text><text class="sf-good sf-start" x="600" y="120">#1, #2, #3</text><text class="sf-k sf-start" x="506" y="148">Details</text><text class="sf-good sf-start" x="600" y="148">30, 40, 30 USD</text></g><g data-b="err-head"><line class="sf-sep" x1="20" y1="206" x2="740" y2="206"/><text class="sf-h sf-start" x="20" y="232">When operations split refunds by hand in Payabl, they can't see how this withdrawal should be split:</text></g><g data-b="err1"><text class="sf-t sf-start" x="20" y="273">One too many</text><rect class="sf-node" x="150" y="250" width="70" height="36" rx="6"/><text class="sf-t" x="185" y="273">30</text><rect class="sf-node" x="230" y="250" width="70" height="36" rx="6"/><text class="sf-t" x="265" y="273">40</text><rect class="sf-node" x="310" y="250" width="70" height="36" rx="6"/><text class="sf-t" x="345" y="273">30</text><rect class="sf-bad" x="390" y="250" width="70" height="36" rx="6"/><text class="sf-t sf-bad-t" x="425" y="273">30</text><text class="sf-bad-t sf-start" x="480" y="273">Duplicate refund → D</text></g><g data-b="err2"><text class="sf-t sf-start" x="20" y="329">Wrong amount</text><rect class="sf-node" x="150" y="306" width="70" height="36" rx="6"/><text class="sf-t" x="185" y="329">30</text><rect class="sf-node" x="230" y="306" width="70" height="36" rx="6"/><text class="sf-t" x="265" y="329">40</text><rect class="sf-bad" x="310" y="306" width="70" height="36" rx="6"/><text class="sf-t sf-bad-t" x="345" y="329">20</text><text class="sf-bad-t sf-start" x="400" y="329">Wrong amount → D</text></g></svg>
+</div>
+<figcaption>Figure 2　What each side records: Bridger passes only the serial, so CRM has the Parent and Child but no details, and Payabl has the details but no Parent; below, the two mistakes when refunds are split by hand (illustration)</figcaption>
+</figure>
+
+<hr data-slide="Matching rules">
+
+So the problem to solve is not "people make mistakes" but that **after a refund, nothing checks every Child Ticket under each Parent Ticket against both sides**. The matching rules follow the same-route rule: the unit is each Child Ticket under a Parent Ticket; compare the count first, then whether there is one or several, then the amounts, and put every Child Ticket into one of the classes A–E:
 
 ```mermaid
 flowchart LR
@@ -70,29 +104,24 @@ flowchart LR
     AMT -->|"refunded on Payabl,<br/>missing or different in CRM"| D["D. recon_mismatch_payabl<br/>written to LarkSheet"]
     AMT -->|"only in CRM"| E["E. recon_mismatch_crm<br/>not output"]
 ```
-*Figure 1　Matching rules (redrawn from the project deck)*
+*Figure 3　Matching rules (redrawn from the project deck)*
 
 <hr data-slide="Worked example">
 
-One example for each of A–E, showing the fields and values on both sides and which path in Figure 1 it takes:
+Staying with the same example, a 100 USD withdrawal split into 30, 40 and 30 under the same-route rule, here is where each variation lands in A–E of Figure 3:
 
-| Parent<br>Ticket | Child<br>Ticket | Refund Amount (Payabl) | Refund_Amount_crm | Path in Figure 1 |
+| Situation | CRM Child Tickets | Payabl refunds | Path in Figure 3 | Class |
 |---|---|---|---|---|
-| P-01 | TX-01 | 100 USD | -100 USD | Same_One&nbsp;→&nbsp;A |
-| P-02 | TX-02 | 60 USD | -30 USD | Same_One&nbsp;→&nbsp;B |
-| P-03 | TX-03 | 200 GBP | -200 GBP | Same_More&nbsp;→&nbsp;C |
-| P-03 | TX-04 | 150 GBP | -150 GBP | Same_More&nbsp;→&nbsp;C |
-| P-04 | TX-05 | 350 EUR | -350 EUR | Not&nbsp;Same&nbsp;→&nbsp;C |
-| P-04 | TX-06 | 350 EUR | (blank) | Not&nbsp;Same&nbsp;→&nbsp;D |
-| P-05 | TX-07 | (blank) | -80 EUR | Not&nbsp;Same&nbsp;→&nbsp;E |
+| Split correctly | 30 · 40 · 30 | 30 · 40 · 30 | Same_More | All three are C |
+| Wrong amount | 30 · 40 · 30 | 30 · 40 · **20** | Same_More | 30, 40 are C; **20 is D** |
+| Duplicate refund | 30 · 40 · 30 | 30 · 40 · 30 · **30** | Not&nbsp;Same | First three are C; **the extra 30 is D** |
+| One not refunded yet | 30 · 40 · 30 | 30 · 40 | Not&nbsp;Same | 30, 40 are C; CRM's extra 30 is E |
+| A single recharge | 100 | 100 | Same_One | A |
+| A single recharge, wrong amount | 100 | **50** | Same_One | **B** |
 
-*Illustration: field names come from the public CSV on this page (the currency comes from its Currency column); amounts for B and D come from the real cases in Result, amounts for A, C and E are illustrative; Parent and Child Ticket numbers are codes, and CRM records refunds as negative amounts.*
+*Illustration: amounts in USD, shown as positive numbers (CRM actually records refunds as negative). Real cases are in the output format in Result (a wrong amount is B, a duplicate refund is D).*
 
-- **A (P-01)**: one on each side, same amount; not output.
-- **B (P-02, counts match, wrong amount)**: one on each side, different amounts; output with `recon_source` = `Payabl & Crm`.
-- **C (P-03)**: two on each side, every amount matches; not output.
-- **D (P-04, counts differ, duplicate refund)**: Payabl has 2, CRM has 1; the one that matches is C, the extra one is D, output with `recon_source` = `Payabl`.
-- **E (P-05)**: only CRM has a record and no refund went out on Payabl; not output.
+- The bold refunds are the ones written to LarkSheet for operations to review (B, D); A and C match on both sides, and E is a refund Payabl never made, so none of them is output.
 
 <hr data-slide="Pain points and evidence">
 
@@ -165,14 +194,14 @@ One example for each of A–E, showing the fields and values on both sides and w
 <div class="pain-evidence">
 <p class="pain-evidence-title">Evidence: tickets on the two sides don't line up</p>
 <ul class="pain-flow">
-<li><b>Payabl</b> only has Child Tickets, with transaction details; matching back to the CRM by hand often paired the wrong Parent Ticket.</li>
+<li><b>Payabl</b> only has Child Tickets, with transaction details, but can't tell which Parent Ticket each refund belongs to; matching back to the CRM by hand often paired them wrong.</li>
 <li><b>CRM</b> has Parent and Child Tickets but no details, so the CRM alone cannot show whether something is wrong.</li>
 <li>Each check covers tens of thousands of transactions on each side (see the log in Result).</li>
 </ul>
 </div>
 </section>
 </div>
-<figcaption>Figure 2　Three pain points in the original process (redrawn from the project deck; platform screenshots have the address bar cropped and the login account and brand logo blurred; roster names replaced with letters; hours are estimates)</figcaption>
+<figcaption>Figure 4　Three pain points in the original process (redrawn from the project deck; platform screenshots have the address bar cropped and the login account and brand logo blurred; roster names replaced with letters; hours are estimates)</figcaption>
 </figure>
 
 <hr data-slide="Why it was worth solving">
@@ -180,7 +209,7 @@ One example for each of A–E, showing the fields and values on both sides and w
 **Why it was worth solving:**
 
 1. **Losses are direct cash outflows**: among the wrong refunds confirmed after launch were a case where Payabl refunded 60 USD while the CRM recorded only 30 USD, and a 350 EUR refund paid out twice; both were reversed by operations after detection (counts in Result).
-2. **The manual approach could not scale**: each round takes a fixed amount of time (Figure 2), 5 shifts was already the limit, and checking more often would only mean adding people.
+2. **The manual approach could not scale**: each round takes a fixed amount of time (Figure 4), 5 shifts was already the limit, and checking more often would only mean adding people.
 
 ## Solution Design
 
@@ -197,7 +226,7 @@ The three pain points break down into four things to solve:
 
 - No official API or database access.
 - The Payabl back office has no report download feature.
-- The two reports become available at different times: CRM covers T ~ T-4 and Payabl covers T ~ T-2, in different time zones (CRM in Asia/Nicosia, Payabl in Asia/Taipei) (Figure 3).
+- The two reports become available at different times: CRM covers T ~ T-4 and Payabl covers T ~ T-2, in different time zones (CRM in Asia/Nicosia, Payabl in Asia/Taipei) (Figure 5).
 
 ## Alternative Solutions
 
@@ -210,7 +239,7 @@ Four options were evaluated at the time; the first three were the alternatives:
 | C. Browser automation (Selenium / RPA) | Simulate a person using the back-office pages | No need to understand the system's internal interfaces | Payabl has no download button, so it would have to copy page by page; breaks when the UI changes; slow, needs a browser running all the time |
 | **D. API reverse engineering (chosen)** | Analyze the HTTP APIs behind the back-office pages, then log in and fetch reports directly with code | Independent of the UI, fast, schedulable | Takes time to analyze; must be adjusted when the other side's API changes |
 
-> Pros and cons are based on the system limits recorded in Figure 2; all four options were actually evaluated at the time.
+> Pros and cons are based on the system limits recorded in Figure 4; all four options were actually evaluated at the time.
 
 ## Selected Solution
 
@@ -225,12 +254,12 @@ Four options were evaluated at the time; the first three were the alternatives:
 <hr data-slide="Architecture">
 
 ![Credit Card Withdraw Workflow architecture diagram](../../assets/projects/credit-card-anomaly-detection/solution-architecture.png)
-*Figure 3　Credit Card Withdraw Workflow (excerpt from the project deck; click the image to enlarge)*
+*Figure 5　Credit Card Withdraw Workflow (excerpt from the project deck; click the image to enlarge)*
 
-The same flow as Figure 3, in text:
+The same flow as Figure 5, in text:
 
 ```mermaid
-flowchart TB
+flowchart LR
     SCH["Schedule<br/>crontab hourly"] --> CRW["Crawler<br/>API Reverse Engineering"]
     CRW --> CRM["CRM CC Report<br/>T ~ T-4 · Asia/Nicosia"]
     CRW --> PAY["Payabl CC Report<br/>T ~ T-2 · Asia/Taipei"]
@@ -252,12 +281,21 @@ flowchart TB
 - **Branch B** first queries the cases already in LarkSheet and appends only new anomalies, so the same transaction is not reported every hour.
 - Every stage writes a JSON structured log (`service`, `stage`, `status`), so an error points straight to the stage that failed.
 - **Access scope**: approved in advance by my manager; uses an existing account the company issued to operations, reads only reports staff could already see, and writes nothing; credentials live in environment variables, not in code.
-- **Matching rules** (Area 3: Prepare → Build Logic → Separate Types → Regularity): each rule was aligned with operations; the decision flow is in Figure 1. How each class is handled:
+- **Matching rules** (Area 3: Prepare → Build Logic → Separate Types → Regularity): each rule was aligned with operations; the decision flow is in Figure 3. How each class is handled:
   - **A, C**: both sides agree; not output.
   - **B, D**: Payabl refunded but CRM does not match; written to LarkSheet for operations to review, with `recon_source` showing whether CRM has a matching record (see the output format in Result).
   - **E**: no refund actually went out on Payabl, so it is not an anomaly; the Mar–Jul output contains no case that appears only in CRM.
 
 ## Result
+
+<hr data-slide="Screens">
+
+### Screens: the LarkSheet case sheet
+
+Every hour the pipeline writes its results into the LarkSheet operations already use: a run with anomalies adds case rows (amounts, `recon_result`, `recon_source`) that operations review right on the sheet; a run with none still leaves a row with the comparison time, proving that run happened.
+
+![LarkSheet case sheet: four Mismatch cases at the top, then one row per hour with only the comparison time](../../assets/projects/credit-card-anomaly-detection/larksheet-cases.png)
+*Figure 6　The LarkSheet case sheet as it really looks (browser and document path cropped; transaction and order number columns blurred; click to enlarge)*
 
 <hr data-slide="One real run">
 
@@ -307,13 +345,13 @@ What this log shows:
 
 ### Output format
 
-Anomalies are written to LarkSheet with the same columns as the CSV. The three rows below are cases operations confirmed as errors between March and July, with transaction and order numbers removed:
+Anomalies are written to LarkSheet with the same columns as the CSV. The three rows below are cases operations confirmed as errors between March and July, with transaction and order numbers removed; all three have Tx-Type Refund and Status In progress, so those columns are left out, and the currency is shown with the amount:
 
-| Tx-Type | Status | Currency | Refund Amount (Payabl) | Refund_Amount_crm | recon_result | recon_source |
-|---|---|---|---|---|---|---|
-| Refund | In progress | USD | 120 | -200 | Mismatch | Payabl & Crm |
-| Refund | In progress | USD | 60 | -30 | Mismatch | Payabl & Crm |
-| Refund | In progress | EUR | 350 | (blank) | Mismatch | Payabl |
+| Refund Amount (Payabl) | Refund_Amount_crm | recon_result | recon_source |
+|---|---|---|---|
+| 120 USD | -200 USD | Mismatch | Payabl & Crm |
+| 60 USD | -30 USD | Mismatch | Payabl & Crm |
+| 350 EUR | (blank) | Mismatch | Payabl |
 
 `recon_source` separates two kinds of anomaly:
 
@@ -332,7 +370,7 @@ The pipeline errs on the side of flagging and leaves the call to operations. "Co
 <li class="is-peak" style="--v: 5.5%"><span class="bar-label">Confirmed wrong refunds</span><span class="bar"></span><span class="bar-value">29</span></li>
 <li class="is-peak" style="--v: 5.4%"><span class="bar-label">Reversed or cancellation requested after detection</span><span class="bar"></span><span class="bar-value">28</span></li>
 </ul>
-<figcaption>Figure 4　From flagged to reversed (unique transactions; from the public CSV on this page)</figcaption>
+<figcaption>Figure 7　From flagged to reversed (unique transactions; from the public CSV on this page)</figcaption>
 </figure>
 
 - **The 523 flagged**: 307 amount mismatches, 216 with no CRM record.
@@ -369,7 +407,7 @@ Source: the full record CSV produced by the pipeline (`Payabl QC new Template - 
 <div class="ba-row"><p class="ba-item">Detection time</p><p class="ba-before">Up to about 5 hours (the gap between two manual rounds)</p><p class="ba-after">Within 1 hour of the data becoming available<small>Basis: hourly schedule; run interval in Result</small></p></div>
 <div class="ba-row"><p class="ba-item">Getting the data</p><p class="ba-before">Manual download and copy-paste, about 45 minutes per round</p><p class="ba-after">Pulled automatically via API reverse engineering; a run takes only a few minutes<small>Basis: run log in Result; manual time is an estimate</small></p></div>
 <div class="ba-row"><p class="ba-item">Coverage</p><p class="ba-before">Manual Excel comparison, volume not recorded</p><p class="ba-after">Every run compares all transactions on both sides<small>Basis: run log in Result</small></p></div>
-<div class="ba-row"><p class="ba-item">Actually caught</p><p class="ba-before">No record</p><p class="ba-after">Nearly all confirmed wrong refunds were reversed or had cancellation requested after detection<small>Basis: CSV review column and operations notes; counts in Result Figure 4</small></p></div>
+<div class="ba-row"><p class="ba-item">Actually caught</p><p class="ba-before">No record</p><p class="ba-after">Nearly all confirmed wrong refunds were reversed or had cancellation requested after detection<small>Basis: CSV review column and operations notes; counts in Result Figure 7</small></p></div>
 </div>
-<figcaption>Figure 5　Before / After (redrawn from the project deck). Correction: the original slide said 4 times a day, ↑600% and >24 hours; the actual roster had 5 rounds a day (about 5 hours apart), and after automation the actual average Mar–Jul was 20.7 runs a day, about 4.1×. The original "accuracy" row is left out.</figcaption>
+<figcaption>Figure 8　Before / After (redrawn from the project deck). Correction: the original slide said 4 times a day, ↑600% and >24 hours; the actual roster had 5 rounds a day (about 5 hours apart), and after automation the actual average Mar–Jul was 20.7 runs a day, about 4.1×. The original "accuracy" row is left out.</figcaption>
 </figure>

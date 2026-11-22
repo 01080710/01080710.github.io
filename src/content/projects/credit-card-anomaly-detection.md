@@ -20,6 +20,102 @@ tldr:
   problem: "信用卡出金時，Payabl 實際退款與 CRM 記帳可能對不上；人工 Excel 比對靠輪班，頻率與準確度都到了極限。"
   approach: "以 API 逆向工程自動擷取兩邊報表，每小時全量對帳，只把不一致的交易寫入 LarkSheet 交給營運複核。"
   result: "錯誤退款在下一輪執行就被標記，交由營運撤銷；比對不再需要輪班人力。"
+story:
+  - label: "地圖"
+    at: "map"
+    dim: "[data-b=\"notes\"]"
+    beats:
+      - "[data-b=\"portal\"]"
+      - "[data-b=\"recharge\"]"
+      - "[data-b=\"refund\"]"
+    line: "客戶的所有操作都在 Client Portal。刷卡充值時，款項從 Payabl 經過 Bridger 入帳到 CRM；出金時則反過來，由營運在 Payabl 把錢退回卡上。"
+  - label: "流水號"
+    at: "ch-1-2"
+    pick: ".split-figure"
+    dim: "[data-b=\"parent\"], [data-b=\"split\"]"
+    beats:
+      - "[data-b=\"recharge\"]"
+      - "[data-b=\"trx\"]"
+    line: "款項經過 Bridger 時，每一筆充值都會拿到一個唯一的流水號（PSP trx ID）。客戶分三次充值 30、40、30 USD，就有 #1、#2、#3 三個流水號。"
+  - label: "原入原出"
+    at: "ch-1-2"
+    pick: ".split-figure"
+    beats:
+      - "[data-b=\"parent\"]"
+      - "[data-b=\"split\"]"
+    line: "正因為每筆充值都有自己的流水號，退款也必須指定退回哪一個，這就是原入原出。客戶申請退 100 USD（Parent），就要拆成 30→#1、40→#2、30→#3 三筆退款（Child）。"
+  - label: "資料落差"
+    at: "ch-1-3"
+    pick: ".split-figure"
+    dim: "[data-b^=\"err\"]"
+    beats:
+      - "[data-b=\"bridger\"]"
+      - "[data-b=\"crm\"]"
+      - "[data-b=\"payabl\"]"
+    line: "問題在於，Bridger 只把流水號傳給 Payabl，沒有傳出金單。結果 CRM 有 Parent 和 Child、卻沒有交易明細；Payabl 有每筆退款的明細，卻不知道它們屬於哪張出金單。"
+  - label: "問題"
+    at: "ch-1-3"
+    pick: ".split-figure"
+    beats:
+      - "[data-b=\"err-head\"]"
+      - "[data-b=\"err1\"]"
+      - "[data-b=\"err2\"]"
+    line: "營運在 Payabl 手動拆退款時，看不到這張單該拆成哪幾筆，就可能多退一筆（30、40、30、30），或打錯金額（30、40、20）。"
+  - label: "比對規則"
+    at: "ch-1-4"
+    pick: ".mermaid"
+    beats:
+      - "[id*=\"-flowchart-ALL-\"], [id*=\"-flowchart-SAME-\"], [id*=\"-flowchart-NS-\"], [id*=\"-L_ALL_\"], [data-id^=\"L_ALL_\"]"
+      - "[id*=\"-flowchart-ONE-\"], [id*=\"-flowchart-MORE-\"], [id*=\"-flowchart-AMT-\"], [id*=\"-L_SAME_\"], [data-id^=\"L_SAME_\"], [id*=\"-L_MORE_\"], [data-id^=\"L_MORE_\"], [id*=\"-L_NS_\"], [data-id^=\"L_NS_\"]"
+      - "[id*=\"-flowchart-A-\"], [id*=\"-flowchart-B-\"], [id*=\"-flowchart-C-\"], [id*=\"-flowchart-E-\"], [id*=\"-L_ONE_\"], [data-id^=\"L_ONE_\"], [id*=\"-L_AMT_C\"], [data-id^=\"L_AMT_C\"], [id*=\"-L_AMT_E\"], [data-id^=\"L_AMT_E\"]"
+      - "[id*=\"-flowchart-D-\"], [id*=\"-L_AMT_D\"], [data-id^=\"L_AMT_D\"]"
+    line: "因此比對不能只看總額，而要細到每一筆 Child Ticket：先確認筆數，再逐筆核對金額。只有 Payabl 已經退款、CRM 卻對不上的交易，才會交給營運處理。"
+  - label: "對照範例"
+    at: "ch-1-5"
+    pick: "table"
+    beats:
+      - "tbody tr:nth-child(1)"
+      - "tbody tr:nth-child(2)"
+      - "tbody tr:nth-child(3)"
+      - "tbody tr:nth-child(n+4)"
+    line: "套回剛才的例子：多退的那筆 30，和打錯金額的那筆 20，都會被歸為 D，自動送到營運手上。"
+  - label: "解決方案"
+    at: "ch-4-2"
+    pick: ".mermaid"
+    beats:
+      - "[id*=\"-flowchart-SCH-\"]"
+      - "[id*=\"-flowchart-CRW-\"], [id*=\"-flowchart-CRM-\"], [id*=\"-flowchart-PAY-\"], [id*=\"-L_SCH_\"], [data-id^=\"L_SCH_\"], [id*=\"-L_CRW_\"], [data-id^=\"L_CRW_\"]"
+      - "[id*=\"-flowchart-REC-\"], [id*=\"-flowchart-TDY-\"], [id*=\"-L_CRM_REC\"], [data-id^=\"L_CRM_REC\"], [id*=\"-L_PAY_REC\"], [data-id^=\"L_PAY_REC\"], [id*=\"-L_REC_\"], [data-id^=\"L_REC_\"]"
+      - "[id*=\"-flowchart-CHK-\"], [id*=\"-flowchart-BOT-\"], [id*=\"-flowchart-A-\"], [id*=\"-flowchart-B-\"], [id*=\"-flowchart-UP-\"], [id*=\"-L_TDY_\"], [data-id^=\"L_TDY_\"], [id*=\"-L_BOT_\"], [data-id^=\"L_BOT_\"], [id*=\"-L_CHK_\"], [data-id^=\"L_CHK_\"], [id*=\"-L_A_\"], [data-id^=\"L_A_\"], [id*=\"-L_B_\"], [data-id^=\"L_B_\"]"
+    line: "但兩邊都沒有 API，Payabl 甚至沒有下載按鈕。所以我透過 API 逆向工程，每小時自動抓取兩邊報表並執行比對，只把新發現的異常寫進 LarkSheet。"
+  - label: "操作畫面"
+    at: "ch-5-1"
+    pick: "img"
+    line: "這是 LarkSheet 案件表的實際畫面：有異常的那一輪寫入案件列，營運直接在這裡複核；沒有異常的每一小時，也會留下一列比對時間。"
+  - label: "實際運作"
+    at: "ch-5-2"
+    pick: "pre"
+    beats:
+      - ".line:nth-child(n+1):nth-child(-n+4)"
+      - ".line:nth-child(n+5):nth-child(-n+9)"
+      - ".line:nth-child(n+10):nth-child(-n+11)"
+      - ".line:nth-child(n+12)"
+    line: "這是 2026-03-16 11:00 的一次實際執行：先登入 Payabl 抓報表，再分天下載 CRM 報表，接著比對，最後把新案件寫進 LarkSheet。這次兩邊都對得上，所以沒有新案件。"
+  - label: "輸出結果"
+    at: "ch-5-3"
+    pick: "table"
+    beats:
+      - "tbody tr:nth-child(-n+2)"
+      - "tbody tr:nth-child(3)"
+    line: "對不上的交易會寫進 LarkSheet：前兩列是兩邊都有、金額不同；最後一列是 Payabl 已退款、CRM 卻查無紀錄。營運就在這張表上複核。"
+  - label: "成果"
+    at: "ch-5-4"
+    pick: ".bar-figure"
+    beats:
+      - "li:nth-child(1)"
+      - "li:nth-child(2)"
+      - "li:nth-child(3)"
+    line: "上線之後，被標記的交易都交由營運複核；確認有誤的退款，幾乎都在偵測後撤銷或要求取消。"
 tags: ["Reverse Engineering", "Automation", "Risk Control"]
 categories: ["Data Pipeline", "Automation"]
 home: true
@@ -35,14 +131,15 @@ accent: violet
 - 兩邊金額不一致（退錯金額、重複退款、CRM 漏記）就代表公司的錢實際流出卻沒有被正確記錄。
 
 <details class="glossary-details">
-<summary>名詞說明<span class="mono">13 個名詞 · 點擊展開</span></summary>
+<summary>名詞說明<span class="mono">14 個名詞 · 點擊展開</span></summary>
 <table>
 <thead><tr><th>名詞</th><th>說明</th></tr></thead>
 <tbody>
 <tr><td>入金／出金</td><td>客戶存入／提領資金</td></tr>
 <tr><td>PSP</td><td>Payment Service Provider，外部支付服務商</td></tr>
-<tr><td>Payabl</td><td>本專案的信用卡 PSP，實際執行充值與退款</td></tr>
-<tr><td>CRM</td><td>內部管理客戶與交易紀錄的系統</td></tr>
+<tr><td>Payabl</td><td>支付端：本專案的信用卡 PSP，實際執行充值與退款；有每一筆退款的明細，但看不出它屬於哪張出金單</td></tr>
+<tr><td>CRM</td><td>內部管理客戶與交易紀錄的系統；有 Parent 與 Child Ticket，但沒有交易明細</td></tr>
+<tr><td>Bridger</td><td>串接 Payabl 與 CRM 的介面，替每一筆充值產生唯一的流水號（PSP trx ID）；只把流水號傳給 Payabl，不傳出金單（Parent）</td></tr>
 <tr><td>充值（Recharge）</td><td>信用卡入金：客戶在 Client Portal 刷卡存入資金</td></tr>
 <tr><td>退款（Refunded）</td><td>信用卡出金：款項退回客戶充值時使用的原卡</td></tr>
 <tr><td>原入原出</td><td>信用卡出金須退回充值時使用的原卡，並對應原本的充值訂單</td></tr>
@@ -58,14 +155,34 @@ accent: violet
 
 <hr data-slide="要對的是什麼">
 
-信用卡出金遵守**原入原出**：款項必須退回客戶充值時使用的原卡，並對應到原本的充值訂單，所以一張出金申請（Parent Ticket）會依充值紀錄拆成多筆退款（Child Ticket）。
+客戶每充值一次，款項經過 Bridger 時就會拿到一個唯一的流水號（PSP trx ID）。例如客戶分三次充值 30、40、30 USD，就有 #1、#2、#3 三個流水號。
 
-人員在 Payabl 執行退款時，Payabl 只看得到 Child Ticket 明細，CRM 有 Parent Ticket 卻沒有明細，兩邊很難對照，常見兩種錯誤：
+正因為每筆充值都有自己的流水號，信用卡出金必須遵守**原入原出**：退款要指定退回哪一個流水號。幾天後客戶申請退 100 USD，這張出金申請就是 **Parent Ticket**，它要拆成 30→#1、40→#2、30→#3 三筆退款，也就是三個 **Child Ticket**。
 
-- **數量對不上**：同一張 Parent Ticket 底下，兩邊的 Child Ticket 數量不同，退款配錯了 Child Ticket（例如重複退款）。
-- **數量對、金額錯**：兩邊數量一致，但手動輸入時打錯退款金額。
+<figure class="split-figure">
+<div class="split-scroll">
+<svg viewBox="0 0 760 220" role="img" aria-labelledby="sf1-title"><title id="sf1-title">流水號與原入原出：三筆充值各有一個流水號，100 USD 的出金拆成三筆退款各自退回</title><defs><marker id="sf-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="sf-head" d="M0,0 L8,4 L0,8 z"/></marker></defs><g data-b="recharge"><text class="sf-s" x="85" y="24">充值</text><rect class="sf-node" x="20" y="40" width="130" height="44" rx="6"/><text class="sf-t" x="85" y="67">30 USD</text><rect class="sf-node" x="20" y="100" width="130" height="44" rx="6"/><text class="sf-t" x="85" y="127">40 USD</text><rect class="sf-node" x="20" y="160" width="130" height="44" rx="6"/><text class="sf-t" x="85" y="187">30 USD</text></g><g data-b="trx"><text class="sf-s" x="228" y="24">Bridger 發流水號</text><path class="sf-line" d="M150 62 H174" marker-end="url(#sf-arrow)"/><rect class="sf-trx" x="180" y="46" width="96" height="32" rx="16"/><text class="sf-trx-t" x="228" y="67">trx #1</text><path class="sf-line" d="M150 122 H174" marker-end="url(#sf-arrow)"/><rect class="sf-trx" x="180" y="106" width="96" height="32" rx="16"/><text class="sf-trx-t" x="228" y="127">trx #2</text><path class="sf-line" d="M150 182 H174" marker-end="url(#sf-arrow)"/><rect class="sf-trx" x="180" y="166" width="96" height="32" rx="16"/><text class="sf-trx-t" x="228" y="187">trx #3</text></g><g data-b="parent"><text class="sf-s" x="410" y="24">出金申請</text><rect class="sf-parent" x="335" y="92" width="150" height="64" rx="6"/><text class="sf-t" x="410" y="120">退 100 USD</text><text class="sf-s" x="410" y="140">Parent Ticket</text></g><g data-b="split"><text class="sf-s" x="670" y="24">依原入原出拆成退款</text><path class="sf-line" d="M485 124 C 540 124, 548 62, 594 62" marker-end="url(#sf-arrow)"/><path class="sf-line" d="M485 124 H594" marker-end="url(#sf-arrow)"/><path class="sf-line" d="M485 124 C 540 124, 548 182, 594 182" marker-end="url(#sf-arrow)"/><rect class="sf-child" x="600" y="40" width="140" height="44" rx="6"/><text class="sf-t" x="670" y="60">30 USD → #1</text><text class="sf-s" x="670" y="76">Child 1</text><rect class="sf-child" x="600" y="100" width="140" height="44" rx="6"/><text class="sf-t" x="670" y="120">40 USD → #2</text><text class="sf-s" x="670" y="136">Child 2</text><rect class="sf-child" x="600" y="160" width="140" height="44" rx="6"/><text class="sf-t" x="670" y="180">30 USD → #3</text><text class="sf-s" x="670" y="196">Child 3</text></g></svg>
+</div>
+<figcaption>圖 1　流水號與原入原出：每筆充值都有一個 PSP trx ID，所以 100 USD 的出金要拆成三筆退款，各自退回對應的流水號（示意，金額單位 USD）</figcaption>
+</figure>
 
-因此要解決的不是「人會犯錯」，而是**退款之後，沒有機制把每張 Parent Ticket 底下的 Child Ticket 逐筆對回兩邊**。比對規則就照原入原出與這兩種錯誤設計：比對單位是 Parent Ticket 底下的每一筆 Child Ticket，而不是整份報表的總額；先比數量，再比筆數，最後比金額，每筆 Child Ticket 歸入 A–E 其中一類：
+<hr data-slide="兩邊各記了什麼">
+
+問題出在 Bridger 只把流水號傳給 Payabl，沒有把出金單（Parent）一起傳過去，交易明細也沒有回寫到 CRM。結果兩邊各只看得到一半：CRM 有 Parent 與 Child Ticket，但沒有交易明細；Payabl 有每一筆退款的明細，卻看不出它屬於哪一張出金單。營運在 Payabl 手動拆退款時，看不到這張單該拆成哪幾筆，常見兩種錯誤：
+
+- **數量對不上**：退成 30、40、30、30，多退了一筆，也就是重複退款。
+- **數量對、金額錯**：退成 30、40、20，筆數對了，金額打錯。
+
+<figure class="split-figure">
+<div class="split-scroll">
+<svg viewBox="0 0 760 380" role="img" aria-labelledby="sf2-title"><title id="sf2-title">兩邊各記了什麼：Bridger 只把流水號傳給 Payabl，CRM 與 Payabl 各缺一半，以及兩種常見錯誤</title><defs><marker id="sf-arrow2" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="sf-head" d="M0,0 L8,4 L0,8 z"/></marker></defs><g data-b="bridger"><rect class="sf-parent" x="305" y="80" width="150" height="56" rx="28"/><text class="sf-t" x="380" y="104">Bridger</text><text class="sf-s" x="380" y="122">只傳 trx ID</text><path class="sf-line" d="M305 108 H278" marker-end="url(#sf-arrow2)"/><path class="sf-line" d="M455 108 H482" marker-end="url(#sf-arrow2)"/><text class="sf-s" x="380" y="160">出金單（Parent）沒有傳到 Payabl</text></g><g data-b="crm"><rect class="sf-box" x="20" y="40" width="250" height="140" rx="8"/><text class="sf-t sf-start" x="36" y="64">CRM（內部）</text><text class="sf-k sf-start" x="36" y="92">Parent</text><text class="sf-good sf-start" x="130" y="92">退 100 USD</text><text class="sf-k sf-start" x="36" y="120">Child</text><text class="sf-good sf-start" x="130" y="120">#1、#2、#3</text><text class="sf-k sf-start" x="36" y="148">交易明細</text><text class="sf-miss sf-start" x="130" y="148">沒有</text></g><g data-b="payabl"><rect class="sf-box" x="490" y="40" width="250" height="140" rx="8"/><text class="sf-t sf-start" x="506" y="64">Payabl（支付端）</text><text class="sf-k sf-start" x="506" y="92">Parent</text><text class="sf-miss sf-start" x="600" y="92">沒有</text><text class="sf-k sf-start" x="506" y="120">Child</text><text class="sf-good sf-start" x="600" y="120">#1、#2、#3</text><text class="sf-k sf-start" x="506" y="148">交易明細</text><text class="sf-good sf-start" x="600" y="148">30、40、30 USD</text></g><g data-b="err-head"><line class="sf-sep" x1="20" y1="206" x2="740" y2="206"/><text class="sf-h sf-start" x="20" y="232">營運在 Payabl 手動拆退款時，看不到這張單該拆成哪幾筆：</text></g><g data-b="err1"><text class="sf-t sf-start" x="20" y="273">多退一筆</text><rect class="sf-node" x="150" y="250" width="70" height="36" rx="6"/><text class="sf-t" x="185" y="273">30</text><rect class="sf-node" x="230" y="250" width="70" height="36" rx="6"/><text class="sf-t" x="265" y="273">40</text><rect class="sf-node" x="310" y="250" width="70" height="36" rx="6"/><text class="sf-t" x="345" y="273">30</text><rect class="sf-bad" x="390" y="250" width="70" height="36" rx="6"/><text class="sf-t sf-bad-t" x="425" y="273">30</text><text class="sf-bad-t sf-start" x="480" y="273">重複退款 → 歸 D</text></g><g data-b="err2"><text class="sf-t sf-start" x="20" y="329">打錯金額</text><rect class="sf-node" x="150" y="306" width="70" height="36" rx="6"/><text class="sf-t" x="185" y="329">30</text><rect class="sf-node" x="230" y="306" width="70" height="36" rx="6"/><text class="sf-t" x="265" y="329">40</text><rect class="sf-bad" x="310" y="306" width="70" height="36" rx="6"/><text class="sf-t sf-bad-t" x="345" y="329">20</text><text class="sf-bad-t sf-start" x="400" y="329">金額錯誤 → 歸 D</text></g></svg>
+</div>
+<figcaption>圖 2　兩邊各記了什麼：Bridger 只傳流水號，CRM 有 Parent 與 Child 但沒有明細，Payabl 有明細但沒有 Parent；下方是營運手動拆退款時的兩種錯誤（示意）</figcaption>
+</figure>
+
+<hr data-slide="比對規則">
+
+因此要解決的不是「人會犯錯」，而是**退款之後，沒有機制把每張 Parent Ticket 底下的 Child Ticket 逐筆對回兩邊**。比對規則就照原入原出設計：以 Parent Ticket 底下的每一筆 Child Ticket 為單位，先比數量，再比筆數，最後比金額，每筆 Child Ticket 歸入 A–E 其中一類：
 
 ```mermaid
 flowchart LR
@@ -81,29 +198,24 @@ flowchart LR
     AMT -->|"Payabl 有退款，<br/>CRM 查無或金額不同"| D["D. recon_mismatch_payabl<br/>寫入 LarkSheet"]
     AMT -->|"只有 CRM 有紀錄"| E["E. recon_mismatch_crm<br/>不輸出"]
 ```
-*圖 1　比對規則（依專案簡報重繪）*
+*圖 3　比對規則（依專案簡報重繪）*
 
 <hr data-slide="對照範例">
 
-A–E 各舉一例，對照兩邊報表的欄位與值，以及它落在圖 1 的哪一條路徑：
+沿用同一個例子：100 USD 的出金單依原入原出拆成 30、40、30。看它的幾種變化落在圖 3 的 A–E 哪一類：
 
-| Parent<br>Ticket | Child<br>Ticket | Refund Amount（Payabl） | Refund_Amount_crm | 圖 1 路徑 |
+| 情境 | CRM 的 Child Ticket | Payabl 的退款 | 圖 3 路徑 | 分類 |
 |---|---|---|---|---|
-| P-01 | TX-01 | 100 USD | -100 USD | Same_One&nbsp;→&nbsp;A |
-| P-02 | TX-02 | 60 USD | -30 USD | Same_One&nbsp;→&nbsp;B |
-| P-03 | TX-03 | 200 GBP | -200 GBP | Same_More&nbsp;→&nbsp;C |
-| P-03 | TX-04 | 150 GBP | -150 GBP | Same_More&nbsp;→&nbsp;C |
-| P-04 | TX-05 | 350 EUR | -350 EUR | Not&nbsp;Same&nbsp;→&nbsp;C |
-| P-04 | TX-06 | 350 EUR | （空白） | Not&nbsp;Same&nbsp;→&nbsp;D |
-| P-05 | TX-07 | （空白） | -80 EUR | Not&nbsp;Same&nbsp;→&nbsp;E |
+| 正確拆成三筆 | 30 · 40 · 30 | 30 · 40 · 30 | Same_More | 三筆都是 C |
+| 金額打錯 | 30 · 40 · 30 | 30 · 40 · **20** | Same_More | 30、40 是 C；**20 是 D** |
+| 重複退款 | 30 · 40 · 30 | 30 · 40 · 30 · **30** | Not&nbsp;Same | 前三筆是 C；**多出的 30 是 D** |
+| 有一筆還沒退 | 30 · 40 · 30 | 30 · 40 | Not&nbsp;Same | 30、40 是 C；CRM 多的 30 是 E |
+| 只充值一次 | 100 | 100 | Same_One | A |
+| 只充值一次、金額打錯 | 100 | **50** | Same_One | **B** |
 
-*示意：欄位名稱取自本頁公開 CSV（金額欄另附 Currency 欄的幣別）；B、D 的金額取自 Result 的實際案件，A、C、E 為示意金額；Parent Ticket 與 Child Ticket 為代碼，CRM 金額以負數記帳。*
+*示意：金額單位 USD，以正數表示（CRM 實際以負數記帳）。實際案件見 Result 的輸出格式（退錯金額歸 B、重複退款歸 D）。*
 
-- **A（P-01）**：兩邊各 1 筆，金額相同，不輸出。
-- **B（P-02，數量對、金額錯）**：兩邊各 1 筆，金額不同，輸出時 `recon_source` 為 `Payabl & Crm`。
-- **C（P-03）**：兩邊各 2 筆，逐筆金額都相同，不輸出。
-- **D（P-04，數量對不上，重複退款）**：Payabl 有 2 筆、CRM 只有 1 筆；對上的那筆歸 C，多出來的那筆歸 D，輸出時 `recon_source` 為 `Payabl`。
-- **E（P-05）**：只有 CRM 有紀錄，Payabl 沒有實際退款，不輸出。
+- 粗體是會寫入 LarkSheet、交給營運複核的那一筆（B、D）；A、C 兩邊一致，E 是 Payabl 沒有實際退款，都不輸出。
 
 <hr data-slide="痛點與證據">
 
@@ -176,14 +288,14 @@ A–E 各舉一例，對照兩邊報表的欄位與值，以及它落在圖 1 �
 <div class="pain-evidence">
 <p class="pain-evidence-title">證據：兩邊的 Ticket 對不起來</p>
 <ul class="pain-flow">
-<li><b>Payabl</b> 只有 Child Ticket，有具體交易明細；人工對回 CRM 時容易配錯 Parent Ticket。</li>
+<li><b>Payabl</b> 只有 Child Ticket，有具體交易明細，但看不出每筆退款屬於哪張 Parent Ticket；人工對回 CRM 時容易配錯。</li>
 <li><b>CRM</b> 有 Parent 與 Child Ticket，但沒有明細，無法單靠 CRM 驗證是否異常。</li>
 <li>一次要對的量是兩邊各數萬筆交易（見 Result 的 log）。</li>
 </ul>
 </div>
 </section>
 </div>
-<figcaption>圖 2　原流程的三個痛點（依專案簡報重繪；平台截圖已裁掉網址列，並模糊登入帳號與品牌標誌；輪班表姓名以代號取代；工時為估計值）</figcaption>
+<figcaption>圖 4　原流程的三個痛點（依專案簡報重繪；平台截圖已裁掉網址列，並模糊登入帳號與品牌標誌；輪班表姓名以代號取代；工時為估計值）</figcaption>
 </figure>
 
 <hr data-slide="值得投入的理由">
@@ -191,7 +303,7 @@ A–E 各舉一例，對照兩邊報表的欄位與值，以及它落在圖 1 �
 **值得投入解決的理由：**
 
 1. **損失是直接的現金流出**：上線後確認的錯誤退款中，有 Payabl 退款 60 USD、CRM 只記 30 USD 的退錯金額，也有同一筆 350 EUR 被退了兩次的重複退款；兩筆都在偵測後由營運撤銷（件數見 Result）。
-2. **人工方案已經無法擴充**：每輪人工比對的耗時固定（圖 2），5 組輪班已是上限，要再提高頻率只能再加人。
+2. **人工方案已經無法擴充**：每輪人工比對的耗時固定（圖 4），5 組輪班已是上限，要再提高頻率只能再加人。
 
 ## Solution Design
 
@@ -208,7 +320,7 @@ A–E 各舉一例，對照兩邊報表的欄位與值，以及它落在圖 1 �
 
 - 沒有官方 API 或資料庫權限。
 - Payabl 後台沒有報表下載功能。
-- 兩邊報表的可取得時間不同：CRM 取 T ~ T-4、Payabl 取 T ~ T-2，且時區不同（CRM 為 Asia/Nicosia、Payabl 為 Asia/Taipei）（圖 3）。
+- 兩邊報表的可取得時間不同：CRM 取 T ~ T-4、Payabl 取 T ~ T-2，且時區不同（CRM 為 Asia/Nicosia、Payabl 為 Asia/Taipei）（圖 5）。
 
 ## Alternative Solutions
 
@@ -221,7 +333,7 @@ A–E 各舉一例，對照兩邊報表的欄位與值，以及它落在圖 1 �
 | C. 瀏覽器自動化（Selenium / RPA） | 模擬人工操作後台頁面 | 不需理解系統內部介面 | Payabl 沒有下載按鈕，只能模擬逐頁複製；畫面一改就失效；執行慢，需要常駐瀏覽器 |
 | **D. API 逆向工程（採用）** | 分析後台頁面背後的 HTTP API，直接以程式登入並取得報表 | 不依賴畫面、速度快、可排程 | 需要投入分析時間；對方 API 變動時要跟著調整 |
 
-> 各方案的優缺點依圖 2 記錄的系統限制整理；四個方案皆為當時實際評估過的選項。
+> 各方案的優缺點依圖 4 記錄的系統限制整理；四個方案皆為當時實際評估過的選項。
 
 ## Selected Solution
 
@@ -236,12 +348,12 @@ A–E 各舉一例，對照兩邊報表的欄位與值，以及它落在圖 1 �
 <hr data-slide="系統架構">
 
 ![Credit Card Withdraw Workflow 架構圖](../../assets/projects/credit-card-anomaly-detection/solution-architecture.png)
-*圖 3　Credit Card Withdraw Workflow（節錄自專案簡報，點擊圖片可放大）*
+*圖 5　Credit Card Withdraw Workflow（節錄自專案簡報，點擊圖片可放大）*
 
-以下是圖 3 的文字版流程：
+以下是圖 5 的文字版流程：
 
 ```mermaid
-flowchart TB
+flowchart LR
     SCH["Schedule<br/>crontab 每小時"] --> CRW["Crawler<br/>API Reverse Engineering"]
     CRW --> CRM["CRM CC Report<br/>T ~ T-4 · Asia/Nicosia"]
     CRW --> PAY["Payabl CC Report<br/>T ~ T-2 · Asia/Taipei"]
@@ -263,12 +375,21 @@ flowchart TB
 - **B 分支**會先查詢 LarkSheet 已有的案件，只追加新的異常，避免同一筆交易每小時重複通知。
 - 每個階段都輸出 JSON structured log（`service`、`stage`、`status`），出錯時可以直接定位是哪一個階段。
 - **權限範圍**：事前經主管核准，使用公司配發給營運的既有帳號，只讀取人工本來就看得到的報表，不寫入任何資料；帳密放在環境變數，不寫在程式碼中。
-- **比對規則**（Area 3：Prepare → Build Logic → Separate Types → Regularity）：規則與營運端逐條對齊，判定流程見圖 1，A–E 的處理方式：
+- **比對規則**（Area 3：Prepare → Build Logic → Separate Types → Regularity）：規則與營運端逐條對齊，判定流程見圖 3，A–E 的處理方式：
   - **A、C**：兩邊一致，不輸出。
   - **B、D**：Payabl 已退款但 CRM 對不上，寫入 LarkSheet 交給營運複核；輸出時以 `recon_source` 標示 CRM 有無對應紀錄（見 Result 的輸出格式）。
   - **E**：Payabl 沒有實際退款，不列入異常；3–7 月的輸出中沒有只出現在 CRM 的案件。
 
 ## Result
+
+<hr data-slide="操作畫面">
+
+### 操作畫面：LarkSheet 案件表
+
+管線每小時把結果寫進營運在用的 LarkSheet：有異常的那一輪寫入案件列（金額、`recon_result`、`recon_source`），營運直接在表上複核；沒有異常的時段也會留下一列比對時間，證明那一輪有執行。
+
+![LarkSheet 案件表：上方四列為 Mismatch 案件，其後每小時一列只有比對時間](../../assets/projects/credit-card-anomaly-detection/larksheet-cases.png)
+*圖 6　LarkSheet 案件表實際畫面（已裁掉瀏覽器與文件路徑，交易編號與訂單編號欄位已模糊；點擊可放大）*
 
 <hr data-slide="一次實際執行">
 
@@ -318,13 +439,13 @@ flowchart TB
 
 ### 輸出格式
 
-異常會寫入 LarkSheet，欄位與 CSV 相同。以下三列取自 3–7 月營運確認為錯誤的案件，已去除交易編號與訂單編號：
+異常會寫入 LarkSheet，欄位與 CSV 相同。以下三列取自 3–7 月營運確認為錯誤的案件，已去除交易編號與訂單編號；三列的 Tx-Type 皆為 Refund、Status 皆為 In progress，表中省略，幣別併入金額欄：
 
-| Tx-Type | Status | Currency | Refund Amount（Payabl） | Refund_Amount_crm | recon_result | recon_source |
-|---|---|---|---|---|---|---|
-| Refund | In progress | USD | 120 | -200 | Mismatch | Payabl & Crm |
-| Refund | In progress | USD | 60 | -30 | Mismatch | Payabl & Crm |
-| Refund | In progress | EUR | 350 | （空白） | Mismatch | Payabl |
+| Refund Amount（Payabl） | Refund_Amount_crm | recon_result | recon_source |
+|---|---|---|---|
+| 120 USD | -200 USD | Mismatch | Payabl & Crm |
+| 60 USD | -30 USD | Mismatch | Payabl & Crm |
+| 350 EUR | （空白） | Mismatch | Payabl |
 
 `recon_source` 區分兩種異常：
 
@@ -343,7 +464,7 @@ flowchart TB
 <li class="is-peak" style="--v: 5.5%"><span class="bar-label">確認為錯誤退款</span><span class="bar"></span><span class="bar-value">29</span></li>
 <li class="is-peak" style="--v: 5.4%"><span class="bar-label">偵測後撤銷或要求取消</span><span class="bar"></span><span class="bar-value">28</span></li>
 </ul>
-<figcaption>圖 4　從標記到撤銷的筆數（不重複交易；取自本頁公開 CSV）</figcaption>
+<figcaption>圖 7　從標記到撤銷的筆數（不重複交易；取自本頁公開 CSV）</figcaption>
 </figure>
 
 - **被標記的 523 筆**：金額不一致 307 筆、CRM 查無紀錄 216 筆。
@@ -380,9 +501,9 @@ flowchart TB
 <div class="ba-row"><p class="ba-item">偵測時效</p><p class="ba-before">最長約 5 小時（兩輪人工比對的間隔）</p><p class="ba-after">資料可取得後 1 小時內<small>依據：每小時排程；執行間隔見 Result</small></p></div>
 <div class="ba-row"><p class="ba-item">資料取得</p><p class="ba-before">手動下載、複製貼上，每輪約 45 分鐘</p><p class="ba-after">API 逆向工程自動擷取，一次執行只需幾分鐘<small>依據：Result 的執行 log；人工工時為估計值</small></p></div>
 <div class="ba-row"><p class="ba-item">比對範圍</p><p class="ba-before">人工 Excel 比對，筆數未紀錄</p><p class="ba-after">每次全量比對兩邊所有交易<small>依據：Result 的執行 log</small></p></div>
-<div class="ba-row"><p class="ba-item">實際攔截</p><p class="ba-before">無紀錄</p><p class="ba-after">確認的錯誤退款幾乎全部在偵測後撤銷或要求取消<small>依據：CSV 複核欄與營運備註；筆數見 Result 圖 4</small></p></div>
+<div class="ba-row"><p class="ba-item">實際攔截</p><p class="ba-before">無紀錄</p><p class="ba-after">確認的錯誤退款幾乎全部在偵測後撤銷或要求取消<small>依據：CSV 複核欄與營運備註；筆數見 Result 圖 7</small></p></div>
 </div>
-<figcaption>圖 5　Before / After 對照（依專案簡報重繪）。更正：原圖標示每日 4 次、↑600%、>24 小時；實際排班為每日 5 輪（間隔約 5 小時），自動化後 3–7 月實際平均每日 20.7 次，約 4.1 倍。原圖「準確程度」一列未納入，原因見下方說明。</figcaption>
+<figcaption>圖 8　Before / After 對照（依專案簡報重繪）。更正：原圖標示每日 4 次、↑600%、>24 小時；實際排班為每日 5 輪（間隔約 5 小時），自動化後 3–7 月實際平均每日 20.7 次，約 4.1 倍。原圖「準確程度」一列未納入，原因見下方說明。</figcaption>
 </figure>
 
 <!-- ### 尚未量化或需要說明的部分

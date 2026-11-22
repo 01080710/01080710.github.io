@@ -49,7 +49,15 @@ const { Content } = await render(project.body);
 
     {(p.system_map || p.tldr || p.metrics.length > 0) && (
       <section class="case-zone zone-brief" aria-label={t("case.zone_brief")}>
-        <p class="zone-label mono">Quick Read</p>
+        <div class="zone-head">
+          <p class="zone-label mono">Quick Read</p>
+          {p.story && (
+            <button type="button" class="story-start" hidden>
+              <span aria-hidden="true">▶</span> {t("case.story_start")}<span class="story-start-count mono">{p.story.length}</span>
+            </button>
+          )}
+        </div>
+        {p.story && <script type="application/json" id="story-data" set:html={JSON.stringify(p.story)} />}
         {p.system_map && <SystemMap map={p.system_map.map} area={p.system_map.area} lang={lang} />}
         {p.tldr && (
           <dl class="tldr">
@@ -96,11 +104,13 @@ const { Content } = await render(project.body);
 
   // ---------- Chapters: one "## section" per page, with collapsible tabs ----------
   // Progressive enhancement: without JS the page stays one long article.
-  function buildChapters(): void {
+  // Returns a way to open chapter ci, slide si (both 0-based) without scrolling, for the storyline guide.
+  type Opener = (ci: number, si: number) => void;
+  function buildChapters(): Opener | null {
     const prose = document.querySelector<HTMLElement>(".prose");
-    if (!prose) return;
+    if (!prose) return null;
     const heads = Array.from(prose.querySelectorAll<HTMLHeadingElement>(":scope > h2"));
-    if (heads.length < 2) return;
+    if (heads.length < 2) return null;
 
     const total    = heads.length;
     const pad      = (n: number) => String(n).padStart(2, "0");
@@ -358,9 +368,202 @@ const { Content } = await render(project.body);
     go(start_ch, { scroll: false, slide: Math.min(Math.max(start_sl, 0), (decks[start_ch]?.count ?? 1) - 1) });
     // A slide link (#ch-N-S) has no matching element, so bring the chapter heading and slide bar into view ourselves.
     if (from_hash?.[2]) scroll_to_chapter(start_ch);
+
+    return (ci, si) => {
+      if (ci !== current) go(ci, { scroll: false, slide: si });
+      else decks[ci]?.show(si, { scroll: false });
+    };
   }
 
-  buildChapters();
+  const open_slide = buildChapters();
+
+  // ---------- Storyline guide (frontmatter `story`, see docs/story.md) ----------
+  // A docked bar walks the reader through the storyline steps in order. Nothing on the page moves: each step only
+  // opens the right chapter / slide, scrolls its element into view and outlines it. A step can be split into beats
+  // (`beats`: one CSS selector per click, inside the picked element) so the presenter reveals one idea at a time;
+  // `dim` fades parts that belong to a later step. Leaving a step restores the element, so the static page is always
+  // the final state. Without JS the button stays hidden. While open, → / Space continue, ← goes back, Esc closes.
+  type Step = { label: string; line: string; at: string; pick?: string; beats?: string[]; dim?: string };
+  const story_json = document.getElementById("story-data");
+  const story_btn  = document.querySelector<HTMLButtonElement>(".story-start");
+  if (story_json && story_btn) {
+    const steps: Step[] = JSON.parse(story_json.textContent ?? "[]");
+    const S = en
+      ? { prev: "← Back", next: "Next", more: "Continue →", done: "Done", close: "Close the storyline", step: (n: number, t: string) => `Step ${n}: ${t}`, title: "Storyline" }
+      : { prev: "← 上一步", next: "下一步", more: "繼續 →", done: "看完了", close: "關閉故事線", step: (n: number, t: string) => `第 ${n} 步：${t}`, title: "故事線" };
+    const reduce_motion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    const dock = document.createElement("aside");
+    dock.className = "story-dock";
+    dock.hidden    = true;
+    dock.setAttribute("aria-label", S.title);
+    dock.innerHTML = `
+      <div class="story-dock-top">
+        <ol class="story-dots"></ol>
+        <p class="story-count mono" aria-live="polite"></p>
+        <span class="story-beats" aria-hidden="true"></span>
+        <button type="button" class="story-close" aria-label="${S.close}">✕</button>
+      </div>
+      <p class="story-line"></p>
+      <div class="story-turns">
+        <button type="button" class="story-prev mono"></button>
+        <button type="button" class="story-next"></button>
+      </div>`;
+    // Inside the article so the dock picks up the project accent colour.
+    (document.querySelector(".case-study") ?? document.body).appendChild(dock);
+    const dots  = dock.querySelector<HTMLOListElement>(".story-dots")!;
+    const count = dock.querySelector<HTMLElement>(".story-count")!;
+    const pips  = dock.querySelector<HTMLElement>(".story-beats")!;
+    const line  = dock.querySelector<HTMLElement>(".story-line")!;
+    const prev  = dock.querySelector<HTMLButtonElement>(".story-prev")!;
+    const next  = dock.querySelector<HTMLButtonElement>(".story-next")!;
+    prev.textContent = S.prev;
+    const dot_btns = steps.map((s, i) => {
+      const li = document.createElement("li");
+      const b  = document.createElement("button");
+      b.type = "button";
+      b.className = "story-dot";
+      b.setAttribute("aria-label", S.step(i + 1, s.label));
+      b.title = s.label;
+      b.addEventListener("click", () => show(i));
+      li.appendChild(b);
+      dots.appendChild(li);
+      return b;
+    });
+
+    let at = -1;      // current step
+    let beat = 0;     // current beat inside the step (0-based)
+    let focused: Element | null = null;
+    let touched: Element[] = [];
+    let playing: HTMLVideoElement[] = [];
+    const beat_count = (i: number) => Math.max(steps[i]?.beats?.length ?? 0, 1);
+
+    function target_of(step: Step): Element | null {
+      if (step.at === "map") return document.querySelector(".zone-brief .system-map");
+      const m = /^ch-(\d+)-(\d+)$/.exec(step.at);
+      if (!m) return null;
+      const [ci, si] = [Number(m[1]) - 1, Number(m[2]) - 1];
+      open_slide?.(ci, si);
+      const slide = document.querySelectorAll<HTMLElement>(`#ch-${ci + 1} .slide`)[si];
+      if (!slide) return document.getElementById(`ch-${ci + 1}`);
+      return (step.pick && slide.querySelector(step.pick)) || slide;
+    }
+
+    function clear_beats(): void {
+      touched.forEach((el) => el.classList.remove("beat-pending", "beat-shown", "beat-now", "beat-dim"));
+      touched = [];
+      playing.forEach((v) => v.pause());
+      playing = [];
+    }
+    // Groups before the current beat are shown, the current one is shown and marked, later ones wait faded.
+    function apply_beats(): void {
+      clear_beats();
+      const step = steps[at];
+      if (!focused || !step) return;
+      const mark = (el: Element, cls: string[]) => { el.classList.add(...cls); touched.push(el); };
+      if (step.dim) focused.querySelectorAll(step.dim).forEach((el) => mark(el, ["beat-dim"]));
+      (step.beats ?? []).forEach((sel, k) => {
+        const cls = k < beat ? ["beat-shown"] : k === beat ? ["beat-shown", "beat-now"] : ["beat-pending"];
+        focused!.querySelectorAll(sel).forEach((el) => mark(el, cls));
+      });
+      // A beat inside a horizontal screenshot strip slides the strip to it, without moving the page.
+      focused.querySelectorAll<HTMLElement>(".shot-strip > .beat-now").forEach((el) => {
+        el.parentElement!.scrollTo({ left: el.offsetLeft, behavior: reduce_motion ? "auto" : "smooth" });
+      });
+      // A recording in the current beat plays muted from the start; leaving the beat pauses it.
+      focused.querySelectorAll<HTMLVideoElement>(".beat-now video, video.beat-now").forEach((v) => {
+        v.muted = true;
+        v.currentTime = 0;
+        void v.play().catch(() => {});
+        playing.push(v);
+      });
+    }
+
+    function update_dock(): void {
+      const step = steps[at];
+      const n    = beat_count(at);
+      dot_btns.forEach((b, j) => b.setAttribute("aria-current", String(j === at)));
+      count.textContent = `${at + 1} / ${steps.length}${en ? "  " : "　"}${step.label}`;
+      pips.innerHTML    = n > 1 ? Array.from({ length: n }, (_, k) => `<i class="${k <= beat ? "on" : ""}"></i>`).join("") : "";
+      line.textContent  = step.line;
+      prev.disabled     = at === 0 && beat === 0;
+      next.textContent  = beat < n - 1 ? S.more
+        : at === steps.length - 1 ? S.done
+        : `${S.next}${en ? ": " : "："}${steps[at + 1].label} →`;
+    }
+
+    // Place the element in the space between the sticky bars (top) and the dock (bottom): centred when it fits,
+    // otherwise top-aligned so its beginning is readable. Waits a frame so the newly shown slide has laid out.
+    function place(): void {
+      if (!focused) return;
+      const bar_h  = 56 + (document.querySelector<HTMLElement>(".chapter-tabs")?.offsetHeight ?? 0) + 16;
+      const room   = window.innerHeight - dock.offsetHeight - 32 - bar_h;
+      const box    = focused.getBoundingClientRect();
+      const offset = box.height < room ? (room - box.height) / 2 : 0;
+      window.scrollTo({ top: window.scrollY + box.top - bar_h - offset, behavior: reduce_motion ? "auto" : "smooth" });
+    }
+
+    function show(i: number, start: number | "last" = 0): void {
+      if (i < 0 || i >= steps.length) return;
+      clear_beats();
+      at   = i;
+      beat = start === "last" ? beat_count(i) - 1 : start;
+      focused?.classList.remove("story-focus");
+      focused = target_of(steps[i]);
+      focused?.classList.add("story-focus");
+      apply_beats();
+      update_dock();
+      requestAnimationFrame(place);
+      // A lazy image has no height until it loads, and one above the element pushes it down when it does;
+      // place again once every image in the same slide has its real size.
+      const area = focused?.closest(".slide") ?? focused;
+      const imgs = area ? [area, ...area.querySelectorAll("img")].filter((el): el is HTMLImageElement => el instanceof HTMLImageElement && !el.complete) : [];
+      const step_now = at;
+      imgs.forEach((img) => img.addEventListener("load", () => { if (at === step_now) place(); }, { once: true }));
+    }
+
+    function forward(): void {
+      if (beat < beat_count(at) - 1) { beat += 1; apply_beats(); update_dock(); }
+      else if (at < steps.length - 1) show(at + 1);
+      else close();
+    }
+    function back(): void {
+      if (beat > 0) { beat -= 1; apply_beats(); update_dock(); }
+      else if (at > 0) show(at - 1, "last");
+    }
+
+    function open(): void {
+      dock.hidden = false;
+      document.body.classList.add("story-open");
+      show(0);
+      next.focus();
+    }
+    function close(): void {
+      dock.hidden = true;
+      document.body.classList.remove("story-open");
+      clear_beats();
+      focused?.classList.remove("story-focus");
+      focused = null;
+      story_btn!.focus();
+    }
+
+    story_btn.hidden = false;
+    story_btn.addEventListener("click", open);
+    prev.addEventListener("click", back);
+    next.addEventListener("click", forward);
+    dock.querySelector(".story-close")!.addEventListener("click", close);
+    // Mermaid re-renders on a theme switch and replaces its SVG; re-apply the current beat to the new nodes.
+    window.addEventListener("themechange", () => { if (!dock.hidden) setTimeout(apply_beats, 300); });
+    // Capture phase on window runs before the chapter handler on document, so the guide owns these keys while open.
+    window.addEventListener("keydown", (e) => {
+      if (dock.hidden || e.altKey || e.ctrlKey || e.metaKey) return;
+      if (e.target instanceof Element && e.target.closest("input, textarea, select")) return;
+      const on_button = e.target instanceof Element && e.target.closest("button");
+      if (e.key === "ArrowRight" || (e.key === " " && !on_button)) { e.preventDefault(); e.stopPropagation(); forward(); }
+      if (e.key === "ArrowLeft")  { e.preventDefault(); e.stopPropagation(); back(); }
+      if (e.key === "Escape")     { e.stopPropagation(); close(); }
+    }, true);
+  }
 
   // ---------- CSV viewer: <div class="csv-viewer" data-src="..."> in Markdown ----------
   // Without JS the download link inside the div is still there.

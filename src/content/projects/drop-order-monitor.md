@@ -22,6 +22,96 @@ metrics:
   - { value: "1 hr", label: "掉單揭露顆粒（原 Deposit、Withdrawal 各每日 2 次抽查）", on_home: true }
   - { value: "≈606 hr", label: "至 2026/11/17 節省的人工監控工時（估計）" }
   - { value: "15,393", label: "至 2026/11/17 自動揭露的掉單案件", on_home: true }
+story:
+  - label: "地圖"
+    at: "map"
+    beats:
+      - "[data-b=\"do-portal\"], rect[data-b=\"portal\"], text[data-b=\"portal\"]"
+      - "[data-b=\"do-ch\"]"
+      - "[data-b=\"do-deposit\"]"
+      - "[data-b=\"do-payout\"]"
+    line: "客戶在 Client Portal 下單後，入金和出金都交給 CPS，由 CPS 對接各國渠道實際收付款；CRM 則記錄客戶看到的帳戶與訂單狀態：入金由 CPS 下入金指令給 CRM，出金由 CRM 下出金指令給 CPS。"
+  - label: "回寫"
+    at: "ch-1-2"
+    pick: ".split-figure"
+    dim: "[data-b$=\"-cb\"], [data-b$=\"-manual\"], [data-b$=\"-stuck\"]"
+    beats:
+      - "[data-b=\"lanes\"]"
+      - "[data-b=\"d-flow\"]"
+      - "[data-b=\"w-flow\"]"
+    line: "錢有沒有真的動，只有 CPS 知道，所以每筆訂單的結果都要回寫到 CRM。舉兩筆印度的實際訂單：入金 9,301 INR 走 UPI，出金 55,704 INR 走本地銀行轉帳。正常情況下，渠道回呼 CPS，CPS 再回寫 CRM。"
+  - label: "掉單"
+    at: "ch-1-2"
+    pick: ".split-figure"
+    beats:
+      - "[data-b=\"d-cb\"], [data-b=\"d-manual\"]"
+      - "[data-b=\"d-stuck\"]"
+      - "[data-b=\"w-cb\"], [data-b=\"w-manual\"]"
+      - "[data-b=\"w-stuck\"]"
+    line: "問題出在渠道回呼失敗的時候：營運會手動把 CPS 改成成功或失敗，但手動修改不會回寫 CRM。結果入金的客戶付了錢卻沒入帳；出金的錢沒出去，CRM 卻顯示完成、也沒退回。"
+  - label: "為什麼難發現"
+    at: "ch-1-3"
+    pick: ":scope > p"
+    line: "麻煩的是，兩邊各自看都正常：CPS 顯示已處理，CRM 顯示處理中或已完成。只有把同一筆訂單在兩邊的狀態放在一起比，才看得出掉單。"
+  - label: "判定規則"
+    at: "ch-1-3"
+    pick: "table"
+    beats:
+      - "tbody tr:nth-child(1)"
+      - "tbody tr:nth-child(2)"
+      - "tbody tr:nth-child(3)"
+    line: "所以我和營運逐條對齊「什麼狀態組合算掉單」，分成入金、三類一般出金與信用卡出金，寫成判定規則。"
+  - label: "對照範例"
+    at: "ch-1-4"
+    pick: "table"
+    beats:
+      - "tbody tr:nth-child(1)"
+      - "tbody tr:nth-child(2)"
+      - "tbody tr:nth-child(n+3)"
+    line: "套回剛才的兩筆訂單：入金那筆 CPS 交易成功(人工)、CRM 停在 Audit；出金那筆 CRM Completed、CPS 交易失敗(人工)，都符合規則，會被標成掉單。"
+  - label: "解決方案"
+    at: "ch-4-2"
+    pick: ".mermaid"
+    beats:
+      - "[id*=\"-flowchart-SCH-\"]"
+      - "[id*=\"-flowchart-CPS-\"], [id*=\"-flowchart-CRM-\"], [id*=\"-flowchart-CC-\"], [id*=\"-flowchart-REF-\"], [id*=\"-L_SCH_\"], [data-id^=\"L_SCH_\"]"
+      - "[id*=\"-flowchart-BK-\"], [id*=\"-flowchart-CMP-\"], [id*=\"-L_CPS_\"], [data-id^=\"L_CPS_\"], [id*=\"-L_CRM_\"], [data-id^=\"L_CRM_\"], [id*=\"-L_CC_\"], [data-id^=\"L_CC_\"], [id*=\"-L_REF_\"], [data-id^=\"L_REF_\"]"
+      - "[id*=\"-flowchart-CHK-\"], [id*=\"-flowchart-AP-\"], [id*=\"-flowchart-HB-\"], [id*=\"-flowchart-OPS-\"], [id*=\"-flowchart-REV-\"], [id*=\"-L_CMP_\"], [data-id^=\"L_CMP_\"], [id*=\"-L_CHK_\"], [data-id^=\"L_CHK_\"], [id*=\"-L_AP_\"], [data-id^=\"L_AP_\"], [id*=\"-L_HB_\"], [data-id^=\"L_HB_\"], [id*=\"-L_OPS_\"], [data-id^=\"L_OPS_\"]"
+    line: "CRM 沒有開放資料庫，所以我用營運帳號自動下載報表、直接查 CPS，每小時比對一次；同一筆只派工一次，沒有新案件也寫一列心跳，證明監控沒中斷。"
+  - label: "操作畫面"
+    at: "ch-5-1"
+    pick: ".shot-gallery"
+    beats:
+      - ".shot-item:nth-child(1)"
+      - ".shot-item:nth-child(2)"
+      - ".shot-item:nth-child(3)"
+      - ".shot-item:nth-child(4)"
+      - ".shot-item:nth-child(5)"
+    line: "這是 LarkSheet 案件表的實際畫面，每種案件類型一個工作表：Handler 處理完在 Status 標 Done 或 Reversed；沒有新案件的時段，每小時仍留一列心跳。"
+  - label: "實際運作"
+    at: "ch-5-2"
+    pick: "pre"
+    beats:
+      - ".line:nth-child(n+1):nth-child(-n+4)"
+      - ".line:nth-child(n+5):nth-child(-n+10)"
+      - ".line:nth-child(n+11)"
+    line: "這是 2026-11-18 03:00 的一次實際執行：先查 CPS，再下載 CRM 報表與對照表，接著依 5 種案件類型比對，只寫入新案件；沒有新案件的類型，寫一列心跳。"
+  - label: "輸出結果"
+    at: "ch-5-3"
+    pick: "table"
+    beats:
+      - "tbody tr:nth-child(1)"
+      - "tbody tr:nth-child(n+2):nth-child(-n+4)"
+      - "tbody tr:nth-child(5)"
+    line: "寫進 LarkSheet 的案件長這樣：入金由 Handler 補登後標 done，出金 Reverse 後標 reversed；最後一列是心跳列，代表那次執行沒有新案件。"
+  - label: "成果"
+    at: "ch-1-6"
+    pick: ".bar-figure"
+    beats:
+      - "li:nth-child(3)"
+      - "li:nth-child(4)"
+      - "li:nth-child(-n+2)"
+    line: "2026/11/6 上游系統異常時，回呼大量失敗；管線在 10 點與 11 點兩次執行就揭露 933 筆入金掉單，平常單次最多只有 75 筆，每日兩次的人工抽查根本來不及。"
 tags: ["Reconciliation", "Automation", "Operations"]
 categories: ["Data Pipeline", "Automation"]
 home: true
@@ -34,11 +124,11 @@ accent: forest
 <hr data-slide="背景與名詞">
 
 - 客戶入金、出金時，訂單會經過兩個系統：**CPS** 對接各國渠道、實際收付款，**CRM** 記錄客戶帳戶與交易狀態。
-- CPS 的結果要回寫到 CRM。回寫中斷（常見原因是渠道回呼失敗或上游系統異常）就形成**掉單**：入金 CPS 已成功、CRM 仍停在審核或處理中，客戶付了錢卻沒入帳；出金 CRM 顯示完成、CPS 實際失敗，錢沒出去也沒退回。
+- CPS 的結果要回寫到 CRM。當渠道回呼 CPS 失敗（例如上游系統異常），營運會手動更新 CPS 的狀態，但**手動更新不會回寫 CRM**，就形成**掉單**：入金 CPS 已成功、CRM 仍停在審核或處理中，客戶付了錢卻沒入帳；出金 CRM 顯示完成、CPS 實際失敗，錢沒出去也沒退回。
 - 掉單落在後置流程，往往是客戶先發現，再透過 CS、Sales、Finance 來詢問。
 
 <details class="glossary-details">
-<summary>名詞說明<span class="mono">13 個名詞 · 點擊展開</span></summary>
+<summary>名詞說明<span class="mono">14 個名詞 · 點擊展開</span></summary>
 <table>
 <thead><tr><th>名詞</th><th>說明</th></tr></thead>
 <tbody>
@@ -46,6 +136,7 @@ accent: forest
 <tr><td>CRM</td><td>內部管理客戶帳戶與交易紀錄的系統，客戶與營運看到的訂單狀態以這裡為準</td></tr>
 <tr><td>CPS</td><td>內部支付系統，對接各國銀行與支付渠道，實際執行收款與付款</td></tr>
 <tr><td>渠道（Channel）</td><td>實際處理款項的外部通道，例如各國銀行轉帳、QR、電子錢包、加密貨幣、信用卡</td></tr>
+<tr><td>回呼（Callback）</td><td>渠道處理完款項後，把結果通知 CPS</td></tr>
 <tr><td>掉單</td><td>CRM 與 CPS 對同一筆訂單的狀態不一致，且沒有自動同步回來</td></tr>
 <tr><td>LBT</td><td>Local Bank Transfer，本地銀行轉帳出金</td></tr>
 <tr><td>IBT</td><td>International Bank Transfer，國際電匯出金</td></tr>
@@ -58,6 +149,19 @@ accent: forest
 </tbody>
 </table>
 </details>
+
+<hr data-slide="一筆訂單的旅程">
+
+錢有沒有真的動，只有 CPS 知道；客戶看到的卻是 CRM。所以每筆訂單在 CPS 處理完之後，結果都要**回寫**到 CRM。以兩筆印度的實際訂單為例：入金 9,301 INR 走 UPI，出金 55,704 INR 走本地銀行轉帳。
+
+正常情況下，渠道處理完會**回呼** CPS，CPS 再回寫 CRM。問題出在回呼失敗的時候：營運會手動把 CPS 改成「交易成功(人工)」或「交易失敗(人工)」，但手動修改不會回寫 CRM，兩邊就停在不同的狀態：
+
+<figure class="split-figure">
+<div class="split-scroll">
+<svg viewBox="0 0 760 310" role="img" aria-labelledby="jr-title"><title id="jr-title">一筆訂單的旅程：入金與出金的結果都要從 CPS 回寫 CRM，渠道回呼失敗後的人工修改不會回寫</title><defs><marker id="jr-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="sf-head" d="M0,0 L8,4 L0,8 z"/></marker></defs><g data-b="lanes"><text class="sf-s" x="95" y="22">CRM（客戶看到的狀態）</text><text class="sf-s" x="410" y="22">CPS（實際收付）</text><text class="sf-s" x="665" y="22">渠道</text><text class="sf-h sf-start" x="20" y="50">入金 · 9,301 INR · UPI</text><rect class="sf-node" x="20" y="60" width="150" height="48" rx="6"/><text class="sf-t" x="95" y="89">CRM</text><rect class="sf-node" x="335" y="60" width="150" height="48" rx="6"/><text class="sf-t" x="410" y="89">CPS</text><rect class="sf-node" x="590" y="60" width="150" height="48" rx="6"/><text class="sf-t" x="665" y="89">UPI</text><line class="sf-sep" x1="20" y1="166" x2="740" y2="166"/><text class="sf-h sf-start" x="20" y="194">出金 · 55,704 INR · 本地銀行轉帳</text><rect class="sf-node" x="20" y="204" width="150" height="48" rx="6"/><text class="sf-t" x="95" y="233">CRM</text><rect class="sf-node" x="335" y="204" width="150" height="48" rx="6"/><text class="sf-t" x="410" y="233">CPS</text><rect class="sf-node" x="590" y="204" width="150" height="48" rx="6"/><text class="sf-t" x="665" y="233">本地銀行</text></g><g data-b="d-flow"><path class="sf-line" d="M590 84 H491" marker-end="url(#jr-arrow)"/><path class="sf-line" d="M335 84 H176" marker-end="url(#jr-arrow)"/><text class="sf-s" x="540" y="77">回呼</text><text class="sf-s" x="255" y="77">回寫</text><text class="sf-s" x="665" y="128">已收到款項</text></g><g data-b="d-cb"><text class="sf-miss" x="540" y="102">✕ 回呼失敗</text></g><g data-b="d-manual"><text class="sf-s" x="410" y="128">營運手動改成</text><text class="sf-link" x="410" y="146">交易成功(人工)</text></g><g data-b="d-stuck"><text class="sf-miss" x="255" y="102">✕ 沒有回寫</text><text class="sf-miss" x="95" y="128">仍停在 Audit</text><text class="sf-bad-t sf-small" x="95" y="146">付了錢卻沒入帳</text></g><g data-b="w-flow"><path class="sf-line" d="M170 220 H329" marker-end="url(#jr-arrow)"/><path class="sf-line" d="M485 220 H584" marker-end="url(#jr-arrow)"/><path class="sf-line" d="M590 240 H491" marker-end="url(#jr-arrow)"/><path class="sf-line" d="M335 240 H176" marker-end="url(#jr-arrow)"/><text class="sf-s" x="255" y="214">出金指令</text><text class="sf-s" x="540" y="214">付款</text><text class="sf-s" x="540" y="256">回呼</text><text class="sf-s" x="255" y="256">回寫</text><text class="sf-s" x="95" y="276">Completed（已扣款）</text><text class="sf-s" x="665" y="276">轉帳失敗</text></g><g data-b="w-cb"><text class="sf-miss" x="540" y="274">✕ 回呼失敗</text></g><g data-b="w-manual"><text class="sf-s" x="410" y="276">營運手動改成</text><text class="sf-link" x="410" y="294">交易失敗(人工)</text></g><g data-b="w-stuck"><text class="sf-miss" x="255" y="274">✕ 沒有回寫</text><text class="sf-bad-t sf-small" x="95" y="294">錢沒出去，也沒退回</text></g></svg>
+</div>
+<figcaption>圖 1　一筆訂單的旅程：渠道回呼 CPS 失敗時，營運手動改 CPS 狀態，但手動修改不會回寫 CRM，於是形成掉單（兩筆皆為本頁公開 CSV 的實際案件）</figcaption>
+</figure>
 
 <hr data-slide="掉單判定規則">
 
@@ -73,19 +177,19 @@ accent: forest
 
 <hr data-slide="對照範例">
 
-五種案件類型各舉一筆實際案件，對照 CRM 與 CPS 的狀態：
+五種案件類型各舉一筆實際案件，對照 CRM 與 CPS 的狀態；前兩列就是圖 1 的兩筆訂單：
 
 | 案件類型 | CRM 狀態 | CPS 交易／出金狀態 | 金額 | 處理 |
 |---|---|---|---|---|
-| Deposit | Audit | 交易成功 | 9,641 INR | 補登入金（done） |
+| Deposit | Audit | 交易成功(人工) | 9,301 INR | 補登入金（done） |
 | Withdraw-LBT | Completed | 處理完成／交易失敗(人工) | 55,704 INR | Reverse（reversed） |
 | Withdraw-Crypto&Wallet | Completed | 提交拒絕 | （空白） | Reverse（reversed） |
 | Withdraw-CreditCard | Success | 處理完成／交易失敗(人工) | 50 EUR | Reverse（reversed） |
 | Withdraw-IBT | Completed | 審核拒絕／審核拒絕 | 461.82 USD | Reverse（reversed） |
 
-*取自本頁公開 CSV 的實際案件（2026/03 與 2026/09；CSV 保留來源系統的簡體字）。Crypto&Wallet 這筆在來源資料中沒有金額；幣別去掉 CC_、IBT_ 前綴。*
+*取自本頁公開 CSV 的實際案件（2026/04 與 2026/09；CSV 保留來源系統的簡體字）。Crypto&Wallet 這筆在來源資料中沒有金額；幣別去掉 CC_、IBT_ 前綴。*
 
-- **Deposit**：CPS 已收款成功，CRM 仍停在 Audit，客戶付了錢卻沒入帳。
+- **Deposit**：營運已把 CPS 手動改成交易成功，CRM 仍停在 Audit，客戶付了錢卻沒入帳。
 - **出金四類**：CRM 已顯示完成或成功，CPS 實際失敗或被拒絕，錢沒出去也沒退回，由 Handler 到 CRM Reverse。
 
 <hr data-slide="痛點與證據">
@@ -140,7 +244,7 @@ accent: forest
 </div>
 </section>
 </div>
-<figcaption>圖 1　原流程的三個痛點（工時為估計值；比對範圍取自本頁公開 CSV）</figcaption>
+<figcaption>圖 2　原流程的三個痛點（工時為估計值；比對範圍取自本頁公開 CSV）</figcaption>
 </figure>
 
 <hr data-slide="值得投入的理由">
@@ -148,8 +252,8 @@ accent: forest
 **值得投入解決的理由：**
 
 1. **掉單是日常，不是偶發**：Deposit 上線後的 233 天中有 220 天出現掉單；Withdrawal 的 70 天中有 67 天。
-2. **上游故障時會瞬間爆量**：2026/11/6 上游系統異常，客戶大量卡單（圖 2）。10 點與 11 點兩次執行就揭露 933 筆入金掉單，涵蓋 85 種渠道、61 個國家；每日 2 次的人工抽查無法及時看到這種規模。
-3. **人工成本無法隨頻率擴充**：每次抽查約 1 小時（圖 1），頻率提高幾倍，人力就要增加幾倍。
+2. **上游故障時會瞬間爆量**：2026/11/6 上游系統異常，客戶大量卡單（圖 3）。10 點與 11 點兩次執行就揭露 933 筆入金掉單，涵蓋 85 種渠道、61 個國家；每日 2 次的人工抽查無法及時看到這種規模。
+3. **人工成本無法隨頻率擴充**：每次抽查約 1 小時（圖 2），頻率提高幾倍，人力就要增加幾倍。
 
 <figure class="bar-figure">
 <ul class="bar-list">
@@ -158,14 +262,14 @@ accent: forest
 <li style="--v: 16%"><span class="bar-label">其他日子單次執行最多</span><span class="bar"></span><span class="bar-value">75</span></li>
 <li style="--v: 4%"><span class="bar-label">11/6 其餘 22 次執行合計</span><span class="bar"></span><span class="bar-value">18</span></li>
 </ul>
-<figcaption>圖 2　2026/11/6 上游故障時，單次執行揭露的入金掉單筆數（取自本頁公開 CSV）</figcaption>
+<figcaption>圖 3　2026/11/6 上游故障時，單次執行揭露的入金掉單筆數（取自本頁公開 CSV）</figcaption>
 </figure>
 
 ## Solution Design
 
 <hr data-slide="痛點與解決方向">
 
-**痛點 → 解決方向**（對應圖 3 的架構）：
+**痛點 → 解決方向**（對應圖 4 的架構）：
 
 - **掉單後置發現** → 排程每小時自動比對，新掉單在下一次整點執行就會出現。
 - **排查要逐層定位** → 一次取齊 CRM 報表、CPS 資料與信用卡明細，依掉單判定規則（見 Problem）判定；出金案件自動帶出原因類別與狀態軌跡。
@@ -206,7 +310,7 @@ accent: forest
 每小時一次的完整流程：
 
 ```mermaid
-flowchart TB
+flowchart LR
     SCH["Schedule<br/>cron 每小時整點"] --> CPS["CPS Database<br/>入金、出金 · 近 7 天"]
     SCH --> CRM["CRM 出入金報表<br/>4 個 regulator · 近 4 天"]
     SCH --> CC["CRM 信用卡明細<br/>近 7 天"]
@@ -223,19 +327,62 @@ flowchart TB
     OPS --> REV["Checker 複盤"]
 ```
 
-*圖 3　出入金掉單監控管線（依專案程式碼整理）*
+*圖 4　出入金掉單監控管線（依專案程式碼整理）*
 
 <hr data-slide="設計重點">
 
 **設計重點：**
 
 - **去重**：以 Order Number 為 Unique Key（信用卡為 Merchant Order + Deposit Order Number），每次先查 LarkSheet 已有的訂單，只追加新案件，同一筆掉單只派工一次。
+- **還在回寫中的訂單**：判定前沒有設等待時間，剛成功、尚未回寫的訂單也可能被標出，由 Handler 確認後略過。
 - **心跳列**：某類案件沒有新掉單時，仍寫入一列只有偵測時間的紀錄。表上「沒有新案件」和「管線停了」因此可以區分。
 - **狀態軌跡與原因**：出金案件把 CRM 與 CPS 的狀態串成一條 Status Workflow（例如 `Risk Audit -> Accepted -> Completed -> 處理完成 -> 交易失敗(人工)`），並由 Reason Table 帶出原因類別與子類別，Handler 不必再開兩個後台對照，可以直接依原因回覆客戶。
 - **可追溯**：每次執行產生一個 `uid`，JSON log 帶 `service`、`stage`、`status`；CPS 原始資料每次備份到 Lark Drive，事後可以查核當時比對的資料。
 - **權限範圍**：CRM 使用營運的既有帳號（含 2FA），只下載報表、不寫入；CPS 只執行 SELECT 查詢；Lark 透過自建 App 寫入案件表與備份資料夾。CRM 與 CPS 的帳密從唯讀掛載的設定檔讀取，不寫在程式碼中。TODO：補充帳號使用的核准者。
 
 ## Result
+
+<hr data-slide="操作畫面">
+
+### 操作畫面：LarkSheet 案件表
+
+每種案件類型一個工作表。Handler 處理完在 `Status` 標 Done（已補登）或 Reversed（已退回），出金並附上回覆客戶的原因；沒有新案件的時段，每小時仍留下一列只有偵測時間的心跳列：
+
+<figure class="shot-gallery">
+<div class="shot-strip">
+<div class="shot-item">
+<p class="shot-label"><span class="mono">1 / 5</span>Deposit：Handler 補登入金後標 Done</p>
+
+![Deposit 工作表：每列一筆入金掉單，Status 為 Done](../../assets/projects/drop-order-monitor/larksheet-deposit.png)
+
+</div>
+<div class="shot-item">
+<p class="shot-label"><span class="mono">2 / 5</span>Withdraw - Crypto&Wallet：Reverse 後標 Reversed，並寫明回覆客戶的原因</p>
+
+![Crypto&Wallet 工作表：Status 為 Reversed，右側為回覆客戶的原因](../../assets/projects/drop-order-monitor/larksheet-crypto-wallet.png)
+
+</div>
+<div class="shot-item">
+<p class="shot-label"><span class="mono">3 / 5</span>Withdraw - LBT：同一小時揭露多筆，逐筆 Reverse</p>
+
+![LBT 工作表：同一時段多筆交易失敗(人工)，Status 皆為 Reversed](../../assets/projects/drop-order-monitor/larksheet-lbt.png)
+
+</div>
+<div class="shot-item">
+<p class="shot-label"><span class="mono">4 / 5</span>Withdraw - CreditCard：一筆案件夾在心跳列之間</p>
+
+![CreditCard 工作表：一筆 Refunded 案件，其餘為每小時的心跳列](../../assets/projects/drop-order-monitor/larksheet-creditcard.png)
+
+</div>
+<div class="shot-item">
+<p class="shot-label"><span class="mono">5 / 5</span>Withdraw - IBT：沒有新案件時，每小時仍寫一列心跳</p>
+
+![IBT 工作表：整頁都是只有偵測時間的心跳列](../../assets/projects/drop-order-monitor/larksheet-ibt.png)
+
+</div>
+</div>
+<figcaption>圖 5　LarkSheet 案件表實際畫面（左右滑動看 5 個工作表；已裁掉瀏覽器與文件路徑，客戶 ID、帳號、訂單編號與 Handler 姓名已模糊；點擊圖片可放大）</figcaption>
+</figure>
 
 <hr data-slide="一次實際執行">
 
@@ -295,15 +442,15 @@ flowchart TB
 
 ### 輸出格式
 
-案件寫入 LarkSheet，每種案件類型一個工作表。以下取自 2026/11 的實際案件與一列心跳列，欄位與公開 CSV 相同（CSV 保留來源系統的簡體字），已去除客戶 ID、帳號、訂單編號與人員姓名：
+案件寫入 LarkSheet，每種案件類型一個工作表。以下取自 2026/11 的實際案件與一列心跳列，已去除客戶 ID、帳號、訂單編號與人員姓名；表中只列判定用的狀態與處理結果，偵測時間、渠道與金額見下方公開 CSV（CSV 保留來源系統的簡體字）：
 
-| Case Type | Comparison Time | Channel Type | CRM Status | CPS 交易狀態 | CPS 出金狀態 | Amount | 原因類別 | 子類別 | 處理狀態 |
-|---|---|---|---|---|---|---|---|---|---|
-| Deposit | 2026-11-01 09:10:34 | Thailand-QR-CPS-APP | Processing | 交易成功 | | 1,692 THB | | | done |
-| Withdraw-LBT | 2026-11-01 01:11:15 | Philippines-CPS | Completed | 處理完成 | 交易失敗(人工) | 28,395 PHP | 渠道問題 | 限額問題 | reversed |
-| Withdraw-CreditCard | 2026-11-01 06:10:17 | ApplePay-Payabl-CPS | Success | 處理完成 | 交易失敗(人工) | 65 GBP | 客戶問題 | 銀行端交易失敗 | reversed |
-| Withdraw-IBT | 2026-11-03 10:10:30 | IBT-International-CPS | Completed | 處理完成 | 交易失敗(人工) | 7,825.5 HKD | 客戶問題 | SWIFT錯誤 | reversed |
-| Withdraw-IBT | 2026-11-17 23:11:40 | - | - | - | - | - | - | - | |
+| Case Type | CRM Status | CPS 狀態（交易／出金） | 原因（類別／子類別） | 處理狀態 |
+|---|---|---|---|---|
+| Deposit | Processing | 交易成功 | — | done |
+| Withdraw-LBT | Completed | 處理完成／交易失敗(人工) | 渠道問題／限額問題 | reversed |
+| Withdraw-CreditCard | Success | 處理完成／交易失敗(人工) | 客戶問題／銀行端交易失敗 | reversed |
+| Withdraw-IBT | Completed | 處理完成／交易失敗(人工) | 客戶問題／SWIFT 錯誤 | reversed |
+| Withdraw-IBT | - | - | 只有偵測時間 2026-11-17 23:11:40 | |
 
 - 最後一列是心跳列：該次執行沒有新案件，只留下偵測時間。
 - `處理狀態` 由 Handler 填寫：入金為 done（已補登），出金為 reversed（已退回）。
@@ -323,7 +470,7 @@ flowchart TB
 <li style="--v: 0.1%"><span class="bar-label">CPS 問題、內部疏失</span><span class="bar"></span><span class="bar-value">7</span></li>
 <li style="--v: 21.7%"><span class="bar-label">未分類（原因欄位空白）</span><span class="bar"></span><span class="bar-value">1,444</span></li>
 </ul>
-<figcaption>圖 4　出金失敗原因類別（Withdrawal 2026-09-09 ~ 11-17，取自本頁公開 CSV）</figcaption>
+<figcaption>圖 6　出金失敗原因類別（Withdrawal 2026-09-09 ~ 11-17，取自本頁公開 CSV）</figcaption>
 </figure>
 
 - **客戶問題**的子類別以銀行端交易失敗、帳號錯誤、無效帳戶、姓名錯誤為主。
@@ -368,7 +515,7 @@ flowchart TB
 <div class="ba-row"><p class="ba-item">比對範圍</p><p class="ba-before">人工 Excel 比對，筆數未紀錄</p><p class="ba-after">每次比對 CPS 入金約 19.5 萬筆、CRM 出入金約 32.2 萬筆<small>依據：Result 的執行 log</small></p></div>
 <div class="ba-row"><p class="ba-item">監控連續性</p><p class="ba-before">依賴人工排班，請假、交接時有空窗</p><p class="ba-after">每次執行都留下紀錄：有新案件寫案件，沒有就寫心跳列，共 6,314 列心跳<small>依據：公開 CSV 中 Tx 為 - 的列</small></p></div>
 </div>
-<figcaption>圖 5　Before / After 對照（人工工時為估計值）</figcaption>
+<figcaption>圖 7　Before / After 對照（人工工時為估計值）</figcaption>
 </figure>
 
 <hr data-slide="尚未量化">

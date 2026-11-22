@@ -38,6 +38,19 @@ const projects = defineCollection({
       map:  z.enum(["hytech", "weishuo"]),                                        // keep in step with data/system-maps.ts
       area: z.enum(["ticket", "credit-card", "drop-order", "account", "noise-enforcement"]),
     }).optional(),
+    // Storyline guide (docs/story.md): ordered steps a reader can walk with "照故事線看". Nothing moves on the page;
+    // each step opens `at` ("map" = Quick Read map, "ch-N-S" = chapter N slide S) and outlines the first match of `pick`
+    // (a CSS selector inside that slide; the whole slide when omitted). Text is zh; projects-en holds `story` text in the same order.
+    story:     z.array(z.object({
+      label: z.string(),
+      line:  z.string(),
+      at:    z.string().regex(/^(map|ch-\d+-\d+)$/),
+      pick:  z.string().optional(),
+      // Beats: the step reveals these groups one click at a time (CSS selectors inside the picked element);
+      // `dim` fades parts of the picked element that belong to a later step. The static page is the last beat.
+      beats: z.array(z.string()).optional(),
+      dim:   z.string().optional(),
+    })).optional(),
     tags:      z.array(z.string()).default([]),
     // Technology-type categories for the Projects page filter (at least one; values from data/project-categories.ts).
     categories: z.array(z.enum(project_categories)).min(1),
@@ -61,6 +74,7 @@ const projects_en = defineCollection({
     metric_labels: z.array(z.string()),
     tldr:          z.object({ problem: z.string(), approach: z.string(), result: z.string() }).optional(),
     impact:        z.object({ before: z.string(), after: z.string() }).optional(),
+    story:         z.array(z.object({ label: z.string(), line: z.string() })).optional(),
   }),
 });
 

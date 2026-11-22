@@ -7,6 +7,16 @@ metric_labels:
   - "Accounts verified (2026-06-09 ~ 11-16)"
   - "Manual query hours saved in total (estimate)"
   - "Equivalent labor cost (estimate)"
+story:
+  - { label: "Map", line: "Client data lives in CRM and trading accounts in MetaTrader; each account's balance, margin and P&L can only be looked up in its own regulator's CRM back office, and there are 4 of them." }
+  - { label: "Why look them up", line: "Offboarding a high-risk client or moving a client to another salesperson both touch the client's money. So before either, OP must check the status of every account on the list." }
+  - { label: "Scattered accounts", line: "The hard part: one client often has several accounts. Each regulator has its own back office, and accounts sit wherever the client opened them." }
+  - { label: "By hand vs. engine", line: "By hand, OP switches back offices and looks up one account at a time; the engine takes the whole list and fetches everything across back offices in one go." }
+  - { label: "Engine flow", line: "Requests from different teams look different but are all \"give a list, get the same fields back\". So I built an engine: OP fills in a sheet, a schedule picks it up, validates it, queries every back office through API reverse engineering, and records both successes and failures." }
+  - { label: "Worked example", line: "A real request: 68 clients expanded into 322 accounts, almost 5 per client, spread over 2 regulators and 33 servers, and the engine looked them all up in one go." }
+  - { label: "Running for real", line: "First, the same kind of lookup done for real: on the left, someone switching CRM back offices and checking accounts one by one; on the right, OP fills in the list and the engine does the rest." }
+  - { label: "Run record", line: "Every request leaves a row in Record: a success says how many accounts and countries it covered; a request missing a field is stopped before any query, with the missing field spelled out." }
+  - { label: "Result", line: "After launch, teams have submitted requests on their own every month without an engineer; October was the busiest month." }
 impact:
   before: "Switching between CRM back offices to check accounts one by one"
   after: "OP submits a list and gets results in bulk, with every request traceable"
@@ -45,10 +55,18 @@ tldr:
 
 <hr data-slide="What gets looked up">
 
-**Two things to know first:**
+Offboarding (closing and settling a high-risk client's accounts) and ownership transfer (moving a client to another IB or salesperson) both touch the client's money or ownership, so before either, OP must check the Balance, Margin, Profit and other status of every account on the list.
 
-- **One client, many accounts**: one client (UID) often has several trading accounts, spread across the CRM back offices of different regulators and across different trading servers; looking up one client often means switching between several back offices.
-- **Why look them up first**: offboarding (closing and settling a high-risk client's accounts) and ownership transfer (moving a client to another IB or salesperson) both touch the client's money or ownership, so the Balance, Margin, Profit and other status of every account on the list must be checked first.
+The hard part is that accounts are not in one place: each regulator has its own CRM back office, and an account sits wherever the client opened it, under that regulator and on that trading server. One client (UID) often has several accounts, so by hand OP can only switch back offices and look them up one at a time (time cost in the pain points):
+
+<figure class="split-figure">
+<div class="split-scroll">
+<svg viewBox="0 0 760 340" role="img" aria-labelledby="ac-title"><title id="ac-title">One client, many accounts: accounts sit in different regulators' back offices; by hand you switch one by one, the engine fetches them in one go</title><defs><marker id="ac-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="sf-head" d="M0,0 L8,4 L0,8 z"/></marker></defs><g data-b="client"><rect class="sf-parent" x="20" y="100" width="140" height="60" rx="8"/><text class="sf-t" x="90" y="126">Client</text><text class="sf-s" x="90" y="146">one UID</text></g><g data-b="backends"><rect class="sf-box" x="220" y="30" width="125" height="170" rx="8"/><text class="sf-t" x="282" y="52">Regulator A</text><text class="sf-s" x="282" y="68">CRM back office</text><rect class="sf-box" x="355" y="30" width="125" height="170" rx="8"/><text class="sf-t" x="417" y="52">Regulator B</text><text class="sf-s" x="417" y="68">CRM back office</text><rect class="sf-box" x="490" y="30" width="125" height="170" rx="8"/><text class="sf-t" x="552" y="52">Regulator C</text><text class="sf-s" x="552" y="68">CRM back office</text><rect class="sf-box" x="625" y="30" width="125" height="170" rx="8"/><text class="sf-t" x="687" y="52">Regulator D</text><text class="sf-s" x="687" y="68">CRM back office</text><text class="sf-s" x="552" y="120">(none for this client)</text></g><g data-b="accounts"><path class="sf-line sf-thin" d="M160 130 C 190 130, 200 98, 228 98"/><path class="sf-line sf-thin" d="M160 130 C 190 130, 200 142, 228 142"/><path class="sf-line sf-thin" d="M160 130 C 190 130, 335 98, 363 98"/><path class="sf-line sf-thin" d="M160 130 C 190 130, 605 98, 633 98"/><path class="sf-line sf-thin" d="M160 130 C 190 130, 605 142, 633 142"/><rect class="sf-child" x="230" y="80" width="105" height="36" rx="6"/><text class="sf-t sf-small-t" x="282" y="96">Account #1</text><text class="sf-s" x="282" y="110">MT5</text><rect class="sf-child" x="230" y="124" width="105" height="36" rx="6"/><text class="sf-t sf-small-t" x="282" y="140">Account #2</text><text class="sf-s" x="282" y="154">MT4</text><rect class="sf-child" x="365" y="80" width="105" height="36" rx="6"/><text class="sf-t sf-small-t" x="417" y="96">Account #3</text><text class="sf-s" x="417" y="110">MT5</text><rect class="sf-child" x="635" y="80" width="105" height="36" rx="6"/><text class="sf-t sf-small-t" x="687" y="96">Account #4</text><text class="sf-s" x="687" y="110">MT5</text><rect class="sf-child" x="635" y="124" width="105" height="36" rx="6"/><text class="sf-t sf-small-t" x="687" y="140">Account #5</text><text class="sf-s" x="687" y="154">MT4</text></g><line class="sf-sep" x1="20" y1="222" x2="740" y2="222"/><g data-b="manual"><text class="sf-t sf-start" x="20" y="262">By hand</text><rect class="sf-node" x="110" y="240" width="150" height="34" rx="6"/><text class="sf-t sf-small-t" x="185.0" y="262">Back office A · 2</text><path class="sf-line" d="M260 257 H282" marker-end="url(#ac-arrow)"/><rect class="sf-node" x="288" y="240" width="150" height="34" rx="6"/><text class="sf-t sf-small-t" x="363.0" y="262">Back office B · 1</text><path class="sf-line" d="M438 257 H460" marker-end="url(#ac-arrow)"/><rect class="sf-node" x="466" y="240" width="150" height="34" rx="6"/><text class="sf-t sf-small-t" x="541.0" y="262">Back office D · 2</text><text class="sf-s sf-start" x="644" y="262">switch, look up one by one</text></g><g data-b="engine"><text class="sf-t sf-start" x="20" y="314">Engine</text><rect class="sf-parent" x="110" y="292" width="150" height="34" rx="6"/><text class="sf-t sf-small-t" x="185.0" y="314">Take the whole list</text><path class="sf-line" d="M260 309 H282" marker-end="url(#ac-arrow)"/><rect class="sf-parent" x="288" y="292" width="190" height="34" rx="6"/><text class="sf-t sf-small-t" x="383.0" y="314">Query all back offices at once</text><path class="sf-line" d="M478 309 H500" marker-end="url(#ac-arrow)"/><rect class="sf-parent" x="506" y="292" width="150" height="34" rx="6"/><text class="sf-t sf-small-t" x="581.0" y="314">Record / Output</text><text class="sf-s sf-start" x="684" y="314"></text></g></svg>
+</div>
+<figcaption>Figure 1　One client, many accounts: each regulator has its own CRM back office, and an account sits wherever the client opened it; by hand you switch back offices one by one, while the engine takes the whole list and fetches everything in one go (illustration)</figcaption>
+</figure>
+
+<hr data-slide="Engine flow">
 
 Requests from different teams look different, but they are all "take a list of userIds / Accounts and return the same set of account fields". So the problem to solve is not "looking up faster" but that **the same lookup was redone by hand every time, one account and one back office at a time**. I turned that shared workflow into an engine:
 
@@ -66,7 +84,7 @@ flowchart LR
     OUT --> CLR
 ```
 
-*Figure 1　Engine flow*
+*Figure 2　Engine flow*
 
 <hr data-slide="Worked example">
 
@@ -139,7 +157,7 @@ One real request from 2026-07-07, showing how a list moves from Input to Record 
 </div>
 </section>
 </div>
-<figcaption>Figure 2　Three pain points in the original process (manual steps based on OP's routine; 45 seconds per account is an estimate; batch figures from the engine's Record sheet, 2026-06-09 ~ 2026-11-16)</figcaption>
+<figcaption>Figure 3　Three pain points in the original process (manual steps based on OP's routine; 45 seconds per account is an estimate; batch figures from the engine's Record sheet, 2026-06-09 ~ 2026-11-16)</figcaption>
 </figure>
 
 <hr data-slide="Why it was worth solving">
@@ -147,7 +165,7 @@ One real request from 2026-07-07, showing how a list moves from Input to Record 
 **Why it was worth solving:**
 
 1. **The demand is real**: in the 24 weeks since launch, every single week had successful batch requests (monthly usage in Result).
-2. **Single batches already exceed what people can do**: the largest batch (Figure 2) would take one person about 27 working days to look up by hand.
+2. **Single batches already exceed what people can do**: the largest batch (Figure 3) would take one person about 27 working days to look up by hand.
 3. **The work is highly repetitive and generalizes well**: requests from different teams look different on the surface, but they all come down to "here is a list of userIds / Accounts, return the same set of account fields". About 80% of OP's day-to-day account queries can be covered by one workflow.
 
 ## Solution Design
@@ -155,7 +173,7 @@ One real request from 2026-07-07, showing how a list moves from Input to Record 
 The three pain points break down into five things to solve. The image below shows the usage rules users see in LarkSheet; the "Maps to" column of the table points to its rows:
 
 ![Usage rules of the account operations automation engine: core rules and four standard procedure steps](../../assets/projects/account-automation-engine/rule-zh.png)
-*Figure 3　Usage rules in LarkSheet (Chinese section of the Rule sheet; the sheet's English section says the same, and the table below gives the content in English; click to enlarge)*
+*Figure 4　Usage rules in LarkSheet (Chinese section of the Rule sheet; the sheet's English section says the same, and the table below gives the content in English; click to enlarge)*
 
 | Pain point | Solution | Maps to |
 |---|---|---|
@@ -200,7 +218,7 @@ The three pain points break down into five things to solve. The image below show
 - **Validate before querying, and record failures too**: when validation fails, nothing is queried; the reason (for example a missing Requestor) is written straight to Record, so the requester can see what to fix (blocked count in Result).
 - **Not-found accounts are kept, not dropped**: accounts that can't be found are collected in Record's `total_missing_list` and shown alongside the successful results.
 - **Exclusive queue**: while Input has data, nobody else can overwrite it; Input is cleared only after both Record and Output are written, so no request is lost.
-- **Per-request limit**: the rules allow at most 2,000 rows per request, so one request can't hold the entry point for too long.
+- **Per-request limit**: the rules allow at most 2,000 rows per request (counted as input userId rows), so one request can't hold the entry point for too long; one userId expands into several accounts, so a batch can exceed 2,000 accounts.
 - **Data retention**: Output details are kept only for the current day and deleted automatically the next day; Record keeps only summaries, as the long-term run history.
 - **Access scope**: the engine logs in to each regulator's CRM back office with my automation account, which is read-only and writes nothing.
 
@@ -223,7 +241,7 @@ The same kind of query: on the left, done by hand in the CRM back office; on the
 <video controls muted playsinline preload="metadata" src="../../../media/account-automation-engine/crm_system.mp4"></video>
 </div>
 </div>
-<figcaption>Figure 4　Real screen recordings (click to play)</figcaption>
+<figcaption>Figure 5　Real screen recordings (click to play)</figcaption>
 </figure>
 
 <hr data-slide="One real run">
@@ -293,7 +311,7 @@ Successful batches and accounts verified per month; October was the busiest mont
 <li class="is-peak" style="--v: 100%"><span class="bar-label">2026-10 (207 runs)</span><span class="bar"></span><span class="bar-value">113,659</span></li>
 <li style="--v: 26.8%"><span class="bar-label">2026-11 (to 11/16, 38 runs)</span><span class="bar"></span><span class="bar-value">30,458</span></li>
 </ul>
-<figcaption>Figure 5　Accounts verified per month (successful runs in brackets; from the Record sheet)</figcaption>
+<figcaption>Figure 6　Accounts verified per month (successful runs in brackets; from the Record sheet)</figcaption>
 </figure>
 
 <hr data-slide="Run statistics">
@@ -333,7 +351,7 @@ Source: the Record sheet (de-identified CSV below). "Successful run" means a bat
 <div class="ba-row"><p class="ba-item">How it's used</p><p class="ba-before">OP has to work every back office in person</p><p class="ba-after">Teams submit a form themselves; the schedule runs every 5 minutes<small>Basis: Rule sheet; monthly usage in Result</small></p></div>
 <div class="ba-row"><p class="ba-item">Bad input</p><p class="ba-before">No record</p><p class="ba-after">Incomplete requests are stopped before querying, with the missing field explained<small>Basis: Record's return_msg; blocked count in Result</small></p></div>
 </div>
-<figcaption>Figure 6　Before / After (hours and cost are estimates; basis below)</figcaption>
+<figcaption>Figure 7　Before / After (hours and cost are estimates; basis below)</figcaption>
 </figure>
 
 <hr data-slide="Not yet quantified">
@@ -344,4 +362,4 @@ Source: the Record sheet (de-identified CSV below). "Successful run" means a bat
 - **Accounts can be counted more than once**: accounts verified in total is the sum over batches; an account queried in different batches counts each time, because each query stands for one round of manual work.
 - **80% coverage**: the share of OP's day-to-day account queries this workflow can handle, estimated by request type rather than counted case by case.
 - **Engine run time**: Record does not store how long each batch took, so this page does not claim "from X hours down to Y minutes".
-- **Per-request limit**: the rules allow at most 2,000 rows per request, yet Record has 65 batches with more than 2,000 accounts. TODO: confirm the unit of the 2,000 limit (input rows or userIds).
+- **Unit of the per-request limit**: 2,000 means input userId rows, not accounts; one userId expands into several accounts, so some batches in Record exceed 2,000 accounts (see Problem).

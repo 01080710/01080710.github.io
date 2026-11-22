@@ -79,6 +79,12 @@ export async function get_projects(lang: Lang): Promise<LocalizedProject[]> {
         `${p.data.metrics.length} metrics; keep one label per metric in the same order.`,
       );
     }
+    if ((en.data.story?.length ?? 0) !== (p.data.story?.length ?? 0)) {
+      throw new Error(
+        `projects-en/${p.id}.md has ${en.data.story?.length ?? 0} story steps but the zh file has ` +
+        `${p.data.story?.length ?? 0}; keep one { label, line } per zh step in the same order.`,
+      );
+    }
     return {
       id:   p.id,
       body: en,
@@ -90,6 +96,7 @@ export async function get_projects(lang: Lang): Promise<LocalizedProject[]> {
         tldr:     en.data.tldr ?? p.data.tldr,
         impact:   en.data.impact ?? p.data.impact,
         metrics:  p.data.metrics.map((m, i) => ({ ...m, label: en.data.metric_labels[i] })),
+        story:    p.data.story?.map((s, i) => ({ ...s, ...en.data.story![i] })),
       },
     };
   });

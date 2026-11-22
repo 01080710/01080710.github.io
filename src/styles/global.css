@@ -206,6 +206,8 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .system-map text.edge { font-size: 10px; fill: var(--muted); }
 .system-map text.edge-r { text-anchor: start; }
 .system-map text.edge-end { text-anchor: end; }
+.system-map text.cc-note { fill: var(--accent); font-weight: 600; }
+.system-map text.edge-end { text-anchor: end; }
 .system-map .legend-mine { fill: var(--accent-bg); stroke: var(--accent); stroke-width: 1.5; }
 .system-map .legend-other { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
 .system-map .node-store { fill: var(--surface); stroke: var(--muted); stroke-width: 1.5; }
@@ -650,7 +652,7 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 
 /* Each chapter is one "page"; its heading reads like a chapter opener. */
 /* clip: the page-turn animation slides 40px sideways and must not create a horizontal scrollbar */
-.prose.paged { overflow-x: clip; }
+.prose.paged { overflow: clip; overflow-clip-margin: 12px; } /* clip on both axes so the margin applies and the storyline outline stays visible */
 /* scroll-margin: deep links (#ch-3) land below the sticky header (56px) + chapter tabs */
 .prose.paged .chapter { min-height: 40vh; scroll-margin-top: 120px; }
 .prose.paged h2 { border-top: 0; margin-top: 36px; padding-top: 0; font-size: 1.6rem; }
@@ -880,6 +882,88 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .zone-brief  { --zone-bg: var(--accent-bg); --zone-alpha: var(--zone-brief-alpha); }
 .zone-detail { --zone-alpha: var(--zone-detail-alpha); }
 .zone-label { margin: 0 0 12px; color: var(--muted); font-size: 0.72rem; letter-spacing: 0.08em; text-transform: uppercase; }
+.zone-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 12px; }
+.zone-head .zone-label { margin: 0; }
+
+/* Storyline guide: start button in Quick Read, a docked bar at the bottom, and an outline on the current step's element. */
+.story-start {
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border: 1px solid var(--accent); border-radius: 999px;
+  background: var(--accent-bg); color: var(--accent); font: inherit; font-size: 0.85rem; font-weight: 600; cursor: pointer;
+}
+.story-start:hover { background: var(--accent); color: var(--surface); }
+.story-start-count { font-size: 0.72rem; font-weight: 400; opacity: 0.8; }
+.story-start-count::after { content: " steps"; }
+:lang(zh) .story-start-count::after { content: " 步"; }
+.story-dock {
+  position: fixed; left: 50%; bottom: 16px; transform: translateX(-50%); z-index: 50;
+  width: min(720px, calc(100vw - 32px)); padding: 12px 16px 14px;
+  background: var(--surface); border: 1px solid var(--line); border-top: 3px solid var(--accent); border-radius: var(--radius); box-shadow: var(--shadow);
+}
+.story-dock[hidden] { display: none; }
+.story-dock-top { display: flex; align-items: center; gap: 12px; }
+.story-dots { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; }
+.story-dot { width: 10px; height: 10px; padding: 0; border-radius: 50%; border: 1px solid var(--accent); background: transparent; cursor: pointer; }
+.story-dot[aria-current="true"] { background: var(--accent); }
+.story-count { flex: 1; margin: 0; font-size: 0.78rem; color: var(--muted); }
+.story-close { border: 0; background: transparent; color: var(--muted); font-size: 1rem; cursor: pointer; padding: 2px 6px; }
+.story-line { margin: 8px 0 10px; font-size: 0.95rem; line-height: 1.6; }
+.story-turns { display: flex; justify-content: space-between; gap: 12px; }
+.story-prev, .story-next { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); color: var(--fg); font: inherit; font-size: 0.85rem; padding: 6px 12px; cursor: pointer; }
+.story-next { border-color: var(--accent); background: var(--accent); color: var(--surface); font-weight: 600; }
+.story-prev:disabled { opacity: 0.4; cursor: default; }
+.story-start:focus-visible, .story-dot:focus-visible, .story-close:focus-visible, .story-prev:focus-visible, .story-next:focus-visible {
+  outline: 2px solid var(--accent-2); outline-offset: 2px;
+}
+.story-focus { outline: 3px solid var(--accent); outline-offset: 6px; border-radius: var(--radius); }
+body.story-open { padding-bottom: 200px; }
+.story-beats { display: inline-flex; gap: 4px; }
+.story-beats i { width: 14px; height: 4px; border-radius: 2px; background: var(--line); }
+.story-beats i.on { background: var(--accent); }
+
+/* Beats: later groups wait faded, the current group is marked; leaving the step removes every class. */
+.beat-pending { opacity: 0.12; }
+.beat-dim { opacity: 0.08; }
+.story-open .story-focus :is(.beat-pending, .beat-shown, .beat-dim),
+.story-open .story-focus :is(.beat-pending, .beat-shown, .beat-dim) td { transition: opacity 0.35s ease, background-color 0.35s ease; }
+tr.beat-now td { background: var(--accent-bg); }
+.astro-code .line.beat-now { background: var(--accent-bg); color: var(--fg); }
+.video-item.beat-now { outline: 2px solid var(--accent); outline-offset: 4px; border-radius: var(--radius); }
+.mermaid .beat-now :is(rect, polygon, circle), .mermaid path.beat-now { stroke: var(--accent) !important; stroke-width: 2.5px !important; }
+.bar-list li.beat-pending .bar::before { width: 0; }
+.story-open .bar-list .bar::before { transition: width 0.6s ease; }
+@media (prefers-reduced-motion: reduce) {
+  .story-open .story-focus :is(.beat-pending, .beat-shown, .beat-dim), .story-open .bar-list .bar::before { transition: none; }
+}
+
+/* Split-refund figure (Credit Card 01): recharges -> one withdrawal (Parent) -> refunds (Child), then two mistakes. */
+.split-figure { margin: 20px 0; }
+.split-scroll { overflow-x: auto; border-radius: var(--radius); background: var(--surface); border: 1px solid var(--line); padding: 8px; }
+.split-figure svg { display: block; width: 100%; min-width: 600px; height: auto; }
+.split-figure figcaption { margin-top: 10px; font-size: 0.85rem; color: var(--muted); font-style: italic; }
+.split-figure text { text-anchor: middle; font-size: 14px; fill: var(--fg); }
+.split-figure text.sf-start { text-anchor: start; }
+.split-figure .sf-s { font-size: 11px; fill: var(--muted); }
+.split-figure .sf-t { font-weight: 600; }
+.split-figure .sf-h { font-size: 13px; fill: var(--muted); }
+.split-figure .sf-link { font-size: 11px; fill: var(--accent); font-weight: 600; }
+.split-figure .sf-node { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+.split-figure .sf-parent { fill: var(--accent-bg); stroke: var(--accent); stroke-width: 2; }
+.split-figure .sf-child { fill: var(--surface); stroke: var(--accent); stroke-width: 1.5; }
+.split-figure .sf-bad { fill: var(--red-bg); stroke: var(--red); stroke-width: 1.5; }
+.split-figure .sf-bad-t { fill: var(--red); font-weight: 700; }
+.split-figure .sf-line { fill: none; stroke: var(--muted); stroke-width: 1.5; }
+.split-figure .sf-head { fill: var(--muted); }
+.split-figure .sf-sep { stroke: var(--line); stroke-dasharray: 4 4; }
+.split-figure .sf-trx { fill: var(--accent-bg); stroke: var(--accent); stroke-width: 1.5; }
+.split-figure .sf-trx-t { font-family: var(--mono); font-size: 12px; fill: var(--accent); font-weight: 700; }
+.split-figure .sf-box { fill: var(--surface); stroke: var(--line); stroke-width: 1.5; }
+.split-figure .sf-k { font-size: 12px; fill: var(--muted); }
+.split-figure .sf-good { font-size: 13px; fill: var(--fg); font-weight: 600; }
+.split-figure .sf-miss { font-size: 13px; fill: var(--red); font-weight: 700; }
+.split-figure .sf-small { font-size: 11px; }
+.split-figure .sf-small-t { font-size: 12px; }
+.split-figure .sf-thin { stroke-width: 1; opacity: 0.7; }
+@media (prefers-reduced-motion: no-preference) { .story-focus { transition: outline-color 0.2s; } }
 .case-zone .case-meta { padding: 0; border: 0; }
 .case-zone .tldr { margin-top: 0; }
 .case-zone .metrics-lg { margin: 20px 0 0; }
@@ -1049,3 +1133,13 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .prose .video-label { margin: 0 0 6px; font: 600 0.8rem/1.4 var(--mono); color: var(--muted); }
 .video-item video { display: block; width: 100%; height: auto; aspect-ratio: 16 / 10; object-fit: contain; border: 1px solid var(--line); border-radius: 6px; background: #000; }
 .video-figure figcaption { margin-top: 10px; font-size: 0.85rem; color: var(--muted); font-style: italic; }
+
+/* Screenshot strip (Drop-Order 05): one sheet per frame, swipe or scroll sideways; the storyline guide slides it beat by beat. */
+.shot-gallery { margin: 20px 0; }
+.shot-strip { position: relative; display: flex; gap: 12px; overflow-x: auto; scroll-snap-type: x mandatory; padding-bottom: 6px; }
+.shot-item { flex: 0 0 100%; scroll-snap-align: start; }
+.shot-item img { display: block; width: 100%; height: auto; border: 1px solid var(--line); border-radius: var(--radius); cursor: zoom-in; }
+.prose .shot-label { margin: 0 0 6px; font-size: 0.85rem; font-weight: 600; display: flex; gap: 10px; align-items: baseline; }
+.shot-label .mono { color: var(--muted); font-weight: 400; font-size: 0.75rem; }
+.prose .shot-item > p:not(.shot-label) { margin: 0; }
+.shot-gallery figcaption { margin-top: 8px; font-size: 0.85rem; color: var(--muted); font-style: italic; }

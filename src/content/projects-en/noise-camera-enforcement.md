@@ -5,6 +5,18 @@ metric_labels:
   - "Over-limit events in the audit dashboard (2024/06/21 ~ 2025/09/18)"
   - "Share judged valid by reviewers (236 events)"
   - "On-site conditions checked per event, 3 of them weather"
+story:
+  - { label: "Map", line: "This is the spine one over-limit event travels: a roadside site measures the sound and writes it to the event database, the weather is verified, a reviewer judges it, and it is finally seen on a dashboard. My part is the four services tagged measured, verified, judged and seen." }
+  - { label: "Over the limit isn't a violation", line: "Noise cameras are automated enforcement against modified, noisy vehicles: when the meter reads over the limit, a camera records the vehicle. But over the limit is not a violation yet; by regulation four on-site conditions must be checked before an event is judged valid or invalid." }
+  - { label: "What judging needs", line: "Judging one event needs three kinds of evidence: the device readings, on-site images, and three weather conditions: road dry or wet, wind speed and the last rainfall. Only with all of it can a reviewer judge it valid or invalid." }
+  - { label: "Problem", line: "The catch is that the evidence sat in four places: the database, file folders, a weather website and an existing work-order program. So the problem is not the judging rules but gathering the evidence by hand for every single case." }
+  - { label: "Worked example", line: "Take two illustrative events, both reading 92 dBA: A meets all four conditions and is judged valid; B had wind above 5 m/s, so it is judged invalid." }
+  - { label: "Solution", line: "So I put the four piecemeal requests back on this flow: measured by the device and site management API, verified by the weather evidence tool, judged through the event review API, seen on the audit dashboard." }
+  - { label: "Measured", line: "Measured: the device and site management API maintains the site, device and calibration records; add a site and the front end updates at once." }
+  - { label: "Verified", line: "Verified: one sentence sets the place and period; AI parses it, calls the crawler service for CODiS data, and produces wind and rainfall charts plus a PDF report." }
+  - { label: "Judged", line: "Judged: the evidence comes together in the event review API, where the reviewer judges in one place; correcting a plate re-stamps the photo, and the evidence and inspection work order are exported. Its screens are not public, so the evidence card stands in." }
+  - { label: "Seen", line: "Seen: judgements roll up into the audit dashboard, where the environmental agency sees totals and the valid share, peak hours and top offending vehicles." }
+  - { label: "Result", line: "Each of the four gaps is closed: records have a home, weather is one sentence away, judging and work orders happen in one place, and results are visible at a glance. There is no record of hours, so this page does not estimate time saved." }
 impact:
   before: "Judging one event meant hopping between the database, files, a weather site and a legacy system"
   after: "Evidence sits in the review API; judging, plate fixes and work orders happen in one place"
@@ -19,7 +31,7 @@ tldr:
 <hr data-slide="Background">
 
 - A **noise camera** is automated enforcement against modified, noisy vehicles: when a roadside noise meter measures sound above the limit, a camera records the vehicle, creating an **over-limit event**.
-- **Over the limit is not yet a violation.** A reviewer checks four on-site conditions (a vehicle present in the three seconds around the event, road dry or wet, wind below 5 m/s, time of the last rainfall) before judging the event **valid** or **invalid**.
+- **Over the limit is not yet a violation.** By regulation, a reviewer must also check four on-site conditions (a vehicle present in the three seconds around the event, road dry or wet, wind below 5 m/s, time of the last rainfall) before judging the event **valid** or **invalid**.
 - The requests that reached me came piecemeal: a device management API, a weather lookup, an event review back end and an audit dashboard. Placed back on the enforcement workflow, they are the four gaps one event passes through: **measured, verified, judged, seen**. Image recognition was owned by the image processing team.
 
 <details class="glossary-details">
@@ -39,44 +51,9 @@ tldr:
 </table>
 </details>
 
-<hr data-slide="Four gaps">
+<hr data-slide="What gets judged">
 
-<figure class="pain-figure">
-<div class="pain-grid">
-<section class="pain-card tone-red pain-wide">
-<h4 class="pain-title">Judged: evidence spread across four places</h4>
-<p class="pain-label"><span>Pain</span>Every event needs its evidence gathered by hand before a decision</p>
-<ul class="pain-note">
-<li>Measurements sit in the database, imagery in file folders, weather is looked up separately, and the work order comes from an existing C# program; a misread plate also has to be fixed on the photo.</li>
-</ul>
-<div class="pain-evidence">
-<p class="pain-evidence-title">Evidence: review volume (2024/06/21 ~ 2025/09/18, audit dashboard)</p>
-<ul class="pain-flow">
-<li>Of <b>5,605</b> over-limit events only <b>236 were valid (4.2%)</b>; the other <b>5,369</b> still had to be judged one by one.</li>
-</ul>
-</div>
-</section>
-<section class="pain-card tone-grey">
-<h4 class="pain-title">Measured: no single place to manage device records</h4>
-<p class="pain-label"><span>Pain</span>Meters, calibrators, anemometers, cameras and sites, split across a main and a history database</p>
-</section>
-<section class="pain-card tone-yellow">
-<h4 class="pain-title">Verified: weather looked up by hand</h4>
-<p class="pain-label"><span>Pain</span>Three of the four conditions are weather, searched by hand on websites</p>
-</section>
-<section class="pain-card tone-grey pain-wide">
-<h4 class="pain-title">Seen: hotspots and peak hours are hard to read</h4>
-<p class="pain-label"><span>Pain</span>Reports were made by hand, hiding priority areas, noisy hours and repeat vehicles</p>
-</section>
-</div>
-<figcaption>Figure 1　The four gaps of one over-limit event</figcaption>
-</figure>
-
-## Solution Design
-
-<hr data-slide="Evidence">
-
-First lay out what judging one event needs, then decide what each part must supply (fields from the event review API's data model):
+Over the limit only means the noise meter measured sound above the standard. By regulation, a reviewer must also check four on-site conditions before judging the event **valid** or **invalid**, and the evidence for that falls into three groups:
 
 <figure class="evidence-figure">
 <div class="evidence-card">
@@ -116,8 +93,59 @@ First lay out what judging one event needs, then decide what each part must supp
 </div>
 </div>
 </div>
-<figcaption>Figure 2　The evidence and outputs behind one over-limit event</figcaption>
+<figcaption>Figure 1　The evidence and outputs behind one over-limit event (fields from the event review API's data model)</figcaption>
 </figure>
+
+That evidence used to sit in four places: readings in the database, images in file folders, weather looked up on a separate website, and work orders produced by an existing C# program. So the problem to solve is not the judging rules but that **the evidence for each judgement was spread over four places and had to be gathered by hand, case by case**.
+
+<hr data-slide="Worked example">
+
+Two illustrative events show why the same over-limit sound can be judged differently:
+
+| Event | Reading (Lmax / limit) | Vehicles in the 3 seconds | Weather (road / wind / last rain) | Judgement |
+|---|---|---|---|---|
+| A | 92 / 86 dBA | Met | Met / 2.1 m/s / Met | Valid |
+| B | 92 / 86 dBA | Met | Met / **6.3 m/s** / Met | **Invalid** |
+
+*Illustration: values are for explanation; only the wind has a number, because 5 m/s is an explicit threshold, and the other conditions are only marked as met; the 86 dBA limit comes from the test data in the device and site management API recording. Judgements are made by reviewers under the regulation.*
+
+- **A**: all four conditions are met, the reviewer judges it valid, and it moves on to an inspection notice or a direct fine.
+- **B**: the wind exceeds 5 m/s, a condition is not met, and it is judged invalid.
+
+<hr data-slide="Four gaps">
+
+<figure class="pain-figure">
+<div class="pain-grid">
+<section class="pain-card tone-red pain-wide">
+<h4 class="pain-title">Judged: evidence spread across four places</h4>
+<p class="pain-label"><span>Pain</span>Every event needs its evidence gathered by hand before a decision</p>
+<ul class="pain-note">
+<li>Measurements sit in the database, imagery in file folders, weather is looked up separately, and the work order comes from an existing C# program; a misread plate also has to be fixed on the photo.</li>
+</ul>
+<div class="pain-evidence">
+<p class="pain-evidence-title">Evidence: review volume (2024/06/21 ~ 2025/09/18, audit dashboard)</p>
+<ul class="pain-flow">
+<li>Of <b>5,605</b> over-limit events only <b>236 were valid (4.2%)</b>; the other <b>5,369</b> still had to be judged one by one.</li>
+</ul>
+</div>
+</section>
+<section class="pain-card tone-grey">
+<h4 class="pain-title">Measured: no single place to manage device records</h4>
+<p class="pain-label"><span>Pain</span>Meters, calibrators, anemometers, cameras and sites, split across a main and a history database</p>
+</section>
+<section class="pain-card tone-yellow">
+<h4 class="pain-title">Verified: weather looked up by hand</h4>
+<p class="pain-label"><span>Pain</span>Three of the four conditions are weather, searched by hand on websites</p>
+</section>
+<section class="pain-card tone-grey pain-wide">
+<h4 class="pain-title">Seen: hotspots and peak hours are hard to read</h4>
+<p class="pain-label"><span>Pain</span>Reports were made by hand, hiding priority areas, noisy hours and repeat vehicles</p>
+</section>
+</div>
+<figcaption>Figure 2　The four gaps of one over-limit event</figcaption>
+</figure>
+
+## Solution Design
 
 <hr data-slide="Gaps and directions">
 
@@ -148,7 +176,6 @@ First lay out what judging one event needs, then decide what each part must supp
 - **Audit dashboard**: Streamlit and Plotly, six view modes; filters by time, site, judgement, noise limit and wind; rankings of loudest, repeat and cross-area vehicles; CSV download.
 - **Access scope**: on the event table the review API writes only the judgement, reason and plate fields and reads the rest; connection details live in environment variables.
 - **Source code**: [01080710/WeatherAI](https://github.com/01080710/WeatherAI), [01080710/NoiseDetect_API](https://github.com/01080710/NoiseDetect_API); the event review API and crawler service repos are not public for now.
-- TODO: launch dates per module and time per judgement are not on record.
 
 ## Result
 
@@ -199,7 +226,7 @@ First lay out what judging one event needs, then decide what each part must supp
 <div class="ba-row ba-head"><p class="ba-item">Gap</p><p class="ba-before">Before</p><p class="ba-after">After</p></div>
 <div class="ba-row"><p class="ba-item">Measured</p><p class="ba-before">No single place to manage device records</p><p class="ba-after">One API maintains site, device and calibration records, and the front end stays in sync<small>Source: Figure 3</small></p></div>
 <div class="ba-row"><p class="ba-item">Verified</p><p class="ba-before">Weather searched by hand</p><p class="ba-after">One sentence returns CODiS data and a report<small>Source: Figure 4</small></p></div>
-<div class="ba-row"><p class="ba-item">Judged</p><p class="ba-before">Evidence spread across four places</p><p class="ba-after">One event carries all its evidence; judging and work orders go through one API<small>Source: Figure 2</small></p></div>
+<div class="ba-row"><p class="ba-item">Judged</p><p class="ba-before">Evidence spread across four places</p><p class="ba-after">One event carries all its evidence; judging and work orders go through one API<small>Source: Figure 1</small></p></div>
 <div class="ba-row"><p class="ba-item">Seen</p><p class="ba-before">Hand-made reports; hotspots judged by experience</p><p class="ba-after">The dashboard shows totals, hotspots, peak hours and repeat vehicles directly<small>Source: Figure 5</small></p></div>
 </div>
 <figcaption>Figure 6　Before / After for the four gaps</figcaption>
@@ -211,4 +238,5 @@ First lay out what judging one event needs, then decide what each part must supp
 
 - **No time data**: time per judgement and how long weather lookups used to take were never recorded, so no hours saved are estimated.
 - **5,605 is data size, not an outcome**: events start 2024/06/21, before I joined (2025/02); judgements were made by reviewers.
+- **No screens for judging**: the event review API's screens are not public, so this page explains its inputs and outputs with the evidence card (Figure 1).
 - **Scope**: image recognition belonged to the image processing team; the four modules were separate requests, arranged here along the enforcement workflow as one data chain.
