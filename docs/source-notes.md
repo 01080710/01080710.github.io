@@ -393,3 +393,66 @@ frontmatter `period`（開發）／`launch`（上線）／`phases`（分線）�
 - 方案表新增 B「請 IT 提供完整欄位報表或 DB 權限」：已提出、交期遙遙無期（Peter 確認）；原 B、C 改為 C、D，選擇理由新增「不必等待 IT」。
 - 權限範圍：Peter 的自動化帳號，唯讀（Peter 確認）；核准者與帳密存放方式未提供。
 - 地圖：帳務段新增「CRM 後台 × 4／每個 regulator 一套」（4 個 regulator 取自痛點卡的單批涵蓋數），由 MetaTrader 連出；`map_crops.account` 加寬為 `380 138 380 226`。
+
+## Credit Card 故事線順稿（2026-11-22，Peter 提供完整故事線）
+
+- 事實確認：Bridger 替每一筆充值產生唯一流水號、傳輸正確；CRM 有 Parent 與 Child Ticket 但沒有交易明細；Payabl 有每筆退款明細但沒有 Parent（Peter 確認，更正其口誤「CRM 僅有 Parent」）。
+- 貫穿例子「充值 30、40、30 USD → 退 100 USD」由 Peter 提供；兩種錯誤的數字（30、40、30、30／30、40、20）與對照範例的 6 種變化（含只充值一次的 100／50）為 Claude 依此例子推演的示意，取代先前 A–E 的 P-01～P-05 示意列。
+- 名詞說明新增 Bridger（共 14 個名詞）；Payabl、CRM 定義補上各自缺哪一半。
+- 地圖在 Credit Card 專案頁加註「有 Child 明細，無 Parent」「有 Parent＋Child，無明細」（只在 area = credit-card 時顯示，首頁全圖不顯示）。
+- 故事線導覽改為 7 步（新增「解決方案」→ 04 系統架構圖），每步句子加銜接詞。
+
+## Credit Card 故事線動畫（2026-11-22，Peter 決定：只由講的人控制、拆單圖放頁面、兩階段一起做）
+
+- 新增圖 1「原入原出拆單示意」（內嵌 SVG，01 第 2 張）：充值 30／40／30 → 退 100（Parent）→ 三筆 Child，下方兩種錯誤（30、40、30、30／30、40、20）。示意圖，數字沿用貫穿例子。
+- 01 第 2 張拆成兩張（「要對的是什麼」放拆單圖、「比對規則」放比對規則圖），維持一張投影片一個主元件；圖號重排：拆單 1、比對規則 2、痛點 3、架構 4、複核 5、Before / After 6。
+- 04 架構的 Mermaid 文字版改為 LR，讓逐段亮起時整張圖在畫面內。
+- 故事線導覽 7 步共 26 拍；地圖、圖 1、圖 2、對照範例表、架構文字版、複核長條各自逐拍亮起。
+
+## Credit Card 流水號與資料落差（2026-11-22，Peter 確認）
+
+- 資料差異的成因：Bridger 替每筆充值產生 PSP trx ID，退款時只把 trx ID（Child 層級）傳給 Payabl，沒有傳出金單（Parent）；交易明細也沒有回寫到 CRM（Peter 選擇「只傳 trx ID，沒傳 Parent」）。
+- 故事線改為：地圖 → 流水號 → 原入原出 → 資料落差 → 問題 → 比對規則 → 對照範例 → 解決方案 → 成果（9 步、28 拍，Peter 選擇）。
+- 原圖 1 拆成兩張：圖 1「流水號與原入原出」（01 第 2 張）、圖 2「兩邊各記了什麼」（01 第 3 張，新增投影片）。圖號重排：比對規則 3、痛點 4、架構 5、複核 6、Before / After 7。
+- 名詞說明的 Bridger 補上「只把流水號傳給 Payabl，不傳出金單」。
+
+## Drop-Order 與 Account Engine 故事線動畫（2026-11-22，Peter 確認規劃）
+
+**Drop-Order**
+- 掉單成因（Peter 確認）：渠道回呼 CPS 失敗 → 營運手動改 CPS 狀態（交易成功(人工)／交易失敗(人工)）→ 手動修改不會回寫 CRM。01 背景改寫，名詞說明新增「回呼（Callback）」（共 14 個名詞，定義為 Claude 草擬）。
+- 誤判（Peter 確認）：判定前沒有等待時間，剛成功、尚未回寫的訂單也可能被標出，由 Handler 確認後略過；寫入 04 設計重點。
+- 貫穿例子：入金 TX-00434（2026-04-20，UPI-India-CPS-APP，CRM Audit，CPS 交易成功(人工)，9,301 INR）取代原 TX-00002（CPS 為交易成功、非人工，與機制不符）；出金 TX-03772（55,704 INR）不變。
+- 新增 01 第 2 張「一筆訂單的旅程」（圖 1）；圖號重排：痛點 2、11/6 長條 3、架構 4、失敗原因 5、Before / After 6。04 架構改 LR。
+- 地圖：掉單段 CPS↔CRM 兩條箭頭由 Deposit／Withdraw 改為「結果回寫」（CPS→CRM）／「出金指令」（CRM→CPS），標出回寫這一段。
+- 故事線 8 步、25 拍。
+
+**Account Engine**
+- 2,000 筆上限的單位是輸入的 userId 列數（Peter 確認）；04 設計重點與 06 的 TODO 改寫，解釋為何有批次帳戶數超過 2,000。
+- 01 改為：要查的是什麼（動機 → 帳戶分散 → 新圖 1「一個客戶，多個帳戶」，示意 5 個帳戶散在 4 個後台）→ 引擎流程（圖 2，原圖 1）→ 對照範例。圖號重排：痛點 3、使用規則 4、錄影 5、每月使用量 6、Before / After 7。
+- 地圖：MetaTrader、CRM 後台 × 4 加 `data-b`（acc-mt、acc-bo）。
+- 故事線 7 步、21 拍。
+
+## 成果的實際運作佐證（2026-11-22，Peter 決定）
+
+- 三個專案的導覽在「成果」之前加入「實際運作」：Credit Card、Drop-Order 走 05 執行 log（逐段亮）與輸出格式表；Account Engine 走 05 兩段操作錄影（走到該拍自動靜音播放）與 Record log。
+- 待補素材：Peter 將提供 Credit Card、Drop-Order 的 LarkSheet 案件表截圖（放 `canva-export/credit-card/`、`canva-export/drop-order/`），去識別後在兩頁 05 開頭新增「操作畫面」投影片並接進導覽。
+- ~~待辦：05 輸出格式表超過 5 欄~~（已精簡，2026-11-22，見下方）。
+
+## LarkSheet 截圖與輸出表精簡（2026-11-22）
+
+- 來源：Peter 提供的 LarkSheet 螢幕截圖，原檔在 `canva-export/credit-card/`（1 張）、`canva-export/drop-order/`（5 張，Deposit、Crypto&Wallet、LBT、IBT、CreditCard），不進 repo。
+- 去識別（腳本：Pillow，裁切＋高斯模糊，只處理資料列、表頭保留）：裁掉瀏覽器分頁（含品牌名稱）、網址、文件路徑與資料夾名稱、頭像；模糊 Tx-Id、Merchant Order、Deposit Order Number、User ID、Account、Order Number（VU／V2U 開頭含品牌代碼）、CPS Order ID、Handler（同事姓名）。浮水印為 Peter 本人姓名，保留。交易叙述與 CRM Reverse Reason 為一般失敗原因文字，保留。輸出縮為寬 1600px，存於 `src/assets/projects/credit-card-anomaly-detection/larksheet-cases.png` 與 `src/assets/projects/drop-order-monitor/larksheet-*.png`。
+- Credit Card 05 新增「操作畫面」（圖 6），後續圖號：複核 7、Before / After 8。Drop-Order 05 新增「操作畫面」（圖 5，5 張可滑動），後續圖號：失敗原因 6、Before / After 7。兩頁導覽各新增「操作畫面」一步。
+- 輸出格式表：Credit Card 7 欄 → 4 欄（Tx-Type、Status 三列相同，改寫在說明；幣別併入金額）；Drop-Order 10 欄 → 5 欄（CPS 交易／出金狀態合併、原因類別／子類別合併；偵測時間、渠道、金額改由 CSV 查閱，心跳列的偵測時間寫在原因欄）。拿掉渠道欄後，頁面上不再出現「ApplePay-Payabl-CPS」。
+
+- 掉單段地圖箭頭再改為「入金指令」（CPS→CRM）／「出金指令」（CRM→CPS）（Peter 指示，2026-11-22）；英文為 Deposit order／Payout order。只改標籤，頁面上「CPS 的結果要回寫 CRM」的機制說明與圖 1 的「回寫」保留。
+
+## Noise Camera 故事線（2026-11-22，Peter 確認）
+
+- 四項現場條件：頁面寫「依規定」需確認，不自行解釋原因（Peter 選擇）。
+- 對照範例：兩筆示意事件（Peter 選擇示意）。Lmax 92 dBA 為說明用數值；管制標準 86 dBA 取自設備與場域管理 API 錄影的測試資料；只有風速列數值（5 m/s 為明確門檻），其餘條件只標「符合」，避免推定未明確的門檻。
+- 4.2% 有效的原因：不確定，頁面不解釋，只在 story.md 備答（Peter 選擇）。
+- 判定佐證：`噪音稽核.png` 為儀表板的簡報文字（Problem／Solution），不是審核 API 操作畫面，不採用；導覽的「判定」一步回到判定證據卡亮出判定與產出，06 加註「判定沒有系統畫面」（Peter 選擇）。
+- 結構：判定證據卡由 02 移到 01 第 2 張「要判定的是什麼」（圖 1），加問題定位句；新增 01 第 3 張「對照範例」；痛點卡改為圖 2；04 的 TODO（上線時間、單筆判定耗時）移出頁面（06 已說明沒有工時紀錄）。
+- 地圖：維碩主幹線四個階段的節點與連線加 `data-b="ws-1"`～`ws-4`。
+- 故事線 11 步、26 拍。

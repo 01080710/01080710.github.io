@@ -11,7 +11,10 @@ Peter Chang 的作品集網站（Astro 7 + Markdown + Mermaid，部署到 GitHub
 
 ### 故事線（讓 Quick Read 之後能直接講到核心邏輯）
 
-每個專案都要能用約 20 秒講完「地圖 → 關鍵概念 → 問題 → 定位 → 邏輯」，頁面順序配合這條線。各專案的口說版本在 [docs/story.md](docs/story.md)，改頁面時一起更新。
+每個專案都要能用約 20 秒講完「地圖 → 關鍵概念 → 問題 → 定位 → 邏輯」，頁面順序配合這條線。各專案的口說版本在 [docs/story.md](docs/story.md)（完整版、20 秒版、畫面對照、被追問時），改頁面時一起更新。
+
+- **標準步驟**（導覽與口說稿都照這個順序）：地圖 → 關鍵概念（先講來由）→ 問題 → 定位 → 規則圖 → 對照範例 → 解決方案 → 操作畫面 → 實際運作（log）→ 輸出結果 → 成果（數據）。
+- **動手前先檢查**：寫一個專案的故事線前，先列出邏輯出入（成因說不通、例子不一致、會被追問卻答不出的數字、頁面上的矛盾），連同規劃一起交給 Peter 確認。**事實不確定一律給選項討論**，不自行補成事實；Peter 選擇後記在 source-notes。
 
 - **01 第 1 張「背景與名詞」**：問題發生在地圖的哪一段，加上名詞說明。問題的常見成因要寫出來（例如掉單：渠道回呼失敗、上游系統異常），否則被問「為什麼會這樣」時答不出來。
 - **01 第 2 張：核心邏輯**（標題用「要對的是什麼」「要查的是什麼」這類問句）。
@@ -22,7 +25,16 @@ Peter Chang 的作品集網站（Astro 7 + Markdown + Mermaid，部署到 GitHub
   - 優先取公開 CSV 的真實案件，避開 Result 已經用過的列。
   - 沒有真實資料的列標「示意」，並在註腳說明哪些是真的、哪些是示意。
   - 數字遵守單一出處，例子用的金額不算新統計。
+- **關鍵概念要有來由**：不要直接丟出規則或術語，先講出讓它成立的那件事（Credit Card：先講 Bridger 替每筆充值發流水號，原入原出才是「所以退款要指定退回哪一個」的自然結果）。
+- **一個例子貫穿全頁**：故事線、01 第 2 張、01 第 3 張對照範例、故事線導覽都用同一組數字（Credit Card：充值 30、40、30 USD → 退 100 USD），對照範例寫成「同一個例子的幾種變化」，真實案件放在註腳指回 Result。故事線的每個段落之間要有因果銜接（「所以」「但」「因此」），同一件事不重複講兩次。
+- **動畫用的概念圖**：關鍵概念或資料落差沒有現成圖時，在 Markdown 內嵌 SVG（`figure.split-figure`，樣式類別 `sf-*`），每個可逐拍亮起的群組加 `data-b`。一張圖只服務一兩步；四個階段塞不下一屏時拆成兩張、各放一張投影片（例如 Credit Card 的「流水號與原入原出」「兩邊各記了什麼」）。圖要能脫離導覽獨立閱讀，靜態畫面就是完整內容。
+- **示意值要誠實**：只有明確門檻（例如風速 5 m/s）才寫數字，門檻不明的條件只標「符合」，不推定；示意數值寫明出處（例如管制標準取自測試資料）。真實案件優先取公開 CSV，挑和機制吻合的列（例如掉單選「交易成功(人工)」的入金）。
+- **地圖註記只給本專案**：解說用的地圖註記（例如「有 Child 明細，無 Parent」）用 `area === "<本專案>"` 條件顯示，首頁全圖與其他專案頁不出現。
+- **插入圖或投影片後重新編號**：圖號依頁面順序重排，正文、Before / After 的「依據：圖 N」、`at: "ch-N-S"` 一起改，中英文都要；改完用驗證腳本走一遍導覽。
 - **細節往後放**：圖下的逐類處理方式（例如 A–E 各自輸出與否）放 04「設計重點」，不留在 01。
+- **故事線導覽（`story`）**：frontmatter 填 `story: [{ label, line, at, pick }]`，Quick Read 右上會出現「照故事線看」，底部導覽列依序帶讀者走每一步。`at` 是 `map`（Quick Read 地圖）或 `ch-N-S`（第 N 章第 S 張）；`pick` 是該投影片內要加框的元件（CSS 選擇器，例如 `.mermaid`、`table`、`img`、`:scope > ul`），省略時框整張投影片。每句 `line` 用銜接詞接上一步；導覽要包含解決方案（04 架構）那一步，不要從範例直接跳到成果。只多一層導覽，不搬動內容；`line` 一句、對應 docs/story.md。英文檔填同數量的 `story: [{ label, line }]`，數量不符 build 擋。投影片順序或內容改動後，重新確認每一步框到的元件。目前 Credit Card、Drop-Order、Account Engine、Noise Camera 有；OP Ticket 尚未製作。
+  - **拍點（`beats`、`dim`）**：一步可以拆成幾拍，每拍一個 CSS 選擇器（在 `pick` 元件內），講的人按「繼續」、→ 或空白鍵才亮下一組；`dim` 把屬於後面步驟的部分先壓暗。只由講的人控制，不自動播放；離開該步驟就還原，所以靜態頁面就是最後一拍。地圖的可亮元件用 `data-b`（例如 `portal`、`recharge`、`refund`、`notes`）標記；Mermaid 用 `[id*="-flowchart-節點-"]`、`[id*="-L_起點_"]`、`[data-id^="L_起點_"]` 選取；表格用 `tbody tr:nth-child(n)`；長條用 `li:nth-child(n)`（長條會從 0 長出來，數字不跳動）。改 Mermaid 節點名稱、表格列數或地圖元素後，要重走一遍導覽確認每一拍都有東西亮。執行 log 的程式碼區塊每行是 `span.line`，可用 `.line:nth-child(n+a):nth-child(-n+b)` 分段；拍內的 `<video>` 會在走到該拍時自動靜音從頭播放、離開時暫停。
+  - **成果要有實際運作的佐證**：導覽在數據之前先走「實際運作」（操作錄影或截圖 → 執行 log → 輸出表），證明真的在跑，再給數字。截圖或錄影先放 `canva-export/<專案>/`，去識別後才進網站：裁掉瀏覽器分頁、網址、文件路徑、資料夾名與頭像（分頁標題常含品牌名稱）；編號類欄位（User ID、帳號、訂單編號，VU／V2U 開頭疑似品牌代碼）與人員姓名欄（例如 Handler）只模糊資料列、保留表頭；Peter 本人的浮水印保留；輸出寬 1600px 放 `src/assets/projects/<專案>/`，做法記在 source-notes。不是操作畫面的素材（例如簡報文字截圖）不當佐證。多張截圖用 `shot-gallery` > `shot-strip` > `shot-item` 做成左右滑動的圖組，導覽每拍一張（`.shot-item:nth-child(n)`），走到該拍時圖組會自動滑過去。
 - **頁面上不留 TODO**：資料取得方式、替代方案（例如「請 IT 提供報表」）、權限範圍，都是故事線一講就會被問的；缺資料就問 Peter，未補的項目記在 source-notes 的待辦。
 
 ### 閱讀節奏（避免四頁看起來一樣）
@@ -33,7 +45,7 @@ Peter Chang 的作品集網站（Astro 7 + Markdown + Mermaid，部署到 GitHub
   3. **Deep Dive**：六章內容。
   - 底色透明度只在 `global.css` 的 `--zone-tech-alpha`、`--zone-brief-alpha`、`--zone-detail-alpha` 調整，淺色與深色各一組。
 - **MUST**：frontmatter 填 `focus`（1–2 個），用 104／LinkedIn 常見的搜尋關鍵字（通用職能詞，例如 Data Integration、Financial Reconciliation），意思須與該頁內容一致；不用暗示特定工具或意思不同的詞（例如 CDC、RPA、Transaction Monitoring）。Stack 維持工具清單。
-- **MUST**：frontmatter 填 `system_map: { map, area }`。地圖一家公司一張，在 [SystemMap.astro](src/components/SystemMap.astro)；完整地圖只出現在首頁成果地圖，專案頁顯示 [system-maps.ts](src/data/system-maps.ts) 的 `map_crops` 裁切範圍，避免四頁重複同一張大圖；「本專案負責」標籤放在地圖框外右上角，不疊在圖上。海科的地圖由 `canva-export/structure.png` 用 SVG 重畫：不放品牌名稱，PSP 與渠道名稱保留；重畫來源只記在 source-notes，頁面不加圖說。海科地圖的線要畫出**方向與流動的東西**：客戶的入口一律從 Client Portal 拉虛線（信用卡到 Payabl、其他渠道到 CPS）；雙向的資金流畫成兩條帶標籤的箭頭（信用卡段 Recharge／Refunded、掉單段 Deposit／Withdraw）。Payabl 這個名字只出現在信用卡段（「Credit Card Payabl」），掉單段的信用卡渠道用通稱「Credit Card PSP」。帳務段的「CRM 後台 × 4」表示每個 regulator 各一套後台。維碩的地圖（`weishuo`）是主幹線圖：一筆事件的主流程由左到右，外部來源從上方接入、產出從下方接出，箭頭只往右或往下；每條連線標上傳遞的資料（例如「量測值」「乾濕、風速、降雨」「判定結果」）；本人負責的節點以主題色框線並標上階段文字（量到、查證、判定、看見，不加 01–04 編號，避免和專案頁的章節編號混淆），左下角附圖例。新增維碩專案時接到主幹線上，不畫回頭線、不另畫一張。換公司時新增一張地圖與 `map` 名稱，不把不同公司的專案畫在同一張圖；Projects 頁目前不放地圖。新公司的專案填好 `system_map` 後，首頁成果地圖會自動多一家（名稱取自該公司專案的 `company`，顯示時去掉「（股份）有限公司」或 Ltd.）。
+- **MUST**：frontmatter 填 `system_map: { map, area }`。地圖一家公司一張，在 [SystemMap.astro](src/components/SystemMap.astro)；完整地圖只出現在首頁成果地圖，專案頁顯示 [system-maps.ts](src/data/system-maps.ts) 的 `map_crops` 裁切範圍，避免四頁重複同一張大圖；「本專案負責」標籤放在地圖框外右上角，不疊在圖上。海科的地圖由 `canva-export/structure.png` 用 SVG 重畫：不放品牌名稱，PSP 與渠道名稱保留；重畫來源只記在 source-notes，頁面不加圖說。海科地圖的線要畫出**方向與流動的東西**：客戶的入口一律從 Client Portal 拉虛線（信用卡到 Payabl、其他渠道到 CPS）；雙向的資金流畫成兩條帶標籤的箭頭（信用卡段 Recharge／Refunded、掉單段「入金指令」（CPS→CRM）／「出金指令」（CRM→CPS））。Payabl 這個名字只出現在信用卡段（「Credit Card Payabl」），掉單段的信用卡渠道用通稱「Credit Card PSP」。帳務段的「CRM 後台 × 4」表示每個 regulator 各一套後台。維碩的地圖（`weishuo`）是主幹線圖：一筆事件的主流程由左到右，外部來源從上方接入、產出從下方接出，箭頭只往右或往下；每條連線標上傳遞的資料（例如「量測值」「乾濕、風速、降雨」「判定結果」）；本人負責的節點以主題色框線並標上階段文字（量到、查證、判定、看見，不加 01–04 編號，避免和專案頁的章節編號混淆），左下角附圖例。新增維碩專案時接到主幹線上，不畫回頭線、不另畫一張。換公司時新增一張地圖與 `map` 名稱，不把不同公司的專案畫在同一張圖；Projects 頁目前不放地圖。新公司的專案填好 `system_map` 後，首頁成果地圖會自動多一家（名稱取自該公司專案的 `company`，顯示時去掉「（股份）有限公司」或 Ltd.）。
 - **MUST**：frontmatter 填 `tldr: { problem, approach, result }`，每行一句、約 40 字以內、不放數字（數字交給 `metrics`）。`summary` 保留給 Projects 卡片與 meta description。
 - **MUST**：數字單一出處。每個數字只在證明它的那一章完整出現一次，其他章寫「（見 Result）」；01 放證明問題存在的數字，05 放執行結果與統計，06 只放 Before / After 對照，不重抄 05。
 - **MUST**：元件預算。一張投影片一個主元件（表格、卡片、長條、Mermaid、log、Before / After、錄影擇一；Tech Label、名詞說明、CSV 收合區不計），相鄰投影片的主元件盡量不同；每章 Markdown 表格最多 2 張；分布型資料用 `bar-list`、兩欄對應用清單，不用表格；痛點卡片只用在 01。
@@ -98,6 +110,7 @@ Peter Chang 的作品集網站（Astro 7 + Markdown + Mermaid，部署到 GitHub
 | 同一家公司的專案 `company` 名稱 | 成果地圖的標題／分頁只取該公司第一個專案的 `company`（去掉法人字尾），各專案要寫成一模一樣 | 人工 |
 | 系統地圖的圖形（[SystemMap.astro](src/components/SystemMap.astro)） | 首頁成果地圖（全圖）與專案頁 Quick Read（裁切）共用同一張；節點移動後檢查 `map_crops` 與 `tag_at` 是否還框得到 | 人工 + 截圖 |
 | `impact: { before, after }` | 首頁成果地圖卡片的「之前／之後」，一句、不放數字；`projects-en` 也要有一份 | 地圖上的專案缺 `impact` build 擋；英文人工 |
+| `story`（故事線導覽） | `projects-en` 的 `story` 同順序同數量；每步的 `at`／`pick` 在投影片增刪、調順序後是否仍指到對的元件；docs/story.md 的口說稿 | 數量不符 build 擋；指向人工（點一遍導覽） |
 | `summary` | Projects 頁卡片、專案頁 meta description、`projects-en` 的 `summary` | 人工 |
 | 內文、`role`、`tldr` | `projects-en/<id>.md` 對應段落；英文影片與 CSV 連結多一層 `../` | 缺檔 build 擋；內容人工 |
 | `accent` 新色 | `content.config.ts` 的 enum ＋ `global.css` 淺色、深色各一組 | enum 不符 build 擋；CSS 人工 |
@@ -131,5 +144,6 @@ npm run build
 python -m pytest tests
 ```
 
-- 版面變更另外用 headless Edge 截圖檢查：桌面 1280px、窄版 500px（headless 最窄約 500px，更窄會被裁切而誤判溢出）、深色模式。
-- 點擊類互動（篩選、翻頁、複製、深淺色切換）無法在 headless 截圖中操作；回報時標「未驗證」並請 Peter 實際點過。
+- 版面變更另外用 headless Chrome（本機沒有 Edge）截圖檢查：桌面 1280px、窄版 500px（headless 最窄約 500px，更窄會被裁切而誤判溢出）、深色模式。截圖要看「導覽框到的元件」而不只是整頁：表格不可橫向溢出、圖要在導覽列上方完整出現。
+- 故事線導覽改動後，用腳本逐拍走過中英文兩版（每拍有元件亮、只框一個元件、關閉後無殘留、無 console error）：`npm run build && npx astro preview`，再執行 `uv run --with playwright python scripts/story_walk.py <slug> [base_url] [--shots DIR]`。
+- 其他點擊類互動（篩選、複製、深淺色切換）可以用 Playwright 操作驗證；無法驗證的項目回報時標「未驗證」並請 Peter 實際點過。
