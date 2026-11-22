@@ -9,6 +9,22 @@ Peter Chang 的作品集網站（Astro 7 + Markdown + Mermaid，部署到 GitHub
 - 每個數字的來源與口徑寫進 [docs/source-notes.md](docs/source-notes.md)。
 - 範本補充：平台截圖當痛點證據、架構圖分區截圖，見 [src/content/projects/credit-card-anomaly-detection.md](src/content/projects/credit-card-anomaly-detection.md)；規則圖在上表格在下、Result 操作錄影並排，見 [src/content/projects/account-automation-engine.md](src/content/projects/account-automation-engine.md)。
 
+### 故事線（讓 Quick Read 之後能直接講到核心邏輯）
+
+每個專案都要能用約 20 秒講完「地圖 → 關鍵概念 → 問題 → 定位 → 邏輯」，頁面順序配合這條線。各專案的口說版本在 [docs/story.md](docs/story.md)，改頁面時一起更新。
+
+- **01 第 1 張「背景與名詞」**：問題發生在地圖的哪一段，加上名詞說明。問題的常見成因要寫出來（例如掉單：渠道回呼失敗、上游系統異常），否則被問「為什麼會這樣」時答不出來。
+- **01 第 2 張：核心邏輯**（標題用「要對的是什麼」「要查的是什麼」這類問句）。
+  - 開頭先補外人不懂的**關鍵概念**（例如原入原出、掉單、一個客戶多個帳戶、清退與轉歸屬），再寫**問題定位**，句型為「要解決的不是……，而是**……**」（粗體）。
+  - 接著放規則圖或規則表（Credit Card 比對規則圖、Drop-Order 判定規則表、Account Engine 引擎流程）。這張圖就是該專案的招牌視覺，不再藏在 04。
+  - 規則依錯誤類型設計時，要在文字裡把「錯誤類型 ↔ 圖上路徑」對起來。
+- **01 第 3 張「對照範例」**：規則裡的每一類（A–E、每種案件類型、每個步驟）都要有一列實際的欄位與值。
+  - 優先取公開 CSV 的真實案件，避開 Result 已經用過的列。
+  - 沒有真實資料的列標「示意」，並在註腳說明哪些是真的、哪些是示意。
+  - 數字遵守單一出處，例子用的金額不算新統計。
+- **細節往後放**：圖下的逐類處理方式（例如 A–E 各自輸出與否）放 04「設計重點」，不留在 01。
+- **頁面上不留 TODO**：資料取得方式、替代方案（例如「請 IT 提供報表」）、權限範圍，都是故事線一講就會被問的；缺資料就問 Peter，未補的項目記在 source-notes 的待辦。
+
 ### 閱讀節奏（避免四頁看起來一樣）
 
 - **頁面分區**：模板 [[slug].astro](src/pages/[...lang]/projects/[slug].astro) 自動排成以下順序，Markdown 不必處理；標題、公司、期間留在區塊外。區塊標籤只用英文。
@@ -17,7 +33,7 @@ Peter Chang 的作品集網站（Astro 7 + Markdown + Mermaid，部署到 GitHub
   3. **Deep Dive**：六章內容。
   - 底色透明度只在 `global.css` 的 `--zone-tech-alpha`、`--zone-brief-alpha`、`--zone-detail-alpha` 調整，淺色與深色各一組。
 - **MUST**：frontmatter 填 `focus`（1–2 個），用 104／LinkedIn 常見的搜尋關鍵字（通用職能詞，例如 Data Integration、Financial Reconciliation），意思須與該頁內容一致；不用暗示特定工具或意思不同的詞（例如 CDC、RPA、Transaction Monitoring）。Stack 維持工具清單。
-- **MUST**：frontmatter 填 `system_map: { map, area }`。地圖一家公司一張，在 [SystemMap.astro](src/components/SystemMap.astro)；完整地圖只出現在首頁成果地圖，專案頁顯示 [system-maps.ts](src/data/system-maps.ts) 的 `map_crops` 裁切範圍，避免四頁重複同一張大圖；「本專案負責」標籤放在地圖框外右上角，不疊在圖上。海科的地圖由 `canva-export/structure.png` 用 SVG 重畫：不放品牌名稱，PSP 與渠道名稱保留；重畫來源只記在 source-notes，頁面不加圖說。維碩的地圖（`weishuo`）是主幹線圖：一筆事件的主流程由左到右，外部來源從上方接入、產出從下方接出，箭頭只往右或往下；每條連線標上傳遞的資料（例如「量測值」「乾濕、風速、降雨」「判定結果」）；本人負責的節點以主題色框線並標上階段文字（量到、查證、判定、看見，不加 01–04 編號，避免和專案頁的章節編號混淆），左下角附圖例。新增維碩專案時接到主幹線上，不畫回頭線、不另畫一張。換公司時新增一張地圖與 `map` 名稱，不把不同公司的專案畫在同一張圖；Projects 頁目前不放地圖。新公司的專案填好 `system_map` 後，首頁成果地圖會自動多一家（名稱取自該公司專案的 `company`，顯示時去掉「（股份）有限公司」或 Ltd.）。
+- **MUST**：frontmatter 填 `system_map: { map, area }`。地圖一家公司一張，在 [SystemMap.astro](src/components/SystemMap.astro)；完整地圖只出現在首頁成果地圖，專案頁顯示 [system-maps.ts](src/data/system-maps.ts) 的 `map_crops` 裁切範圍，避免四頁重複同一張大圖；「本專案負責」標籤放在地圖框外右上角，不疊在圖上。海科的地圖由 `canva-export/structure.png` 用 SVG 重畫：不放品牌名稱，PSP 與渠道名稱保留；重畫來源只記在 source-notes，頁面不加圖說。海科地圖的線要畫出**方向與流動的東西**：客戶的入口一律從 Client Portal 拉虛線（信用卡到 Payabl、其他渠道到 CPS）；雙向的資金流畫成兩條帶標籤的箭頭（信用卡段 Recharge／Refunded、掉單段 Deposit／Withdraw）。Payabl 這個名字只出現在信用卡段（「Credit Card Payabl」），掉單段的信用卡渠道用通稱「Credit Card PSP」。帳務段的「CRM 後台 × 4」表示每個 regulator 各一套後台。維碩的地圖（`weishuo`）是主幹線圖：一筆事件的主流程由左到右，外部來源從上方接入、產出從下方接出，箭頭只往右或往下；每條連線標上傳遞的資料（例如「量測值」「乾濕、風速、降雨」「判定結果」）；本人負責的節點以主題色框線並標上階段文字（量到、查證、判定、看見，不加 01–04 編號，避免和專案頁的章節編號混淆），左下角附圖例。新增維碩專案時接到主幹線上，不畫回頭線、不另畫一張。換公司時新增一張地圖與 `map` 名稱，不把不同公司的專案畫在同一張圖；Projects 頁目前不放地圖。新公司的專案填好 `system_map` 後，首頁成果地圖會自動多一家（名稱取自該公司專案的 `company`，顯示時去掉「（股份）有限公司」或 Ltd.）。
 - **MUST**：frontmatter 填 `tldr: { problem, approach, result }`，每行一句、約 40 字以內、不放數字（數字交給 `metrics`）。`summary` 保留給 Projects 卡片與 meta description。
 - **MUST**：數字單一出處。每個數字只在證明它的那一章完整出現一次，其他章寫「（見 Result）」；01 放證明問題存在的數字，05 放執行結果與統計，06 只放 Before / After 對照，不重抄 05。
 - **MUST**：元件預算。一張投影片一個主元件（表格、卡片、長條、Mermaid、log、Before / After、錄影擇一；Tech Label、名詞說明、CSV 收合區不計），相鄰投影片的主元件盡量不同；每章 Markdown 表格最多 2 張；分布型資料用 `bar-list`、兩欄對應用清單，不用表格；痛點卡片只用在 01。
@@ -26,12 +42,15 @@ Peter Chang 的作品集網站（Astro 7 + Markdown + Mermaid，部署到 GitHub
 - **MUST**：網站以繁體中文為主（`/`），英文版在 `/en/`，全站頁面（含專案頁）都有兩種語言。中文頁面內文一律繁體中文。來源系統的簡體欄位名稱與狀態值（交易状态、处理完成、客户问题…）在頁面上轉成繁體，「账号」寫成台灣慣用的「帳號」；公開 CSV 可保留來源原貌，頁面上註明「CSV 保留來源系統的簡體字」。用 OpenCC 等工具判斷時，異體字（台、才、查核、吃、群、折、佣、准、表）不要改。
 - **MUST**：網站頁面不放 emoji 或圓圈數字（①②），語意顏色交給既有元件（章節徽章、`tone-*`、`ba-before`／`ba-after`）；README 與 docs 不受此限。
 - **MUST**：每個專案在第一章加「名詞說明」收合頁籤（`glossary-details`），定義經 Peter 確認後才放上，不確定的名詞先問。
+  - 海科專案的信用卡用語統一：信用卡入金稱**充值（Recharge）**、出金稱**退款（Refunded）**，退款遵守**原入原出**（退回充值時使用的原卡，並對應原本的充值訂單）。Credit Card 與 Drop-Order 兩頁的名詞說明要一致。
 - **MUST**：frontmatter 填 `categories`（技術類型，至少一個），可選值只來自 [src/data/project-categories.ts](src/data/project-categories.ts)；新類型先加進該檔。Projects 頁只顯示有專案的分類按鈕。
 - **MUST**：期間欄位只寫日期，格式 `YYYY/MM~YYYY/MM`（月份補零）；仍在運作的寫 `YYYY/MM~`。「開發」「上線」標籤由 [ProjectPeriod.astro](src/components/ProjectPeriod.astro) 加上，Markdown 不寫標籤或括號說明。
   - `period` 填開發期間；`launch` 填上線期間，沒有上線資訊就省略。卡片與專案頁顯示成兩欄對齊的「開發／上線」兩行，編號與公司名稱另起一行。
   - 同一專案有多條線、各自開發與上線（例如 Drop-Order 的入金／出金）時改填 `phases: [{ name, period, launch }]`，顯示成「列 = 線別、欄 = 開發／上線」的表格；`period` 保留整體期間但不顯示，也不再填 `launch`。線別用中文（入金／出金）。
   - 日期需經 Peter 確認，來源記在 source-notes。
 - 長章節用 `<hr data-slide="小標">` 切成章內投影片（一張約一個螢幕、說明與它的圖表同一張），切法見框架文件〈Components〉。
+  - Mermaid 流程圖預設 `flowchart LR`；由上往下排超過一個螢幕高時，一律改成由左往右。
+  - Markdown 表格在桌面 1280px 不可橫向捲動：最多約 5 欄；過寬時拿掉可以寫進下方說明的欄、合併同類欄（例如幣別併入金額），長表頭用 `<br>` 斷行，短的路徑或代碼用 `&nbsp;` 防止斷行。窄版 500px 允許表格內橫向捲動。
 
 ## 網站設計慣例
 
@@ -74,7 +93,7 @@ Peter Chang 的作品集網站（Astro 7 + Markdown + Mermaid，部署到 GitHub
 | `metrics` 的 `on_home: true` | 成果地圖卡片上顯示的數字（每個專案最多 2 個），數值與說明直接讀 `metrics` | 超過 2 個 build 擋 |
 | `system_map.area`、`accent` | 成果地圖上該區的位置與顏色，要和卡片同色；卡片順序依 [system-maps.ts](src/data/system-maps.ts) 的 `map_area_order` | 人工 |
 | 專案改名或新增區域 | [system-maps.ts](src/data/system-maps.ts) 的 `map_tags`（地圖上的短名，中英文各一）、`map_crops`（專案頁的裁切範圍）＋ SystemMap.astro 的 `tag_at` 座標 | 人工 + 截圖（首頁全圖與該專案頁都要看） |
-| `focus`、`stack` | 首頁專長與工具列：專長 = 所有專案 `focus` 聯集；工具 = 出現在 2 個以上專案的 `stack`，用得多的在前 | 自動；新增專案後截圖看長度 |
+| `focus`、`stack` | 首頁專長與工具列：專長依 [focus-groups.ts](src/data/focus-groups.ts) 收成 3 個能力群組（群組名稱＋該組的 focus 小字）；工具 = 出現在 3 個以上專案的 `stack`，用得多的在前 | 新的 `focus` 沒有歸到任何群組時 build 擋；群組名稱與歸屬人工；新增專案後截圖看長度 |
 | 新增一家公司 | `content.config.ts` 的 `system_map.map` 與 `area` enum、[system-maps.ts](src/data/system-maps.ts) 的型別、`map_area_order`、`map_tags`、[SystemMap.astro](src/components/SystemMap.astro) 新增該公司的圖、`global.css` 的 `.impact-company:has(...)` 補上新 `area` 名稱；下拉選單與卡片分組自動產生 | enum 不符 build 擋；圖與 CSS 人工 |
 | 同一家公司的專案 `company` 名稱 | 成果地圖的標題／分頁只取該公司第一個專案的 `company`（去掉法人字尾），各專案要寫成一模一樣 | 人工 |
 | 系統地圖的圖形（[SystemMap.astro](src/components/SystemMap.astro)） | 首頁成果地圖（全圖）與專案頁 Quick Read（裁切）共用同一張；節點移動後檢查 `map_crops` 與 `tag_at` 是否還框得到 | 人工 + 截圖 |

@@ -34,11 +34,11 @@ accent: forest
 <hr data-slide="背景與名詞">
 
 - 客戶入金、出金時，訂單會經過兩個系統：**CPS** 對接各國渠道、實際收付款，**CRM** 記錄客戶帳戶與交易狀態。
-- CPS 的結果要回寫到 CRM。回寫中斷就形成**掉單**：入金 CPS 已成功、CRM 仍停在審核或處理中，客戶付了錢卻沒入帳；出金 CRM 顯示完成、CPS 實際失敗，錢沒出去也沒退回。
+- CPS 的結果要回寫到 CRM。回寫中斷（常見原因是渠道回呼失敗或上游系統異常）就形成**掉單**：入金 CPS 已成功、CRM 仍停在審核或處理中，客戶付了錢卻沒入帳；出金 CRM 顯示完成、CPS 實際失敗，錢沒出去也沒退回。
 - 掉單落在後置流程，往往是客戶先發現，再透過 CS、Sales、Finance 來詢問。
 
 <details class="glossary-details">
-<summary>名詞說明<span class="mono">12 個名詞 · 點擊展開</span></summary>
+<summary>名詞說明<span class="mono">13 個名詞 · 點擊展開</span></summary>
 <table>
 <thead><tr><th>名詞</th><th>說明</th></tr></thead>
 <tbody>
@@ -50,13 +50,43 @@ accent: forest
 <tr><td>LBT</td><td>Local Bank Transfer，本地銀行轉帳出金</td></tr>
 <tr><td>IBT</td><td>International Bank Transfer，國際電匯出金</td></tr>
 <tr><td>Crypto & e-Wallet</td><td>加密貨幣與電子錢包出金</td></tr>
-<tr><td>CreditCard 出金</td><td>信用卡入金的客戶出金時，款項退回原卡</td></tr>
+<tr><td>CreditCard 出金</td><td>信用卡充值（Recharge）的客戶出金時，款項以退款（Refunded）退回原卡</td></tr>
+<tr><td>原入原出</td><td>信用卡出金須退回充值時使用的原卡，並對應原本的充值訂單</td></tr>
 <tr><td>Reverse</td><td>出金失敗時，在 CRM 把已扣除的金額退回客戶帳戶</td></tr>
 <tr><td>Handler／Checker</td><td>Handler 依案件到 CRM 補登入金或 Reverse；Checker 是營運人員的事後複盤</td></tr>
 <tr><td>心跳列（Heartbeat Row）</td><td>該次執行沒有新案件時，只寫入偵測時間的一列，用來證明管線有正常執行</td></tr>
 </tbody>
 </table>
 </details>
+
+<hr data-slide="掉單判定規則">
+
+掉單發生時，CRM 與 CPS 各自看起來都正常，只有把同一筆訂單在兩邊的狀態放在一起看，才看得出不一致。因此要解決的不是「查得不夠快」，而是**沒有機制持續核對 CRM 與 CPS 上同一筆訂單的狀態**。
+
+我先和營運端逐條對齊「什麼狀態組合算掉單」，再把規則寫成程式。下表是五種案件類型的判定規則：
+
+| 案件類型 | CRM 狀態 | CPS 狀態 | 代表的情況 | 處理動作 |
+|---|---|---|---|---|
+| Deposit | 尚未成功（Audit、Submit to third party、Processing 等） | 交易成功、交易成功(人工) | 客戶已付款，CRM 未入帳 | Handler 到 CRM 補登入金 |
+| Withdraw-LBT／Crypto&Wallet／IBT | Apply Status 為 Completed | 交易狀態或出金狀態為失敗、拒絕 | CRM 已扣款，渠道實際沒有出金 | Handler 到 CRM Reverse，依失敗原因回覆客戶 |
+| Withdraw-CreditCard | Success 或 Partial Success，且 Order Status 為 Refunded | 出金失敗 | CRM 已記退款，CPS 實際沒有退回原卡 | 同上 |
+
+<hr data-slide="對照範例">
+
+五種案件類型各舉一筆實際案件，對照 CRM 與 CPS 的狀態：
+
+| 案件類型 | CRM 狀態 | CPS 交易／出金狀態 | 金額 | 處理 |
+|---|---|---|---|---|
+| Deposit | Audit | 交易成功 | 9,641 INR | 補登入金（done） |
+| Withdraw-LBT | Completed | 處理完成／交易失敗(人工) | 55,704 INR | Reverse（reversed） |
+| Withdraw-Crypto&Wallet | Completed | 提交拒絕 | （空白） | Reverse（reversed） |
+| Withdraw-CreditCard | Success | 處理完成／交易失敗(人工) | 50 EUR | Reverse（reversed） |
+| Withdraw-IBT | Completed | 審核拒絕／審核拒絕 | 461.82 USD | Reverse（reversed） |
+
+*取自本頁公開 CSV 的實際案件（2026/03 與 2026/09；CSV 保留來源系統的簡體字）。Crypto&Wallet 這筆在來源資料中沒有金額；幣別去掉 CC_、IBT_ 前綴。*
+
+- **Deposit**：CPS 已收款成功，CRM 仍停在 Audit，客戶付了錢卻沒入帳。
+- **出金四類**：CRM 已顯示完成或成功，CPS 實際失敗或被拒絕，錢沒出去也沒退回，由 Handler 到 CRM Reverse。
 
 <hr data-slide="痛點與證據">
 
@@ -133,22 +163,12 @@ accent: forest
 
 ## Solution Design
 
-<hr data-slide="掉單判定規則">
-
-先和營運端逐條對齊「什麼狀態組合算掉單」，再把規則寫成程式。下表是五種案件類型的判定規則：
-
-| 案件類型 | CRM 狀態 | CPS 狀態 | 代表的情況 | 處理動作 |
-|---|---|---|---|---|
-| Deposit | 尚未成功（Audit、Submit to third party、Processing 等） | 交易成功、交易成功(人工) | 客戶已付款，CRM 未入帳 | Handler 到 CRM 補登入金 |
-| Withdraw-LBT／Crypto&Wallet／IBT | Apply Status 為 Completed | 交易狀態或出金狀態為失敗、拒絕 | CRM 已扣款，渠道實際沒有出金 | Handler 到 CRM Reverse，依失敗原因回覆客戶 |
-| Withdraw-CreditCard | Success 或 Partial Success，且 Order Status 為 Refunded | 出金失敗 | CRM 已記退款，CPS 實際沒有退回原卡 | 同上 |
-
 <hr data-slide="痛點與解決方向">
 
 **痛點 → 解決方向**（對應圖 3 的架構）：
 
 - **掉單後置發現** → 排程每小時自動比對，新掉單在下一次整點執行就會出現。
-- **排查要逐層定位** → 一次取齊 CRM 報表、CPS 資料與信用卡明細，依上表規則判定；出金案件自動帶出原因類別與狀態軌跡。
+- **排查要逐層定位** → 一次取齊 CRM 報表、CPS 資料與信用卡明細，依掉單判定規則（見 Problem）判定；出金案件自動帶出原因類別與狀態軌跡。
 - **依賴熟悉架構的人** → 判定規則寫進程式，案件寫入 LarkSheet；Handler 只處理已判定的案件。
 - **監控中斷沒人知道** → 沒有新案件時也寫入心跳列，區分「沒有掉單」和「管線沒跑」。
 
@@ -313,7 +333,7 @@ flowchart TB
 
 ### 執行統計（Deposit 2026-03-30 ~ 11-17；Withdrawal 2026-09-09 ~ 11-17）
 
-資料來源：管線寫入 LarkSheet 的完整紀錄（公開 CSV）。「案件」指 Tx 不是 `-` 的列；信用卡出金一張出金單可能對應多筆原入金單，以「出金單 × 原入金單」計為一件，與管線的去重單位相同。「執行次數」指不重複的 Comparison Time。
+資料來源：管線寫入 LarkSheet 的完整紀錄（公開 CSV）。「案件」指 Tx 不是 `-` 的列；信用卡出金依原入原出，一張出金單可能對應多筆原充值單，以「出金單 × 原充值單」計為一件，與管線的去重單位相同。「執行次數」指不重複的 Comparison Time。
 
 | 案件類型 | 案件 | 日均 | 執行次數 | 有新案件的執行 | 處理狀態 |
 |---|---|---|---|---|---|

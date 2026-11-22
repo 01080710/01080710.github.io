@@ -4,7 +4,7 @@ subtitle: "聲音照相科技執法：從超標事件到稽查工作單"
 summary: "四個零散需求：設備與場域管理 API、天候查證工具、事件審核 API、稽核儀表板。放回聲音照相的執法流程，剛好補上一筆超標事件從被量到、查證、判定到被看見的四個斷點。"
 company: "維碩科技股份有限公司"
 period: "2025/02~2025/12"
-role: "負責資料串接與可視化：設備與場域管理 API、天候查證工具、事件審核 API、稽核儀表板；影像辨識由影像處理團隊負責"
+role: "負責資料串接與可視化：設備與場域管理 API、天候查證工具、事件審核 API、噪音事件稽核儀表板（影像辨識由影像處理團隊負責）"
 stack: ["Python", "FastAPI", "SQLAlchemy / MSSQL", "Swagger (OpenAPI)", "WebSocket", "Docker", "Selenium", "LangChain", "GPT-4o-mini", "Google Maps API", "Plotly", "Streamlit", "Pillow"]
 focus: ["API Development", "Data Visualization"]
 system_map: { map: "weishuo", area: "noise-enforcement" }
@@ -31,8 +31,8 @@ accent: amber
 <hr data-slide="背景">
 
 - **聲音照相**是取締改裝噪音車的科技執法：路邊噪音計量到超過管制標準的聲音，攝影機同時拍下車輛，形成一筆**超標事件**。
-- **超標不等於違規。** 審核人員要確認四項現場條件（前後三秒有沒有車、地面乾濕、風速是否小於 5 m/s、最近降雨時間），才能判定**有效**或**無效**。
-- 我接到的需求很零散：設備管理 API、天氣查詢、事件審核後台、稽核儀表板。放回執法流程看，剛好是同一筆事件**量到、查證、判定、看見**的四個斷點。影像辨識由影像處理團隊負責。
+- **超標不等於違規，** 審核人員要確認四項現場條件（前後三秒有沒有車、地面乾濕、風速是否小於 5 m/s、最近降雨時間），才能判定**有效**或**無效**。
+- 我接到的需求很零散：設備管理 API、天氣查詢、事件審核後台、噪音事件稽核儀表板，放回執法流程看，剛好是同一筆事件**量到、查證、判定、看見**的四個斷點。
 
 <details class="glossary-details">
 <summary>名詞說明<span class="mono">8 個名詞 · 點擊展開</span></summary>

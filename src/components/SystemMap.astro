@@ -25,7 +25,7 @@ const view_box = area ? (map_crops[map][area] ?? "0 0 960 484") : (map === "weis
 const tags = map_tags[lang];
 // Where each area's tag sits in the 960x484 viewBox (overview only).
 const tag_at: Record<Area, { x: number; y: number }> = {
-  "credit-card": { x: 125, y: 116 },
+  "credit-card": { x: 110, y: 116 },
   "ticket":      { x: 317, y: 240 },
   "account":     { x: 480, y: 376 },
   "drop-order":  { x: 680, y: 228 },
@@ -52,11 +52,11 @@ const area_label = area ? area_labels[lang][area] : "";
 const uid = `sysmap-${map}-${area ?? "all"}`;   // unique per page even when several maps are shown
 const svg_text = lang === "en"
   ? { title: "Money flow and system map",
-      desc:  "Clients enter the CRM through the Client Portal; deposits and withdrawals go through CPS to each payment channel; credit card payments go through Bridger to the credit card PSP; CRM accounts map to MetaTrader trading accounts; Freshservice tickets are handled by OP groups or dispatched to 11 other teams and closed out by OP; OP group tickets are synced daily into a yearly SQLite data mart.",
-      serial: "Serial no.", groups: "OP handling groups", mart: "SQLite · one file per year", dispatch: "dispatch / close", other: "Other teams (11)", not_yet: "not synced yet" }
+      desc:  "Clients enter the CRM through the Client Portal; deposits and withdrawals go through CPS to each payment channel; card payments start in the Client Portal, and credit card recharges and refunds go through Bridger to Payabl; CRM accounts map to MetaTrader trading accounts, and account status is read from the CRM back office of each of 4 regulators; Freshservice tickets are handled by OP groups or dispatched to 11 other teams and closed out by OP; OP group tickets are synced daily into a yearly SQLite data mart.",
+      serial: "Serial no.", groups: "OP handling groups", mart: "SQLite · one file per year", dispatch: "dispatch / close", other: "Other teams (11)", not_yet: "not synced yet", backoffice: "Back offices × 4", per_reg: "one per regulator" }
   : { title: "海科科技的資金流與系統地圖",
-      desc:  "客戶經 Client Portal 進入 CRM；入金與出金經 CPS 連到各支付渠道；信用卡款項經 Bridger 連到信用卡 PSP；CRM 帳戶對應 MetaTrader 交易帳戶；Freshservice 工單由 OP 的處理群組處理，或派給 11 個轉派部門後由 OP 收口；OP 群組的工單每日同步到每年一檔的 SQLite。",
-      serial: "流水號", groups: "OP 處理群組", mart: "SQLite · 每年一檔", dispatch: "派單／收口", other: "轉派部門（11）", not_yet: "尚未納入擷取" };
+      desc:  "客戶經 Client Portal 進入 CRM；入金與出金經 CPS 連到各支付渠道；客戶在 Client Portal 刷卡，信用卡充值（Recharge）與退款（Refunded）經 Bridger 連到 Payabl；CRM 帳戶對應 MetaTrader 交易帳戶，帳戶狀態分別在 4 個 regulator 的 CRM 後台查詢；Freshservice 工單由 OP 的處理群組處理，或派給 11 個轉派部門後由 OP 收口；OP 群組的工單每日同步到每年一檔的 SQLite。",
+      serial: "流水號", groups: "OP 處理群組", mart: "SQLite · 每年一檔", dispatch: "派單／收口", other: "轉派部門（11）", not_yet: "尚未納入擷取", backoffice: "CRM 後台 × 4", per_reg: "每個 regulator 一套" };
 // Noise camera enforcement (weishuo): a "spine" diagram. One event's main path runs left to right
 // (site -> event DB -> review API -> dashboard); the device & site management API and the image team join from
 // above (master data and plates), weather evidence feeds the review, outputs leave below,
@@ -116,19 +116,28 @@ const ws = lang === "en"
           <text class="small" x="480" y="192">Deposit / WD Audit</text>
         </g>
 
-        <!-- Credit Card Anomaly Detection: card PSP <-> Bridger <-> CRM -->
+        <!-- Credit Card Anomaly Detection: Payabl <-> Bridger <-> CRM; Recharge = card deposit, Refunded = card withdrawal -->
         <g class:list={["area", { "is-building": building.includes("credit-card") }]} data-area="credit-card" data-accent={accents["credit-card"]}>
           {overview && <text class="map-tag" x={tag_at["credit-card"].x} y={tag_at["credit-card"].y}>{tags["credit-card"]}</text>}
-          <path class="flow" d="M210 178 H250" />
-          <path class="flow" d="M360 178 H400" />
+          <path class="flow" d="M400 84 H180 V120" />
+          <path class="arrow" d="M180 128 L175 119 H185 Z" />
+          <path class="flow" d="M210 170 H258" />
+          <path class="arrow" d="M266 170 L257 165 V175 Z" />
+          <path class="flow" d="M266 188 H218" />
+          <path class="arrow" d="M210 188 L219 183 V193 Z" />
+          <path class="flow" d="M354 170 H392" />
+          <path class="arrow" d="M400 170 L391 165 V175 Z" />
+          <path class="flow" d="M400 188 H362" />
+          <path class="arrow" d="M354 188 L363 183 V193 Z" />
+          <text class="tiny" x="238" y="163">Recharge</text>
+          <text class="tiny" x="238" y="203">Refunded</text>
           <rect class="node" x="40" y="128" width="170" height="100" rx="6" />
-          <text class="strong" x="125" y="150">Credit Card PSP</text>
-          <text class="small" x="125" y="172">Worldpay</text>
-          <text class="small" x="125" y="190">Checkout</text>
-          <text class="small" x="125" y="208">Innatech (Payabl)</text>
-          <rect class="node node-core" x="250" y="150" width="110" height="56" rx="28" />
-          <text class="strong" x="305" y="173">Bridger</text>
-          <text class="small" x="305" y="192">PSP trx ID</text>
+          <text class="strong" x="125" y="158">Credit Card Payabl</text>
+          <text class="small" x="125" y="182">Worldpay</text>
+          <text class="small" x="125" y="200">Checkout</text>
+          <rect class="node node-core" x="266" y="150" width="88" height="56" rx="28" />
+          <text class="strong" x="310" y="173">Bridger</text>
+          <text class="small" x="310" y="192">PSP trx ID</text>
         </g>
 
         <!-- Deposit & Withdrawal Drop-Order Monitor: CRM <-> CPS -> channels -->
@@ -150,13 +159,12 @@ const ws = lang === "en"
           <path class="flow" d="M740 178 L790 150" />
           <path class="flow" d="M740 178 L790 208" />
           <path class="flow" d="M740 178 L790 266" />
-          <path class="flow" d="M740 178 L790 324" />
           <rect class="node" x="790" y="10" width="160" height="48" rx="6" />
-          <text class="strong" x="870" y="30">Credit Card</text>
-          <text class="small" x="870" y="48">Googlepay</text>
+          <text class="strong" x="870" y="30">Local Bank</text>
+          <text class="small" x="870" y="48">Offline · Xpay · Zota</text>
           <rect class="node" x="790" y="68" width="160" height="48" rx="6" />
-          <text class="strong" x="870" y="88">Local Bank</text>
-          <text class="small" x="870" y="106">Offline · Xpay · Zota</text>
+          <text class="strong" x="870" y="88">Credit Card PSP</text>
+          <text class="small" x="870" y="106">Googlepay · Applepay</text>
           <rect class="node" x="790" y="126" width="160" height="48" rx="6" />
           <text class="strong" x="870" y="146">E-wallet</text>
           <text class="small" x="870" y="164">Skrill · Neteller · Paypal</text>
@@ -165,9 +173,6 @@ const ws = lang === "en"
           <text class="small" x="870" y="222">USDT · USDC · ETH</text>
           <rect class="node" x="790" y="242" width="160" height="48" rx="6" />
           <text class="strong" x="870" y="271">International Bank</text>
-          <rect class="node" x="790" y="300" width="160" height="48" rx="6" />
-          <text class="strong" x="870" y="320">Payabl PSP</text>
-          <text class="small" x="870" y="338">Applepay · EU Netbanking</text>
         </g>
 
         <!-- Account Operation Automation Engine: CRM account <-> MetaTrader -->
@@ -179,6 +184,11 @@ const ws = lang === "en"
           <text class="strong" x="480" y="271">MetaTrader</text>
           <rect class="node node-core" x="400" y="316" width="160" height="40" rx="6" />
           <text class="small" x="480" y="341">CRM Trading History · Ticket</text>
+          <path class="flow" d="M540 276 H590" />
+          <rect class="node" x="598" y="250" width="150" height="40" rx="6" />
+          <rect class="node" x="590" y="258" width="150" height="40" rx="6" />
+          <text class="strong" x="665" y="276">{svg_text.backoffice}</text>
+          <text class="small" x="665" y="291">{svg_text.per_reg}</text>
         </g>
 
         <!-- OP Ticket Data Pipeline: Freshservice tickets -> yearly SQLite -> OP; OP dispatches to and closes out from these groups -->

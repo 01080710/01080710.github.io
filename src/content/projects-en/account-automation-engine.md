@@ -37,11 +37,53 @@ tldr:
 <tr><td>Account Server</td><td>The trading server an account lives on (for example MT5_AU7)</td></tr>
 <tr><td>Trading Account / Rebate Account</td><td>The account a client trades with / the account an IB (introducing broker) receives rebates in</td></tr>
 <tr><td>Balance / Equity / Margin / Profit / Credit</td><td>Balance / equity / used margin / floating P&amp;L / bonus or credit line</td></tr>
-<tr><td>Offboarding</td><td>Closing and settling a high-risk client's accounts</td></tr>
-<tr><td>Ownership transfer</td><td>Moving a client to another IB or salesperson</td></tr>
+<tr><td>Offboarding</td><td>Closing and settling a high-risk client's accounts; each account's balance, equity and margin must be checked first</td></tr>
+<tr><td>Ownership transfer</td><td>Moving a client to another IB or salesperson; the status of every account the client holds must be checked first</td></tr>
 </tbody>
 </table>
 </details>
+
+<hr data-slide="What gets looked up">
+
+**Two things to know first:**
+
+- **One client, many accounts**: one client (UID) often has several trading accounts, spread across the CRM back offices of different regulators and across different trading servers; looking up one client often means switching between several back offices.
+- **Why look them up first**: offboarding (closing and settling a high-risk client's accounts) and ownership transfer (moving a client to another IB or salesperson) both touch the client's money or ownership, so the Balance, Margin, Profit and other status of every account on the list must be checked first.
+
+Requests from different teams look different, but they are all "take a list of userIds / Accounts and return the same set of account fields". So the problem to solve is not "looking up faster" but that **the same lookup was redone by hand every time, one account and one back office at a time**. I turned that shared workflow into an engine:
+
+```mermaid
+flowchart LR
+    OP["OP colleague<br/>fills in the Input sheet"] --> SCH["Schedule<br/>picks up pending requests every 5 min"]
+    SCH --> VAL{"Input Validation<br/>Requestor required<br/>at least one Account / UserId"}
+    VAL -->|"Fail"| REC_F["Record<br/>writes Input validation failed<br/>and the missing field"]
+    VAL -->|"Pass"| QRY["Batch Query<br/>across regulators / servers<br/>Asyncio concurrency"]
+    QRY --> SRC["CRM back office of each regulator<br/>API reverse engineering · read-only"]
+    SRC --> NORM["Normalize<br/>unify field formats"]
+    NORM --> REC["Record<br/>one summary row per batch"]
+    NORM --> OUT["Output<br/>per-account details, current day only"]
+    REC --> CLR["Clear Input<br/>free it for the next request"]
+    OUT --> CLR
+```
+
+*Figure 1　Engine flow*
+
+<hr data-slide="Worked example">
+
+One real request from 2026-07-07, showing how a list moves from Input to Record and Output:
+
+| Step | Sheet | Content |
+|---|---|---|
+| 1. Fill in the list | Input (illustration) | Requestor: the requester; UserId: 68 clients |
+| 2. Validation passes, the schedule picks it up | — | Requestor filled in, at least one UserId |
+| 3. Query across back offices, write the summary | Record | 68 clients → 322 accounts; 22 countries, 33 servers, 2 regulators, 25 account types; 0 not found |
+| 4. Write the details | Output | One row per account (322 rows), 23 fields (see the output format in Result) |
+| 5. Clear Input | Input | Freed for the next request |
+
+*Rows 3 and 4 come from the Record sheet (R-0055); Input is not kept, so row 1 is an illustration.*
+
+- **68 clients, 322 accounts**: about 4.7 accounts per client on average, across 2 regulators and 33 servers, which is why doing it by hand meant switching back offices over and over.
+- **When validation fails**: nothing is queried, and Record states the missing field (examples in Result).
 
 <hr data-slide="Pain points and evidence">
 
@@ -97,7 +139,7 @@ tldr:
 </div>
 </section>
 </div>
-<figcaption>Figure 1　Three pain points in the original process (manual steps based on OP's routine; 45 seconds per account is an estimate; batch figures from the engine's Record sheet, 2026-06-09 ~ 2026-11-16)</figcaption>
+<figcaption>Figure 2　Three pain points in the original process (manual steps based on OP's routine; 45 seconds per account is an estimate; batch figures from the engine's Record sheet, 2026-06-09 ~ 2026-11-16)</figcaption>
 </figure>
 
 <hr data-slide="Why it was worth solving">
@@ -105,7 +147,7 @@ tldr:
 **Why it was worth solving:**
 
 1. **The demand is real**: in the 24 weeks since launch, every single week had successful batch requests (monthly usage in Result).
-2. **Single batches already exceed what people can do**: the largest batch (Figure 1) would take one person about 27 working days to look up by hand.
+2. **Single batches already exceed what people can do**: the largest batch (Figure 2) would take one person about 27 working days to look up by hand.
 3. **The work is highly repetitive and generalizes well**: requests from different teams look different on the surface, but they all come down to "here is a list of userIds / Accounts, return the same set of account fields". About 80% of OP's day-to-day account queries can be covered by one workflow.
 
 ## Solution Design
@@ -113,7 +155,7 @@ tldr:
 The three pain points break down into five things to solve. The image below shows the usage rules users see in LarkSheet; the "Maps to" column of the table points to its rows:
 
 ![Usage rules of the account operations automation engine: core rules and four standard procedure steps](../../assets/projects/account-automation-engine/rule-zh.png)
-*Figure 2　Usage rules in LarkSheet (Chinese section of the Rule sheet; the sheet's English section says the same, and the table below gives the content in English; click to enlarge)*
+*Figure 3　Usage rules in LarkSheet (Chinese section of the Rule sheet; the sheet's English section says the same, and the table below gives the content in English; click to enlarge)*
 
 | Pain point | Solution | Maps to |
 |---|---|---|
@@ -128,47 +170,28 @@ The three pain points break down into five things to solve. The image below show
 - Users are non-technical OP colleagues, so the entry point had to be a tool they already use (LarkSheet), not a new system to learn.
 - Several teams share one sheet; filling it in at the same time would overwrite each other, so a queue was needed.
 - The output is client account data, so details cannot stay on a shared sheet for long: Output keeps only the current day and is deleted the next day.
-- TODO: add how CRM data is obtained and the access limits (whether there is an official API or DB access).
+- The CRM offers OP no API or database access; a request to IT for a full-field report or DB access had no foreseeable delivery date, and batch cases could not wait. So the engine uses API reverse engineering to log in to each regulator's CRM back office and fetch the account data.
 
 ## Alternative Solutions
 
 | Option | Approach | Pros | Cons |
 |---|---|---|---|
 | A. Keep manual one-by-one lookups | Use IT's UID list and look up each account in each CRM back office | No development | Staff time grows linearly with case volume (time in Problem) |
-| B. A one-off script per request | Write a query script for each list as requests arrive | Fast for a single delivery | Needs an engineer every time; OP can't use it alone; logic scattered and hard to audit |
-| **C. General batch query engine (chosen)** | Distill the shared workflow into a tool with LarkSheet as the entry point, run on a schedule | OP submits on their own; covers about 80% of day-to-day queries; every run is recorded | Shared fields and validation rules must be designed up front; the remaining ~20% of special requests still need individual handling |
+| B. Ask IT for a full-field report or DB access | IT or the system owner provides an official data source | Most complete data, officially supported | Requested, but with no foreseeable delivery date; batch cases could not wait |
+| C. A one-off script per request | Write a query script for each list as requests arrive | Fast for a single delivery | Needs an engineer every time; OP can't use it alone; logic scattered and hard to audit |
+| **D. General batch query engine (chosen)** | Distill the shared workflow into a tool with LarkSheet as the entry point, run on a schedule | OP submits on their own; covers about 80% of day-to-day queries; every run is recorded | Shared fields and validation rules must be designed up front; the remaining ~20% of special requests still need individual handling |
 
-> TODO: confirm whether "ask IT for a full-field report" or DB query access was also evaluated at the time; if so, add it to the table.
 
 ## Selected Solution
 
 <hr data-slide="Why this option">
 
-**Chosen: C, a general batch query engine**
+**Chosen: D, a general batch query engine**
 
 1. **Removes A's linear staffing problem**: the engine does the lookups; people only fill in the list and review results, so more cases don't need more people.
-2. **Removes B's dependence on engineers**: once OP fills in the parameters in LarkSheet, the schedule picks the request up; no engineer is needed.
-3. **Find the pattern first, then build the tool**: about 80% of requests share the same input (userId / Account) and the same output fields, which makes one tool worthwhile; the remaining special cases are not forced into the same flow.
-
-<hr data-slide="Engine flow">
-
-TODO: add the original engine architecture diagram (only the text flow below exists for now).
-
-The engine flow:
-
-```mermaid
-flowchart TB
-    OP["OP colleague<br/>fills in the Input sheet"] --> SCH["Schedule<br/>picks up pending requests every 5 min"]
-    SCH --> VAL{"Input Validation<br/>Requestor required<br/>at least one Account / UserId"}
-    VAL -->|"Fail"| REC_F["Record<br/>writes Input validation failed<br/>and the missing field"]
-    VAL -->|"Pass"| QRY["Batch Query<br/>across regulators / servers<br/>Asyncio concurrency"]
-    QRY --> SRC["CRM back offices"]
-    SRC --> NORM["Normalize<br/>unify field formats"]
-    NORM --> REC["Record<br/>one summary row per batch"]
-    NORM --> OUT["Output<br/>per-account details, current day only"]
-    REC --> CLR["Clear Input<br/>free it for the next request"]
-    OUT --> CLR
-```
+2. **No waiting on IT**: B's delivery date was out of our hands, so D could go live first; if an official data source arrives later, only the fetch layer needs replacing.
+3. **Removes C's dependence on engineers**: once OP fills in the parameters in LarkSheet, the schedule picks the request up; no engineer is needed.
+4. **Find the pattern first, then build the tool**: about 80% of requests share the same input (userId / Account) and the same output fields, which makes one tool worthwhile; the remaining special cases are not forced into the same flow.
 
 <hr data-slide="Design notes">
 
@@ -179,7 +202,7 @@ flowchart TB
 - **Exclusive queue**: while Input has data, nobody else can overwrite it; Input is cleared only after both Record and Output are written, so no request is lost.
 - **Per-request limit**: the rules allow at most 2,000 rows per request, so one request can't hold the entry point for too long.
 - **Data retention**: Output details are kept only for the current day and deleted automatically the next day; Record keeps only summaries, as the long-term run history.
-- **Access scope**: TODO: add the account the engine uses to read the CRM, read/write scope (expected read-only), approver and how credentials are stored.
+- **Access scope**: the engine logs in to each regulator's CRM back office with my automation account, which is read-only and writes nothing.
 
 ## Result
 
@@ -200,7 +223,7 @@ The same kind of query: on the left, done by hand in the CRM back office; on the
 <video controls muted playsinline preload="metadata" src="../../../media/account-automation-engine/crm_system.mp4"></video>
 </div>
 </div>
-<figcaption>Figure 3　Real screen recordings (click to play)</figcaption>
+<figcaption>Figure 4　Real screen recordings (click to play)</figcaption>
 </figure>
 
 <hr data-slide="One real run">
@@ -270,7 +293,7 @@ Successful batches and accounts verified per month; October was the busiest mont
 <li class="is-peak" style="--v: 100%"><span class="bar-label">2026-10 (207 runs)</span><span class="bar"></span><span class="bar-value">113,659</span></li>
 <li style="--v: 26.8%"><span class="bar-label">2026-11 (to 11/16, 38 runs)</span><span class="bar"></span><span class="bar-value">30,458</span></li>
 </ul>
-<figcaption>Figure 4　Accounts verified per month (successful runs in brackets; from the Record sheet)</figcaption>
+<figcaption>Figure 5　Accounts verified per month (successful runs in brackets; from the Record sheet)</figcaption>
 </figure>
 
 <hr data-slide="Run statistics">
@@ -310,7 +333,7 @@ Source: the Record sheet (de-identified CSV below). "Successful run" means a bat
 <div class="ba-row"><p class="ba-item">How it's used</p><p class="ba-before">OP has to work every back office in person</p><p class="ba-after">Teams submit a form themselves; the schedule runs every 5 minutes<small>Basis: Rule sheet; monthly usage in Result</small></p></div>
 <div class="ba-row"><p class="ba-item">Bad input</p><p class="ba-before">No record</p><p class="ba-after">Incomplete requests are stopped before querying, with the missing field explained<small>Basis: Record's return_msg; blocked count in Result</small></p></div>
 </div>
-<figcaption>Figure 5　Before / After (hours and cost are estimates; basis below)</figcaption>
+<figcaption>Figure 6　Before / After (hours and cost are estimates; basis below)</figcaption>
 </figure>
 
 <hr data-slide="Not yet quantified">

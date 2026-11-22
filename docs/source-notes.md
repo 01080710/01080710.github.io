@@ -345,8 +345,51 @@ frontmatter `period`（開發）／`launch`（上線）／`phases`（分線）�
 - [x] ~~逆向工程實際遇到的技術難點~~（原 Infra 頁已移除，2026-11-20）
 - [x] ~~Infrastructure 排程與儲存層實際工具~~（原 Infra 頁已移除，2026-11-20）
 - [ ] 信用卡偵測的告警通知管道
-- [ ] 信用卡偵測 Area 3 比對規則（Prepare／Build Logic／Separate Types／Regularity）
+- [ ] 信用卡偵測 Area 3 比對規則：判定流程已補為圖 1（2026-11-22，見下方）；各步驟的比對欄位、金額容許誤差、排除狀態仍待補
+- [ ] 信用卡圖 1 的 D／E 定義為推論，待 Peter 確認
 - [ ] Drop-Order Monitor：名詞說明定義確認、帳號核准者、進線量與溝通次數的前後統計
 - [ ] 專案期間：Credit Card 開發 2026/01~2026/02 尚未對照 PDF 或經 Peter 逐項確認
 - [ ] OP Ticket Data Pipeline：見該段〈待 Peter 確認〉；第 62 段回補完成後更新回補統計
 - [ ] `profile.ts`／`profile.en.ts` 仍引用舊 Infra 專案（「整合 6 個封閉平台」等），待 Peter 決定改寫內容
+
+## Credit Card 圖 1 比對規則（2026-11-22）
+
+- 位置：01 Problem Assessment 第 2 張「要對的是什麼」（Peter 選擇，2026-11-22；原放 04 系統架構後），讓 Quick Read 之後可直接切入比對脈絡。圖號隨之重排：比對規則 1、痛點 2、架構 3、複核長條 4、Before / After 5。
+- 招牌視覺：本圖（比對規則決策樹，Mermaid），類型與其他專案不重複。
+
+- 來源：Peter 提供的專案簡報比對邏輯圖（Assessment：match = A + C、mismatch = B + D），以 Mermaid 重繪；原圖的勾、驚嘆號、叉改為節點文字「一致／寫入 LarkSheet／不輸出」。
+- 「數量」= 同一張 Parent Ticket 底下兩邊的 Child Ticket 數（Peter 確認）。
+- E = CRM 有、Payabl 沒有，不輸出（Peter 確認）。
+- D 的定義（Payabl 有退款，CRM 查無或金額不同；多筆金額不同也歸 D）為 Claude 推論，Peter 不記得細節：依據是公開 CSV 的 570 列輸出 `recon_source` 只有 `Payabl & Crm`（343）與 `Payabl`（227），沒有只在 CRM 的案件，且原圖 mismatch 只含 B + D。
+
+## 海科系統地圖調整（2026-11-22）
+
+- 依 Peter 指示移除兩處 Payabl：「信用卡異常偵測」Credit Card PSP 節點的 Innatech (Payabl) 一行；「掉單監控」渠道中的 Payabl PSP 整塊（含 Applepay · EU Netbanking 與 CPS 連線）。
+- 掉單監控的專案頁裁切 `map_crops["drop-order"]` 由高 360 縮為 300。
+- 信用卡異常偵測節點標題由「Credit Card PSP」改為「Credit Card Payabl」（Peter 指示，2026-11-22）；Worldpay、Checkout 兩行保留。
+- 信用卡段加上方向線（Peter 指示，2026-11-22）：信用卡入金稱充值（Recharge，Payabl → Bridger → CRM），出金稱退款（Refunded，CRM → Bridger → Payabl），比照掉單監控的 Deposit／Withdraw 雙線。Bridger 節點由寬 110 縮為 88，讓左側間距放得下標籤。
+- 新增 Client Portal → Credit Card Payabl 虛線（客戶只能在 Client Portal 操作，Peter 確認，2026-11-22）；專案頁裁切 `map_crops["credit-card"]` 改為 `24 56 540 184` 以納入 Client Portal；首頁標籤左移避開新連線。
+- 名詞說明：原「Refund」一列改為「充值（Recharge）」「退款（Refunded）」兩列，共 12 個名詞；Payabl 說明改為「實際執行充值與退款」；01 背景第一句改用充值／退款（Peter 指示用語，2026-11-22；定義文字為 Claude 草擬，待 Peter 確認）。
+- 01 第 2 張「要對的是什麼」開頭加入問題定位（Peter 口述，2026-11-22）：退款時兩邊後台難對照 → 兩種錯誤（Child Ticket 數量不同而配錯、數量一致但手動打錯金額）→ 要解決的是「退款後沒有逐筆對回兩邊的機制」。兩種錯誤與 CSV 營運備註一致（重複退款、退錯訂單、退錯金額），數字留在 Result。
+- 01 第 3 張「對照範例」（Peter 選擇，2026-11-22）：欄位名稱取自公開 CSV（Currency、Refund Amount、Refund_Amount_crm、recon_source），金額取自頁面既有的兩筆實際案件（350 EUR 重複退款、60 vs 30 USD 退錯金額）；Parent／Child Ticket 為示意代碼（原始報表不在 repo）。P-01 的 CRM -350 與 TX-01 歸 C 為示意推定，非原始紀錄。待 Peter 提供原始報表表頭後可換成真實欄位。
+- A–E 處理方式三行由 01 移到 04「設計重點」的比對規則項下（Peter 指示，2026-11-22）。
+- 「原入原出」加入 01 第 2 張開頭（比對單位是每筆 Child Ticket 的設計理由）與名詞說明（共 13 個名詞）（Peter 指示，2026-11-22）。定義「退回充值時使用的原卡，並對應原本的充值訂單」為 Claude 草擬，依據為 CSV 備註「wrong deposit order」與退錯訂單案件，待 Peter 確認；英文暫譯 same-route rule。對照範例表 Parent Ticket 與 Child Ticket 分成兩欄。
+- 對照範例擴充為 A–E 各一例（Peter 指示，2026-11-22）：B（60 vs 30 USD）、D（350 EUR 重複退款）金額取自實際案件；A（100 USD）、C（200／150 GBP）、E（CRM -80 EUR）為示意金額，頁面已註明。
+
+## Drop-Order 故事線補強（2026-11-22，Peter 指示）
+
+- 地圖：掉單監控的 Credit Card 渠道改為「Credit Card PSP」＋「Googlepay · Applepay」，補回信用卡出金經 CPS 到 PSP 的路徑；依 Peter 選擇只在掉單地圖用通稱、不寫 Payabl（信用卡段仍為 Credit Card Payabl）。依據：CSV 的 CreditCard 渠道為 `ApplePay-Payabl-CPS`、`Apple/GooglePay-BridgerPay-CPS`。
+- 用語同步：名詞說明「CreditCard 出金」改用充值／退款；新增「原入原出」（共 13 個名詞）；執行統計的「原入金單」改為「原充值單」並點出原入原出。
+- 掉單常見原因：渠道回呼失敗、上游系統異常（Peter 確認）。
+- 「掉單判定規則」由 02 第 1 張移到 01 第 2 張，開頭加問題定位（Claude 草擬）；02「痛點與解決方向」的「依上表規則」改為「依掉單判定規則（見 Problem）」。
+- 01 第 3 張「對照範例」：五種案件類型各一筆 CSV 實際案件，與 Result 輸出格式不重複——Deposit TX-00002（UPI-India，Audit／交易成功，9,641 INR，done）、LBT TX-03772（India-CPS，55,704 INR）、Crypto&Wallet TX-03771（USDT-BEP，提交拒絕，來源無金額）、CreditCard TX-04178（Apple/GooglePay-BridgerPay，CC_EUR 50）、IBT TX-03980（IBT-Australia，审核拒绝，IBT_USD 461.82）。頁面狀態值轉繁體，幣別去前綴。
+
+## Account Engine 故事線補強（2026-11-22，Peter 確認）
+
+- 結構：04「引擎流程」Mermaid 移到 01 第 2 張「要查的是什麼」，改為 LR 並編為圖 1（原 TODO「補上引擎架構圖原圖」移出頁面，仍待補）；後續圖號順延：痛點 2、使用規則 3、錄影 4、每月使用量 5、Before / After 6。
+- 01 第 2 張開頭：兩個關鍵概念（一個客戶多個帳戶、清退與轉歸屬為何要先查）＋問題定位（Claude 草擬，Peter 確認方向）。名詞說明的清退、轉歸屬補上「執行前要先確認……」（Claude 草擬，待 Peter 確認）。
+- 01 第 3 張「對照範例」：Record R-0055（2026-07-07 15:20:17；68 users、322 accounts、22 countries、33 servers、2 regulators、25 account types、missing 0）；Input 不留存，該列為示意；Output「共 322 列」依每帳戶一列推定。4.7 = 322 ÷ 68。
+- 資料取得：CRM 沒有開放 API／DB 權限給 OP，以 API 逆向工程登入各 regulator 的 CRM 後台（Peter 確認）。Stack 加入 API Reverse Engineering。
+- 方案表新增 B「請 IT 提供完整欄位報表或 DB 權限」：已提出、交期遙遙無期（Peter 確認）；原 B、C 改為 C、D，選擇理由新增「不必等待 IT」。
+- 權限範圍：Peter 的自動化帳號，唯讀（Peter 確認）；核准者與帳密存放方式未提供。
+- 地圖：帳務段新增「CRM 後台 × 4／每個 regulator 一套」（4 個 regulator 取自痛點卡的單批涵蓋數），由 MetaTrader 連出；`map_crops.account` 加寬為 `380 138 380 226`。

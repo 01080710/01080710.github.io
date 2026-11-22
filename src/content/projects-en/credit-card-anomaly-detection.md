@@ -20,19 +20,21 @@ tldr:
 
 <hr data-slide="Background and terms">
 
-- When a client who deposited by credit card requests a withdrawal, the refund is executed at the payment provider **Payabl** and must also be recorded in the internal **CRM**.
+- When a client who recharged by credit card requests a withdrawal, the money is refunded to the original card at the payment provider **Payabl** and must also be recorded in the internal **CRM**.
 - If the two amounts differ (wrong refund amount, duplicate refund, missing CRM record), company money has actually left without being recorded correctly.
 
 <details class="glossary-details">
-<summary>Glossary<span class="mono">11 terms · click to expand</span></summary>
+<summary>Glossary<span class="mono">13 terms · click to expand</span></summary>
 <table>
 <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
 <tbody>
 <tr><td>Deposit / Withdrawal</td><td>A client putting money in / taking money out</td></tr>
 <tr><td>PSP</td><td>Payment Service Provider, an external payment provider</td></tr>
-<tr><td>Payabl</td><td>The credit card PSP in this project; it actually processes card payments and refunds</td></tr>
+<tr><td>Payabl</td><td>The credit card PSP in this project; it actually processes recharges and refunds</td></tr>
 <tr><td>CRM</td><td>Internal system that manages clients and transaction records</td></tr>
-<tr><td>Refund</td><td>When a client who deposited by credit card withdraws, the money goes back to the original card</td></tr>
+<tr><td>Recharge</td><td>A credit card deposit: the client pays by card in the Client Portal</td></tr>
+<tr><td>Refunded</td><td>A credit card withdrawal: the money goes back to the card used for the recharge</td></tr>
+<tr><td>Same-route rule</td><td>A credit card withdrawal must go back to the card used for the recharge and be tied to the original recharge order</td></tr>
 <tr><td>Parent Ticket</td><td>One withdrawal request from a client</td></tr>
 <tr><td>Child Ticket</td><td>The actual refund transactions that request is split into (possibly several)</td></tr>
 <tr><td>QC</td><td>Quality Control, the operations shift that did the manual comparison</td></tr>
@@ -42,6 +44,55 @@ tldr:
 </tbody>
 </table>
 </details>
+
+<hr data-slide="What gets matched">
+
+Credit card withdrawals follow the **same-route rule**: money must go back to the card the client recharged with and be tied to the original recharge order, so one withdrawal request (Parent Ticket) is split by recharge record into several refunds (Child Tickets).
+
+When staff execute a refund in Payabl, Payabl shows only Child Ticket details while CRM has the Parent Ticket but no details, so the two are hard to cross-check. Two kinds of mistakes are common:
+
+- **The counts differ**: under the same Parent Ticket, the two sides have a different number of Child Tickets, so the refund was matched to the wrong Child Ticket (for example, a duplicate refund).
+- **The counts match, the amount does not**: both sides have the same number, but the refund amount was typed in wrong.
+
+So the problem to solve is not "people make mistakes" but that **after a refund, nothing checks every Child Ticket under each Parent Ticket against both sides**. The matching rules follow the same-route rule and these two mistakes: the unit of comparison is every Child Ticket under a Parent Ticket, not the total of the whole report; compare the count first, then whether there is one or several, then the amounts, and put every Child Ticket into one of the classes A–E:
+
+```mermaid
+flowchart LR
+    ALL["Child Tickets of<br/>one Parent Ticket"] -->|"same count"| SAME["Same"]
+    ALL -->|"different count"| NS["Not Same"]
+    SAME -->|"1 each (1 vs 1)"| ONE["Same_One"]
+    SAME -->|"several each (3 vs 3)"| MORE["Same_More"]
+    ONE -->|"same amount"| A["A. single_ok<br/>match"]
+    ONE -->|"different amount"| B["B. single_mismatch<br/>written to LarkSheet"]
+    MORE -->|"scan all"| AMT{"compare amounts<br/>one by one"}
+    NS -->|"scan all,<br/>extract the unmatched part"| AMT
+    AMT -->|"on both sides, same amount"| C["C. multi_ok<br/>match"]
+    AMT -->|"refunded on Payabl,<br/>missing or different in CRM"| D["D. recon_mismatch_payabl<br/>written to LarkSheet"]
+    AMT -->|"only in CRM"| E["E. recon_mismatch_crm<br/>not output"]
+```
+*Figure 1　Matching rules (redrawn from the project deck)*
+
+<hr data-slide="Worked example">
+
+One example for each of A–E, showing the fields and values on both sides and which path in Figure 1 it takes:
+
+| Parent<br>Ticket | Child<br>Ticket | Refund Amount (Payabl) | Refund_Amount_crm | Path in Figure 1 |
+|---|---|---|---|---|
+| P-01 | TX-01 | 100 USD | -100 USD | Same_One&nbsp;→&nbsp;A |
+| P-02 | TX-02 | 60 USD | -30 USD | Same_One&nbsp;→&nbsp;B |
+| P-03 | TX-03 | 200 GBP | -200 GBP | Same_More&nbsp;→&nbsp;C |
+| P-03 | TX-04 | 150 GBP | -150 GBP | Same_More&nbsp;→&nbsp;C |
+| P-04 | TX-05 | 350 EUR | -350 EUR | Not&nbsp;Same&nbsp;→&nbsp;C |
+| P-04 | TX-06 | 350 EUR | (blank) | Not&nbsp;Same&nbsp;→&nbsp;D |
+| P-05 | TX-07 | (blank) | -80 EUR | Not&nbsp;Same&nbsp;→&nbsp;E |
+
+*Illustration: field names come from the public CSV on this page (the currency comes from its Currency column); amounts for B and D come from the real cases in Result, amounts for A, C and E are illustrative; Parent and Child Ticket numbers are codes, and CRM records refunds as negative amounts.*
+
+- **A (P-01)**: one on each side, same amount; not output.
+- **B (P-02, counts match, wrong amount)**: one on each side, different amounts; output with `recon_source` = `Payabl & Crm`.
+- **C (P-03)**: two on each side, every amount matches; not output.
+- **D (P-04, counts differ, duplicate refund)**: Payabl has 2, CRM has 1; the one that matches is C, the extra one is D, output with `recon_source` = `Payabl`.
+- **E (P-05)**: only CRM has a record and no refund went out on Payabl; not output.
 
 <hr data-slide="Pain points and evidence">
 
@@ -121,7 +172,7 @@ tldr:
 </div>
 </section>
 </div>
-<figcaption>Figure 1　Three pain points in the original process (redrawn from the project deck; platform screenshots have the address bar cropped and the login account and brand logo blurred; roster names replaced with letters; hours are estimates)</figcaption>
+<figcaption>Figure 2　Three pain points in the original process (redrawn from the project deck; platform screenshots have the address bar cropped and the login account and brand logo blurred; roster names replaced with letters; hours are estimates)</figcaption>
 </figure>
 
 <hr data-slide="Why it was worth solving">
@@ -129,7 +180,7 @@ tldr:
 **Why it was worth solving:**
 
 1. **Losses are direct cash outflows**: among the wrong refunds confirmed after launch were a case where Payabl refunded 60 USD while the CRM recorded only 30 USD, and a 350 EUR refund paid out twice; both were reversed by operations after detection (counts in Result).
-2. **The manual approach could not scale**: each round takes a fixed amount of time (Figure 1), 5 shifts was already the limit, and checking more often would only mean adding people.
+2. **The manual approach could not scale**: each round takes a fixed amount of time (Figure 2), 5 shifts was already the limit, and checking more often would only mean adding people.
 
 ## Solution Design
 
@@ -146,7 +197,7 @@ The three pain points break down into four things to solve:
 
 - No official API or database access.
 - The Payabl back office has no report download feature.
-- The two reports become available at different times: CRM covers T ~ T-4 and Payabl covers T ~ T-2, in different time zones (CRM in Asia/Nicosia, Payabl in Asia/Taipei) (Figure 2).
+- The two reports become available at different times: CRM covers T ~ T-4 and Payabl covers T ~ T-2, in different time zones (CRM in Asia/Nicosia, Payabl in Asia/Taipei) (Figure 3).
 
 ## Alternative Solutions
 
@@ -159,7 +210,7 @@ Four options were evaluated at the time; the first three were the alternatives:
 | C. Browser automation (Selenium / RPA) | Simulate a person using the back-office pages | No need to understand the system's internal interfaces | Payabl has no download button, so it would have to copy page by page; breaks when the UI changes; slow, needs a browser running all the time |
 | **D. API reverse engineering (chosen)** | Analyze the HTTP APIs behind the back-office pages, then log in and fetch reports directly with code | Independent of the UI, fast, schedulable | Takes time to analyze; must be adjusted when the other side's API changes |
 
-> Pros and cons are based on the system limits recorded in Figure 1; all four options were actually evaluated at the time.
+> Pros and cons are based on the system limits recorded in Figure 2; all four options were actually evaluated at the time.
 
 ## Selected Solution
 
@@ -174,9 +225,9 @@ Four options were evaluated at the time; the first three were the alternatives:
 <hr data-slide="Architecture">
 
 ![Credit Card Withdraw Workflow architecture diagram](../../assets/projects/credit-card-anomaly-detection/solution-architecture.png)
-*Figure 2　Credit Card Withdraw Workflow (excerpt from the project deck; click the image to enlarge)*
+*Figure 3　Credit Card Withdraw Workflow (excerpt from the project deck; click the image to enlarge)*
 
-The same flow as Figure 2, in text:
+The same flow as Figure 3, in text:
 
 ```mermaid
 flowchart TB
@@ -201,7 +252,10 @@ flowchart TB
 - **Branch B** first queries the cases already in LarkSheet and appends only new anomalies, so the same transaction is not reported every hour.
 - Every stage writes a JSON structured log (`service`, `stage`, `status`), so an error points straight to the stage that failed.
 - **Access scope**: approved in advance by my manager; uses an existing account the company issued to operations, reads only reports staff could already see, and writes nothing; credentials live in environment variables, not in code.
-- **Matching rules** (Area 3: Prepare → Build Logic → Separate Types → Regularity): each rule was aligned with operations. TODO: add what each step does (fields compared, amount tolerance, excluded statuses).
+- **Matching rules** (Area 3: Prepare → Build Logic → Separate Types → Regularity): each rule was aligned with operations; the decision flow is in Figure 1. How each class is handled:
+  - **A, C**: both sides agree; not output.
+  - **B, D**: Payabl refunded but CRM does not match; written to LarkSheet for operations to review, with `recon_source` showing whether CRM has a matching record (see the output format in Result).
+  - **E**: no refund actually went out on Payabl, so it is not an anomaly; the Mar–Jul output contains no case that appears only in CRM.
 
 ## Result
 
@@ -278,7 +332,7 @@ The pipeline errs on the side of flagging and leaves the call to operations. "Co
 <li class="is-peak" style="--v: 5.5%"><span class="bar-label">Confirmed wrong refunds</span><span class="bar"></span><span class="bar-value">29</span></li>
 <li class="is-peak" style="--v: 5.4%"><span class="bar-label">Reversed or cancellation requested after detection</span><span class="bar"></span><span class="bar-value">28</span></li>
 </ul>
-<figcaption>Figure 3　From flagged to reversed (unique transactions; from the public CSV on this page)</figcaption>
+<figcaption>Figure 4　From flagged to reversed (unique transactions; from the public CSV on this page)</figcaption>
 </figure>
 
 - **The 523 flagged**: 307 amount mismatches, 216 with no CRM record.
@@ -315,7 +369,7 @@ Source: the full record CSV produced by the pipeline (`Payabl QC new Template - 
 <div class="ba-row"><p class="ba-item">Detection time</p><p class="ba-before">Up to about 5 hours (the gap between two manual rounds)</p><p class="ba-after">Within 1 hour of the data becoming available<small>Basis: hourly schedule; run interval in Result</small></p></div>
 <div class="ba-row"><p class="ba-item">Getting the data</p><p class="ba-before">Manual download and copy-paste, about 45 minutes per round</p><p class="ba-after">Pulled automatically via API reverse engineering; a run takes only a few minutes<small>Basis: run log in Result; manual time is an estimate</small></p></div>
 <div class="ba-row"><p class="ba-item">Coverage</p><p class="ba-before">Manual Excel comparison, volume not recorded</p><p class="ba-after">Every run compares all transactions on both sides<small>Basis: run log in Result</small></p></div>
-<div class="ba-row"><p class="ba-item">Actually caught</p><p class="ba-before">No record</p><p class="ba-after">Nearly all confirmed wrong refunds were reversed or had cancellation requested after detection<small>Basis: CSV review column and operations notes; counts in Result Figure 3</small></p></div>
+<div class="ba-row"><p class="ba-item">Actually caught</p><p class="ba-before">No record</p><p class="ba-after">Nearly all confirmed wrong refunds were reversed or had cancellation requested after detection<small>Basis: CSV review column and operations notes; counts in Result Figure 4</small></p></div>
 </div>
-<figcaption>Figure 4　Before / After (redrawn from the project deck). Correction: the original slide said 4 times a day, ↑600% and >24 hours; the actual roster had 5 rounds a day (about 5 hours apart), and after automation the actual average Mar–Jul was 20.7 runs a day, about 4.1×. The original "accuracy" row is left out.</figcaption>
+<figcaption>Figure 5　Before / After (redrawn from the project deck). Correction: the original slide said 4 times a day, ↑600% and >24 hours; the actual roster had 5 rounds a day (about 5 hours apart), and after automation the actual average Mar–Jul was 20.7 runs a day, about 4.1×. The original "accuracy" row is left out.</figcaption>
 </figure>

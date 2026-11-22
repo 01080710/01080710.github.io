@@ -21,11 +21,11 @@ tldr:
 <hr data-slide="Background and terms">
 
 - When a client deposits or withdraws, the order passes through two systems: **CPS** connects to channels in each country and actually collects and pays out, and the **CRM** records the client's account and transaction status.
-- CPS results have to be written back to the CRM. When that write-back breaks, it becomes a **drop order**: for a deposit, CPS has succeeded but the CRM is still in review or processing, so the client paid but was not credited; for a withdrawal, the CRM shows completed but CPS actually failed, so the money neither went out nor came back.
+- CPS results have to be written back to the CRM. When that write-back breaks (most often because a channel callback failed or an upstream system had an outage), it becomes a **drop order**: for a deposit, CPS has succeeded but the CRM is still in review or processing, so the client paid but was not credited; for a withdrawal, the CRM shows completed but CPS actually failed, so the money neither went out nor came back.
 - Drop orders sit late in the process, so clients often notice first and then ask through CS, Sales or Finance.
 
 <details class="glossary-details">
-<summary>Glossary<span class="mono">12 terms · click to expand</span></summary>
+<summary>Glossary<span class="mono">13 terms · click to expand</span></summary>
 <table>
 <thead><tr><th>Term</th><th>Meaning</th></tr></thead>
 <tbody>
@@ -37,13 +37,43 @@ tldr:
 <tr><td>LBT</td><td>Local Bank Transfer withdrawal</td></tr>
 <tr><td>IBT</td><td>International Bank Transfer withdrawal</td></tr>
 <tr><td>Crypto &amp; e-Wallet</td><td>Crypto and e-wallet withdrawals</td></tr>
-<tr><td>CreditCard withdrawal</td><td>When a client who deposited by credit card withdraws, the money goes back to the original card</td></tr>
+<tr><td>CreditCard withdrawal</td><td>When a client who recharged by credit card withdraws, the money is refunded to the original card</td></tr>
+<tr><td>Same-route rule</td><td>A credit card withdrawal must go back to the card used for the recharge and be tied to the original recharge order</td></tr>
 <tr><td>Reverse</td><td>When a withdrawal fails, returning the deducted amount to the client's account in the CRM</td></tr>
 <tr><td>Handler / Checker</td><td>The Handler credits the deposit or reverses the withdrawal in the CRM for each case; the Checker is the operations staff member who reviews afterwards</td></tr>
 <tr><td>Heartbeat row</td><td>When a run finds no new case, a row with only the detection time, proving the pipeline ran normally</td></tr>
 </tbody>
 </table>
 </details>
+
+<hr data-slide="Drop-order rules">
+
+When a drop order happens, CRM and CPS each look normal on their own; the mismatch only shows when the same order's status on both sides is put together. So the problem to solve is not "checking faster" but that **nothing keeps checking the same order's status in CRM against CPS**.
+
+First, operations and I agreed rule by rule on "which status combinations count as a drop order"; then the rules were written into code. The table shows the rules for the five case types:
+
+| Case type | CRM status | CPS status | What it means | Action |
+|---|---|---|---|---|
+| Deposit | Not yet successful (Audit, Submit to third party, Processing, etc.) | Success, Success (manual) | Client paid, CRM not credited | Handler credits the deposit in the CRM |
+| Withdraw-LBT / Crypto&Wallet / IBT | Apply Status is Completed | Transaction or payout status is failed or rejected | CRM deducted the money, the channel never paid out | Handler reverses in the CRM and replies to the client based on the failure reason |
+| Withdraw-CreditCard | Success or Partial Success, and Order Status is Refunded | Payout failed | CRM recorded the refund, CPS never returned it to the card | Same as above |
+
+<hr data-slide="Worked example">
+
+One real case for each of the five case types, comparing the status in CRM and CPS:
+
+| Case type | CRM status | CPS transaction / payout status | Amount | Handling |
+|---|---|---|---|---|
+| Deposit | Audit | Success | 9,641 INR | Deposit credited (done) |
+| Withdraw-LBT | Completed | Completed / Failed (manual) | 55,704 INR | Reverse (reversed) |
+| Withdraw-Crypto&Wallet | Completed | Submission rejected | (blank) | Reverse (reversed) |
+| Withdraw-CreditCard | Success | Completed / Failed (manual) | 50 EUR | Reverse (reversed) |
+| Withdraw-IBT | Completed | Review rejected / Review rejected | 461.82 USD | Reverse (reversed) |
+
+*Real cases from the public CSV on this page (March and September 2026; CPS statuses translated, the CSV keeps the source system's Chinese). The Crypto&Wallet case has no amount in the source data; the CC_ and IBT_ currency prefixes are dropped.*
+
+- **Deposit**: CPS collected the money, but CRM is still at Audit, so the client paid and was not credited.
+- **The four withdrawal types**: CRM shows completed or success, but CPS actually failed or rejected it, so the money neither went out nor came back; a Handler reverses it in CRM.
 
 <hr data-slide="Pain points and evidence">
 
@@ -120,22 +150,12 @@ tldr:
 
 ## Solution Design
 
-<hr data-slide="Drop-order rules">
-
-First, operations and I agreed rule by rule on "which status combinations count as a drop order"; then the rules were written into code. The table shows the rules for the five case types:
-
-| Case type | CRM status | CPS status | What it means | Action |
-|---|---|---|---|---|
-| Deposit | Not yet successful (Audit, Submit to third party, Processing, etc.) | Success, Success (manual) | Client paid, CRM not credited | Handler credits the deposit in the CRM |
-| Withdraw-LBT / Crypto&Wallet / IBT | Apply Status is Completed | Transaction or payout status is failed or rejected | CRM deducted the money, the channel never paid out | Handler reverses in the CRM and replies to the client based on the failure reason |
-| Withdraw-CreditCard | Success or Partial Success, and Order Status is Refunded | Payout failed | CRM recorded the refund, CPS never returned it to the card | Same as above |
-
 <hr data-slide="Pain points and solutions">
 
 **Pain point → solution** (matches the architecture in Figure 3):
 
 - **Found late** → an hourly scheduled comparison; a new drop order appears on the next top-of-the-hour run.
-- **Tracing layer by layer** → pull the CRM report, CPS data and credit card details together and apply the rules above; withdrawal cases automatically carry the reason category and status trail.
+- **Tracing layer by layer** → pull the CRM report, CPS data and credit card details together and apply the drop-order rules (see Problem); withdrawal cases automatically carry the reason category and status trail.
 - **Depends on people who know the architecture** → the rules live in code and cases go to LarkSheet; Handlers only work on cases already identified.
 - **Nobody knows when monitoring stops** → write a heartbeat row even when there are no new cases, so "no drop orders" can be told apart from "the pipeline didn't run".
 
@@ -300,7 +320,7 @@ Withdrawal cases get a reason category from the Reason Table, and Handlers reply
 
 ### Run statistics (Deposit 2026-03-30 ~ 11-17; Withdrawal 2026-09-09 ~ 11-17)
 
-Source: the full records the pipeline wrote to LarkSheet (public CSV). A "case" is a row whose Tx is not `-`; one credit card withdrawal can map to several original deposits, and each "withdrawal × original deposit" pair counts as one case, the same unit the pipeline de-duplicates on. "Runs" means distinct Comparison Times.
+Source: the full records the pipeline wrote to LarkSheet (public CSV). A "case" is a row whose Tx is not `-`; under the same-route rule, one credit card withdrawal can map to several original recharges, and each "withdrawal × original recharge" pair counts as one case, the same unit the pipeline de-duplicates on. "Runs" means distinct Comparison Times.
 
 | Case type | Cases | Per day | Runs | Runs with new cases | Handling status |
 |---|---|---|---|---|---|

@@ -6,7 +6,7 @@ company: "海科科技有限公司"
 period: "2026/05~2026/06"
 launch: "2026/06~"
 role: "從 OP 痛點歸納出共通查詢流程，獨立設計並實作批量查詢引擎"
-stack: ["Python", "Asyncio", "LarkSheet API", "Input Validation", "Data Normalization", "Audit Log"]
+stack: ["Python", "Asyncio", "API Reverse Engineering", "LarkSheet API", "Input Validation", "Data Normalization", "Audit Log"]
 focus: ["Batch Processing", "Process Automation"]
 system_map: { map: "hytech", area: "account" }
 metrics:
@@ -48,11 +48,53 @@ accent: ocean
 <tr><td>Account Server</td><td>交易帳戶所在的交易伺服器（例如 MT5_AU7）</td></tr>
 <tr><td>Trading Account／Rebate Account</td><td>客戶交易用的帳戶／IB（介紹經紀商）收取返佣的帳戶</td></tr>
 <tr><td>Balance／Equity／Margin／Profit／Credit</td><td>餘額／淨值／已用保證金／浮動損益／贈金或信用額度</td></tr>
-<tr><td>清退</td><td>關閉高風險客戶的帳戶並結清</td></tr>
-<tr><td>轉歸屬</td><td>把客戶轉到另一個 IB 或業務名下</td></tr>
+<tr><td>清退</td><td>關閉高風險客戶的帳戶並結清；執行前要先確認每個帳戶的餘額、淨值與保證金</td></tr>
+<tr><td>轉歸屬</td><td>把客戶轉到另一個 IB 或業務名下；執行前要先確認客戶名下每個帳戶的狀態</td></tr>
 </tbody>
 </table>
 </details>
+
+<hr data-slide="要查的是什麼">
+
+**先理解兩件事：**
+
+- **一個客戶，多個帳戶**：一個客戶（UID）常有多個交易帳戶，分散在不同 regulator 的 CRM 後台與不同的交易伺服器（Server）；查一個客戶，往往要切好幾個後台。
+- **為什麼要先查**：清退（關閉高風險客戶的帳戶並結清）與轉歸屬（把客戶轉到另一個 IB 或業務名下）都會動到客戶的資金或歸屬，執行前必須先確認名單上每個帳戶的 Balance、Margin、Profit 等狀態。
+
+各團隊的需求看起來不同，其實都是「給一份 userId／Account 名單，回傳同一組帳戶欄位」。因此要解決的不是「查得不夠快」，而是**同一種查詢每次都由人工逐筆、逐個後台重做**。我把這個共通流程做成引擎：
+
+```mermaid
+flowchart LR
+    OP["OP 同仁<br/>填寫 Input 工作表"] --> SCH["Schedule<br/>每 5 分鐘撿取待處理案件"]
+    SCH --> VAL{"Input Validation<br/>Requestor 必填<br/>Account / UserId 至少一個"}
+    VAL -->|"不通過"| REC_F["Record<br/>寫入 Input validation failed<br/>與缺少的欄位"]
+    VAL -->|"通過"| QRY["Batch Query<br/>跨 regulator / Server 查詢<br/>Asyncio 並行"]
+    QRY --> SRC["各 regulator 的 CRM 後台<br/>API 逆向工程 · 唯讀"]
+    SRC --> NORM["Normalize<br/>統一欄位格式"]
+    NORM --> REC["Record<br/>每批一列摘要"]
+    NORM --> OUT["Output<br/>逐帳戶明細，只保留當天"]
+    REC --> CLR["清空 Input<br/>釋放給下一個申請"]
+    OUT --> CLR
+```
+
+*圖 1　引擎流程*
+
+<hr data-slide="對照範例">
+
+以 2026-07-07 的一次實際申請為例，看一份名單怎麼從 Input 走到 Record 與 Output：
+
+| 步驟 | 工作表 | 內容 |
+|---|---|---|
+| 1. 填寫名單 | Input（示意） | Requestor：申請人；UserId：68 個客戶 |
+| 2. 驗證通過，排程撿取 | — | Requestor 已填、至少有一個 UserId |
+| 3. 跨後台查詢，寫入摘要 | Record | 68 個客戶 → 322 個帳戶；涵蓋 22 個國家、33 個 Server、2 個 regulator、25 種帳戶類型；查無資料 0 |
+| 4. 寫入明細 | Output | 每個帳戶一列（共 322 列），23 個欄位（見 Result 的輸出格式） |
+| 5. 清空 Input | Input | 釋放給下一個申請 |
+
+*第 3、4 列取自 Record 工作表（R-0055）；Input 不留存，第 1 列為示意。*
+
+- **68 個客戶對應 322 個帳戶**：平均一個客戶約 4.7 個帳戶，分散在 2 個 regulator、33 個 Server，人工就要反覆切後台。
+- **驗證不通過時**：查詢不會執行，Record 直接寫入缺少的欄位（實例見 Result）。
 
 <hr data-slide="痛點與證據">
 
@@ -108,7 +150,7 @@ accent: ocean
 </div>
 </section>
 </div>
-<figcaption>圖 1　原流程的三個痛點（人工步驟依 OP 作業整理；每帳戶 45 秒為估計值；批量數據取自引擎的 Record 工作表，2026-06-09 ~ 2026-11-16）</figcaption>
+<figcaption>圖 2　原流程的三個痛點（人工步驟依 OP 作業整理；每帳戶 45 秒為估計值；批量數據取自引擎的 Record 工作表，2026-06-09 ~ 2026-11-16）</figcaption>
 </figure>
 
 <hr data-slide="值得投入的理由">
@@ -116,7 +158,7 @@ accent: ocean
 **值得投入解決的理由：**
 
 1. **需求量是真的**：上線 24 週，每一週都有成功的批量申請（每月使用量見 Result）。
-2. **單批量級已經超過人工能力**：最大的一批（圖 1）人工逐筆查詢，大約要一個人 27 個工作天。
+2. **單批量級已經超過人工能力**：最大的一批（圖 2）人工逐筆查詢，大約要一個人 27 個工作天。
 3. **流程高度重複，適合通則化**：不同團隊的需求表面不同，但都是「給一份 userId／Account 名單，回傳同一組帳戶欄位」。OP 日常的帳戶查詢需求中，約 80% 可以用同一套流程涵蓋。
 
 ## Solution Design
@@ -124,7 +166,7 @@ accent: ocean
 依照三個痛點，拆成五個要解決的面向。下圖是 LarkSheet 上給使用者看的使用規則，表格的「對應」欄指向圖中的各列：
 
 ![帳務營運自動化引擎的使用規則：核心規則與四個標準程序步驟](../../assets/projects/account-automation-engine/rule-zh.png)
-*圖 2　LarkSheet 上的使用規則（節錄 Rule 工作表中文部分，英文版內容相同；點擊可放大）*
+*圖 3　LarkSheet 上的使用規則（節錄 Rule 工作表中文部分，英文版內容相同；點擊可放大）*
 
 | 痛點 | 解決方向 | 對應 |
 |---|---|---|
@@ -139,47 +181,28 @@ accent: ocean
 - 使用者是非技術的 OP 同仁，入口必須是他們已經在用的工具（LarkSheet），不能要求學新系統。
 - 多個團隊共用同一張表，同時填寫會互相覆蓋，需要排隊機制。
 - 輸出內容是客戶帳戶資料，明細不能長期留在共用表上：Output 只保留當天，隔天刪除。
-- TODO：補充 CRM 資料的取得方式與權限限制（是否有官方 API 或 DB 權限）。
+- CRM 沒有開放 API 或資料庫權限給 OP；向 IT 申請完整欄位報表或 DB 權限，交期遙遙無期，批量案件等不了。因此以 API 逆向工程登入各 regulator 的 CRM 後台取得帳戶資料。
 
 ## Alternative Solutions
 
 | 方案 | 做法 | 優點 | 缺點 |
 |---|---|---|---|
 | A. 維持人工逐筆查詢 | 依 IT 提供的 UID 名單，在各 CRM 後台逐筆查 | 不需開發 | 人力隨案件量線性增加（耗時見 Problem） |
-| B. 每個需求寫一次性腳本 | 收到需求後，針對該次名單寫查詢腳本 | 單次交付快 | 每次都要工程師介入；OP 無法自行使用；邏輯分散，難以稽核 |
-| **C. 通用批量查詢引擎（採用）** | 歸納共通流程，做成以 LarkSheet 為入口、排程自動執行的工具 | OP 可自行送件；一次涵蓋約 80% 的日常查詢；每次執行都有紀錄 | 需要前期設計共通欄位與驗證規則；剩下約 20% 的特殊需求仍需個別處理 |
+| B. 請 IT 提供完整欄位報表或 DB 權限 | 由 IT 或系統負責單位提供正式的資料來源 | 資料最完整、有官方支援 | 已提出需求，但交期遙遙無期，批量案件等不了 |
+| C. 每個需求寫一次性腳本 | 收到需求後，針對該次名單寫查詢腳本 | 單次交付快 | 每次都要工程師介入；OP 無法自行使用；邏輯分散，難以稽核 |
+| **D. 通用批量查詢引擎（採用）** | 歸納共通流程，做成以 LarkSheet 為入口、排程自動執行的工具 | OP 可自行送件；一次涵蓋約 80% 的日常查詢；每次執行都有紀錄 | 需要前期設計共通欄位與驗證規則；剩下約 20% 的特殊需求仍需個別處理 |
 
-> TODO：確認當時是否也評估過「請 IT 直接提供完整欄位報表」或 DB 查詢權限，若有，補進表格。
 
 ## Selected Solution
 
 <hr data-slide="選擇理由">
 
-**選擇 C：通用批量查詢引擎**
+**選擇 D：通用批量查詢引擎**
 
 1. **解決 A 的線性人力問題**：查詢交給引擎，人工只剩填名單與審查結果，案件量增加不需要加人。
-2. **解決 B 的工程師依賴**：OP 在 LarkSheet 填完參數就會被排程撿走，不需要找工程師。
-3. **先找通則，再寫工具**：約 80% 的需求共用同一組輸入（userId／Account）與同一組輸出欄位，值得做成一個工具；剩下的特殊需求不硬塞進同一套流程。
-
-<hr data-slide="引擎流程">
-
-TODO：補上引擎架構圖原圖（目前只有下方的文字版流程）。
-
-以下是引擎的流程：
-
-```mermaid
-flowchart TB
-    OP["OP 同仁<br/>填寫 Input 工作表"] --> SCH["Schedule<br/>每 5 分鐘撿取待處理案件"]
-    SCH --> VAL{"Input Validation<br/>Requestor 必填<br/>Account / UserId 至少一個"}
-    VAL -->|"不通過"| REC_F["Record<br/>寫入 Input validation failed<br/>與缺少的欄位"]
-    VAL -->|"通過"| QRY["Batch Query<br/>跨 regulator / Server 查詢<br/>Asyncio 並行"]
-    QRY --> SRC["CRM 各後台"]
-    SRC --> NORM["Normalize<br/>統一欄位格式"]
-    NORM --> REC["Record<br/>每批一列摘要"]
-    NORM --> OUT["Output<br/>逐帳戶明細，只保留當天"]
-    REC --> CLR["清空 Input<br/>釋放給下一個申請"]
-    OUT --> CLR
-```
+2. **不必等待 IT**：B 的交期無法掌握，D 可以先上線；未來若取得正式資料來源，只需替換擷取層。
+3. **解決 C 的工程師依賴**：OP 在 LarkSheet 填完參數就會被排程撿走，不需要找工程師。
+4. **先找通則，再寫工具**：約 80% 的需求共用同一組輸入（userId／Account）與同一組輸出欄位，值得做成一個工具；剩下的特殊需求不硬塞進同一套流程。
 
 <hr data-slide="設計重點">
 
@@ -190,7 +213,7 @@ flowchart TB
 - **排隊獨佔**：Input 有資料時其他人不能覆蓋；Record 與 Output 都寫入成功後才清空 Input，避免申請被吃掉。
 - **單次上限**：規則上每次最多 2,000 筆，避免單一申請長時間佔住入口。
 - **資料保留**：Output 明細只保留當天，隔天自動刪除；Record 只留摘要，作為長期的執行紀錄。
-- **權限範圍**：TODO：補充引擎讀取 CRM 使用的帳號、讀寫範圍（預期為唯讀）、核准者、帳密存放方式。
+- **權限範圍**：使用我的自動化帳號登入各 regulator 的 CRM 後台，權限為唯讀，不寫入任何資料。
 
 ## Result
 
@@ -211,7 +234,7 @@ flowchart TB
 <video controls muted playsinline preload="metadata" src="../../media/account-automation-engine/crm_system.mp4"></video>
 </div>
 </div>
-<figcaption>圖 3　實際操作錄影（點擊播放）</figcaption>
+<figcaption>圖 4　實際操作錄影（點擊播放）</figcaption>
 </figure>
 
 <hr data-slide="一次實際執行">
@@ -281,7 +304,7 @@ Output 每個帳戶一列，共 23 個欄位。以下兩列取自 2026-11-16 的
 <li class="is-peak" style="--v: 100%"><span class="bar-label">2026-10（207 次）</span><span class="bar"></span><span class="bar-value">113,659</span></li>
 <li style="--v: 26.8%"><span class="bar-label">2026-11（至 11/16，38 次）</span><span class="bar"></span><span class="bar-value">30,458</span></li>
 </ul>
-<figcaption>圖 4　每月驗證帳戶數（括號內為成功執行次數；取自 Record 工作表）</figcaption>
+<figcaption>圖 5　每月驗證帳戶數（括號內為成功執行次數；取自 Record 工作表）</figcaption>
 </figure>
 
 <hr data-slide="執行統計">
@@ -321,7 +344,7 @@ Output 每個帳戶一列，共 23 個欄位。以下兩列取自 2026-11-16 的
 <div class="ba-row"><p class="ba-item">使用方式</p><p class="ba-before">需要 OP 親自操作每一個後台</p><p class="ba-after">各團隊自行填表送件，排程每 5 分鐘自動執行<small>依據：Rule 工作表；每月使用量見 Result</small></p></div>
 <div class="ba-row"><p class="ba-item">錯誤輸入</p><p class="ba-before">無紀錄</p><p class="ba-after">不完整的申請在查詢前被攔下，並說明缺少的欄位<small>依據：Record 的 return_msg；攔截次數見 Result</small></p></div>
 </div>
-<figcaption>圖 5　Before / After 對照（工時與成本為估計值，計算基準見下方）</figcaption>
+<figcaption>圖 6　Before / After 對照（工時與成本為估計值，計算基準見下方）</figcaption>
 </figure>
 
 <hr data-slide="尚未量化的部分">

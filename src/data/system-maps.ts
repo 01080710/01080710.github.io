@@ -14,9 +14,9 @@ export const map_area_order: Record<MapName, MapArea[]> = {
 // Each value is an SVG viewBox ("x y width height") inside the full 960x484 drawing in SystemMap.astro.
 export const map_crops: Record<MapName, Partial<Record<MapArea, string>>> = {
   hytech: {
-    "credit-card": "24 112 540 128",   // Credit Card PSP <-> Bridger <-> CRM
-    "drop-order":  "388 0 572 360",    // Client Portal / CRM <-> CPS -> channels
-    "account":     "380 138 200 226",  // CRM -> MetaTrader -> CRM trading history
+    "credit-card": "24 56 540 184",    // Client Portal -> Payabl <-> Bridger <-> CRM
+    "drop-order":  "388 0 572 300",    // Client Portal / CRM <-> CPS -> channels
+    "account":     "380 138 380 226",  // CRM -> MetaTrader -> CRM trading history, plus the regulator back offices
     "ticket":      "24 238 600 244",   // Freshservice -> Ticket Pipeline, OP groups, other teams
   },
   // One project covers the whole data chain, so the case study shows the full spine drawing.
