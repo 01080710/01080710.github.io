@@ -134,6 +134,7 @@ const hero_text = { result: t("home.pipe_result"), open: t("home.machine_open"),
   // no camera moves, clicks open the case study at once. Paused while off screen.
   import { svg_el as el, make_packet, place, set_clean, rand } from "../../lib/pipe-packets";
   import { assemble } from "../../lib/scatter-text";
+  import { assemble_photo, type PhotoAssembly } from "../../lib/photo-assemble";
   import { BASE_VIEW, recede, ring, set_layer_tilt, tilt, type View } from "../../lib/blueprint";
 
   type Kind = "match" | "align" | "query" | "stages" | "scaffold";
@@ -157,6 +158,8 @@ const hero_text = { result: t("home.pipe_result"), open: t("home.machine_open"),
   const MW = 68, MH = 44, DM = 34, DB = 60;      // machine width, height, depth; how far it sits behind the trunk
   const LINE_GAP = 104;                          // second company's line, below the first
   const ASSEMBLED_S = 1.7;                       // keep in step with the snap timings below and --hp-arrive
+  const EXPRESS = 3;                             // speed-up of the opening batch (photo-assemble)
+  const PHOTO_DEADLINE_S = 9;                    // first visit: show the whole photo by now even if a line is slow
 
   // ---------- projection ----------
   // Pipes run in one front plane, sheared so trunks run down to the right at SLOPE. A point is (x, y, depth) in that
@@ -288,15 +291,18 @@ const hero_text = { result: t("home.pipe_result"), open: t("home.machine_open"),
   interface Packet {
     g: SVGGElement; m: Machine; leg: "fly" | "in" | "proc" | "out" | "tray" | "rest"; s: number; v: number;
     a: number; spin: number; mine: boolean; t: number; outcome: "ok" | "flag" | "fail"; off: { x: number; y: number };
-    fx: number; fy: number; qx: number; qy: number; port: number;
+    fx: number; fy: number; qx: number; qy: number; port: number; express?: boolean;
   }
   interface Scene { machines: Machine[]; lines: { inlet: P3; machines: Machine[]; next: number; spawn_t: number }[]; loose: Packet[] }
   let scene: Scene | null = null;
   let build_id = 0;
   let inline = false;
+  // First visit: the photo is drawn in as live projects deliver (see photo-assemble.ts); any rebuild shows it whole.
+  let photo: PhotoAssembly = { arrive() {}, finish() {} };
 
   function build(animate: boolean) {
     if (!svg || !hero || !drop) return;
+    if (!animate) photo.finish();
     stop();
     scene = null;
     follow = null;
@@ -485,7 +491,7 @@ const hero_text = { result: t("home.pipe_result"), open: t("home.machine_open"),
     if (animate) {
       setTimeout(() => {
         if (id !== build_id) return;
-        for (let k = 0; k < 6; k++) setTimeout(() => id === build_id && spawn(k % scene!.lines.length), k * 90);
+        for (let k = 0; k < 6; k++) setTimeout(() => id === build_id && spawn(k % scene!.lines.length, true), k * 90);
         live = true;
         sync();
       }, ASSEMBLED_S * 1000);
@@ -511,10 +517,13 @@ const hero_text = { result: t("home.pipe_result"), open: t("home.machine_open"),
     }
     return null;
   }
-  function spawn(li: number) {
+  // express: the first-visit opening batch runs at EXPRESS x speed so the photo assembles within a few seconds
+  function spawn(li: number, express = false) {
     const line = scene?.lines[li], m = line && pick(line);
     if (!m) return;
-    m.queue.push(new_packet(m, false));
+    const p = new_packet(m, false);
+    if (express) { p.v *= EXPRESS; p.express = true; }
+    m.queue.push(p);
   }
   function drop_at(x: number, y: number) {
     if (!scene) return;
@@ -536,7 +545,7 @@ const hero_text = { result: t("home.pipe_result"), open: t("home.machine_open"),
 
   function begin(m: Machine, p: Packet, quiet: boolean) {
     m.cur = p; m.busy = PROC_S; p.leg = "proc"; p.t = 0; p.spin = 0;
-    p.outcome = p.mine ? "ok" : m.d.kind === "query" ? (Math.random() < FAIL_P ? "fail" : "ok") : Math.random() < FLAG_P ? "flag" : "ok";
+    p.outcome = p.mine || p.express ? "ok" : m.d.kind === "query" ? (Math.random() < FAIL_P ? "fail" : "ok") : Math.random() < FLAG_P ? "flag" : "ok";
     p.port = Math.floor(Math.random() * 4);
     if (quiet) return;
     if (m.twin) {
@@ -615,6 +624,7 @@ const hero_text = { result: t("home.pipe_result"), open: t("home.machine_open"),
           if (p.s >= m.out_route.length) {
             p.leg = "rest"; p.g.remove(); outs.delete(p);
             if (follow === p) end_follow();
+            if (!quiet) photo.arrive(m.d.accent);
             const now = performance.now();
             if (!quiet && !inline && now - last_pulse > 220) { last_pulse = now; bump(blob, [{ scale: "1" }, { scale: "1.045" }, { scale: "1" }], 420); }
           }
@@ -804,6 +814,11 @@ const hero_text = { result: t("home.pipe_result"), open: t("home.machine_open"),
   if (svg && hero && drop) {
     const first_run = !reduce && !document.documentElement.classList.contains("hero-seen");
     document.fonts.ready.then(() => {
+      const wrap = hero.querySelector<HTMLElement>(".hero-photo");
+      if (first_run && wide.matches && wrap) {
+        const live_projects = new Set(LINES.flatMap((l) => l.machines.filter((m) => !m.building).map((m) => m.accent)));
+        photo = assemble_photo(wrap, live_projects.size, PHOTO_DEADLINE_S * 1000);
+      }
       build(first_run && wide.matches);
       if (document.documentElement.classList.contains("ts-pending")) assemble_text();
       let built_w = hero.getBoundingClientRect().width;
