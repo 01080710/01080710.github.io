@@ -42,6 +42,36 @@ if (life_photo_text.length !== profile.life.photos.length) {
   );
 }
 
+// Same groups and order as profile.certifications; only name and issuer are translated (dates and images from profile.ts).
+// Names follow the English wording printed on each certificate where there is one.
+const certification_text = [
+  [
+    { name: "TQC-DA MySQL 5, Professional Level",                     issuer: "Computer Skills Foundation" },
+    { name: "TQC+ Python Machine Learning Expert",                    issuer: "Computer Skills Foundation" },
+    { name: "TQC+ Python Data Analyst Expert",                        issuer: "Computer Skills Foundation" },
+    { name: "TQC+ Software Development Knowledge",                    issuer: "Computer Skills Foundation" },
+    { name: "TQC+ Machine Learning, Python 3",                        issuer: "Computer Skills Foundation" },
+    { name: "TQC+ Web Data Extraction and Analysis, Python 3",        issuer: "Computer Skills Foundation" },
+    { name: "TQC+ Programming Language, Python 3",                    issuer: "Computer Skills Foundation" },
+  ],
+  [
+    { name: "Senior Securities Specialist",                           issuer: "Taiwan Securities Association" },
+    { name: "Securities Specialist",                                  issuer: "Taiwan Securities Association" },
+    { name: "Investment-linked Insurance Agent",                      issuer: "Taiwan Insurance Institute" },
+    { name: "Foreign-currency Non-investment Insurance Agent",        issuer: "Life Insurance Association of the ROC" },
+    { name: "Property Insurance Agent",                               issuer: "Non-Life Insurance Association of the ROC" },
+    { name: "Life Insurance Agent",                                   issuer: "Life Insurance Association of the ROC" },
+  ],
+];
+
+if (certification_text.length !== profile.certifications.length ||
+    certification_text.some((items, g) => items.length !== profile.certifications[g].items.length)) {
+  throw new Error(
+    "profile.en.ts: certification_text must have the same groups and item counts as profile.certifications; " +
+    "add the English name/issuer for every certificate in the same order.",
+  );
+}
+
 export const profile_en: typeof profile = {
   ...profile,
   tagline: "I start from users' pain points, connect data scattered across systems, and turn it into automated services the team relies on every day and can hand over with confidence.",
@@ -91,9 +121,15 @@ export const profile_en: typeof profile = {
     note:   "National Yang Ming Chiao Tung University, Institute of Food Safety and Health Risk Assessment (master's program, not completed)",
   },
 
+  certifications: profile.certifications.map((group, g) => ({
+    ...group,
+    items: group.items.map((item, i) => ({ ...item, ...certification_text[g][i] })),
+  })),
+
   life: {
     intro:     "At work, I enjoy wrestling with technology and solving hard problems; off the clock, I head for the sky and dive deep into the sea. I've taken on a skydive in Pattaya and explored the underwater world of Xiaoliuqiu, Bali, the Maldives and Fiji, meeting sea life up close. I don't settle for routine: I love adventure and trying new things, and I always look forward to finding new scenery, and a different side of myself, in new places.",
     photos:    profile.life.photos.map((photo, i) => ({ ...photo, ...life_photo_text[i] })),
+    cert:      { ...profile.life.cert, label: "Dive certification" },
   },
 
   contact_invite: "Whether it's a collaboration or a role in data pipelines, operations automation or system integration, I'd be glad to hear from you.",

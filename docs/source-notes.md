@@ -514,3 +514,19 @@ frontmatter `period`（開發）／`launch`（上線）／`phases`（分線）�
 - 圖 8 補上與圖 7 同款的紅色原因帶（`o-up`，第一拍與座標軸一起亮），右側說明框拿掉重複的原因列（Peter 指示，2026-11-23）。
 - 圖 3「做得到嗎」由 Mermaid 改為 SVG 對話圖（我問 Think → 查證 Check，四組＋結論，共 5 拍）；導覽稿縮成一句（Peter 指示：文字太多，要能留住目光）。
 - 圖 3 再改為人物對話圖（Peter 指示，2026-11-23）：左「我（工程）」冒思考雲，右「營運」以對話框回答；自己查的題目放中間虛線卡。誰回答哪一題經 Peter 確認：資料拿得到嗎 → 問營運（CPS 可直接查、CRM 用營運帳號下載報表）；對得到同一筆嗎 → 自己查；什麼算掉單 → 問營運；多久比一次 → 問營運。營運的回答是示意改寫，Peter 同意，圖說註明「對話為示意，內容依實際對齊結果」。回看 4／7 天屬於技術設計，不放進營運的回答，留在 Solution Design。導覽 58 拍。
+
+## Certifications 證照（2026-11-23，Peter 決定）
+
+- 來源：Peter 提供的三個壓縮檔（Coding 7 張 TQC、Financial 7 張、Diving 1 份 SDI PDF），原檔解壓到 `canva-export/certificates/`（不進 git），根目錄的 zip 已刪除。
+- 擺放（Peter 選擇）：About 新增「02 Certifications」，分 Data & Engineering（TQC 7 張）與 Finance（6 張），各組依日期新到舊；後面章節順延為 03–06。潛水證照不混進專業證照，放在 06 Off the Clock 的「水下」區，一行文字加「看證卡」連結。
+- 收錄範圍：「金融市場常識與職業道德」證書寫明有效期限至 2025/09（測驗日起 5 年），已過期，Peter 決定不列。其餘證照證書上沒有寫有效期限，頁面寫的是測驗合格證書，不寫成「執照」或「登錄」。
+- 日期：取證書上的發證日（民國年轉西元），格式 YYYY/MM。人身保險與外幣保險取證書下方的發證年月；投資型與證券類取證書下方的發證日。
+- 英文名稱：TQC 依證書上印的英文；金融類證書沒有英文，為 Claude 草稿，待 Peter 審稿。
+- 個資處理（Peter 選擇「文字＋遮蔽後的證書圖」）：
+  - 遮蔽：身分證字號（含條碼與條碼下方的字號）、出生日期、證書序號／License ID、證書角落的控制編號。用實心色塊，不用模糊（印刷字模糊後可能被還原）。
+  - 保留：中英文姓名、Peter 的浮水印、發證日期、發證單位與理事長簽名（公開職務）。
+  - 潛水 PDF：用 PyMuPDF redaction 從文字層刪除證號、教練與助教的姓名和會員編號（第三方，未取得同意），只裁出證卡部分；驗證信本文不公開。裁切依證卡外框（上下框線）四周各留 8pt；同一行相鄰的遮蔽字合併成一塊、右緣內縮避免吃到「Member:」；腳本會再讀一次證卡範圍的文字層，確認遮蔽字已不存在才輸出（Peter 要求證卡擷取整齊，2026-11-23）。
+  - 輸出 `public/media/certs/<slug>.jpg`（寬 1200px）與 `<slug>-thumb.jpg`（寬 480px），不保留 EXIF。
+  - 遮蔽腳本 `canva-export/certificates/mask_certs.py` 刻意留在 canva-export（腳本內含證號與第三方姓名，不可進 git）。重新產生：`python -I canva-export/certificates/mask_certs.py canva-export/certificates public/media/certs`（需 Pillow、PyMuPDF）。
+  - 檢查：14 張輸出逐張目視確認；第一輪「投資型」條碼與左下編號、「高業」條碼下緣與左下編號有漏，改用原圖座標補遮後重新確認。
+- 防呆：`tests/test_no_national_id.py` 掃描 src、public、docs、scripts、tests 與 README／CLAUDE.md 的文字檔，出現身分證格式字串即失敗。圖片內的文字掃不到，新增證書圖仍需人工檢查。

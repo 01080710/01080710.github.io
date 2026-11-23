@@ -72,8 +72,34 @@ const life_zones = ZONES.map((zone) => ({
     </ol>
   </section>
 
+  <section class="section" id="certifications">
+    <h2 class="section-title"><span class="mono">02</span> Certifications</h2>
+    <p class="muted small">{t("about.certs_note")}</p>
+    {profile.certifications.map((group) => (
+      <div class="cert-group">
+        <h3 class="cert-group-title mono">{group.group}</h3>
+        <ul class="cert-grid">
+          {group.items.map((c) => (
+            <li>
+              {/* Plain link to the masked full-size scan: works without JS and opens in a new tab. */}
+              <a class="cert-card" href={url(c.image)} target="_blank" rel="noopener">
+                <span class="cert-thumb">
+                  <img src={url(c.image.replace(/\.jpg$/, "-thumb.jpg"))} alt="" loading="lazy" decoding="async" />
+                </span>
+                <span class="cert-text">
+                  <span class="cert-name">{c.name}</span>
+                  <span class="cert-meta muted small">{c.issuer} <span class="mono">{c.date}</span></span>
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </div>
+    ))}
+  </section>
+
   <section class="section">
-    <h2 class="section-title"><span class="mono">02</span> Core Capabilities</h2>
+    <h2 class="section-title"><span class="mono">03</span> Core Capabilities</h2>
     <ul class="capability-grid">
       {profile.capabilities.map((c) => (
         <li>
@@ -85,7 +111,7 @@ const life_zones = ZONES.map((zone) => ({
   </section>
 
   <section class="section">
-    <h2 class="section-title"><span class="mono">03</span> Engineering Philosophy</h2>
+    <h2 class="section-title"><span class="mono">04</span> Engineering Philosophy</h2>
     <div class="principle-list">
       {profile.philosophy.map((item) => (
         <div class="principle">
@@ -97,7 +123,7 @@ const life_zones = ZONES.map((zone) => ({
   </section>
 
   <section class="section">
-    <h2 class="section-title"><span class="mono">04</span> Problem-solving Approach</h2>
+    <h2 class="section-title"><span class="mono">05</span> Problem-solving Approach</h2>
     <ol class="approach">
       {profile.approach.map((a, i) => (
         <li>
@@ -113,7 +139,7 @@ const life_zones = ZONES.map((zone) => ({
   </section>
 
   <section class="section" id="off-the-clock">
-    <h2 class="section-title"><span class="mono">05</span> Off the Clock</h2>
+    <h2 class="section-title"><span class="mono">06</span> Off the Clock</h2>
     <p class="prose-block">{profile.life.intro}</p>
     <div class="life-depth">
       {life_zones.map((z) => (
@@ -141,6 +167,13 @@ const life_zones = ZONES.map((zone) => ({
               </li>
             ))}
           </ul>
+          {z.zone === "underwater" && (
+            <p class="life-cert small">
+              <span class="muted">{profile.life.cert.label}</span> {profile.life.cert.name}
+              <span class="mono muted">{profile.life.cert.date}</span>
+              <a href={url(profile.life.cert.image)} target="_blank" rel="noopener">{t("about.cert_view")} →</a>
+            </p>
+          )}
         </div>
       ))}
     </div>

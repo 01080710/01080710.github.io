@@ -67,12 +67,40 @@ export const profile = {
     note:   "國立陽明交通大學 食品安全及風險評估研究所（碩士肄業）",
   },
 
+  // About "Certifications" section. Originals live in canva-export/certificates/ (not committed); the published
+  // copies in public/media/certs/ have the national ID, birth date, barcodes and certificate/license numbers
+  // covered with solid boxes (method in docs/source-notes.md). date = issue date, YYYY/MM.
+  // The expired 金融市場常識與職業道德 pass (valid until 2025/09) is left out on purpose (Peter's choice).
+  certifications: [
+    { group: "Data & Engineering", items: [
+      { name: "TQC-DA MySQL 5 專業級",            issuer: "電腦技能基金會", date: "2024/04", image: "media/certs/tqc-mysql.jpg" },
+      { name: "TQC+ Python 機器學習專業人員",     issuer: "電腦技能基金會", date: "2024/01", image: "media/certs/tqc-python-ml-expert.jpg" },
+      { name: "TQC+ Python 大數據分析專業人員",   issuer: "電腦技能基金會", date: "2024/01", image: "media/certs/tqc-python-big-data-expert.jpg" },
+      { name: "TQC+ 軟體開發知識",                issuer: "電腦技能基金會", date: "2023/12", image: "media/certs/tqc-software-dev.jpg" },
+      { name: "TQC+ 人工智慧：機器學習 Python 3", issuer: "電腦技能基金會", date: "2023/09", image: "media/certs/tqc-ml-python3.jpg" },
+      { name: "TQC+ 網頁資料擷取與分析 Python 3", issuer: "電腦技能基金會", date: "2023/06", image: "media/certs/tqc-web-data-extraction.jpg" },
+      { name: "TQC+ 程式語言 Python 3",           issuer: "電腦技能基金會", date: "2023/01", image: "media/certs/tqc-python3.jpg" },
+    ] },
+    { group: "Finance", items: [
+      { name: "證券商高級業務員",               issuer: "中華民國證券商業同業公會",   date: "2021/05", image: "media/certs/securities-senior.jpg" },
+      { name: "證券商業務員",                   issuer: "中華民國證券商業同業公會",   date: "2021/03", image: "media/certs/securities-associate.jpg" },
+      { name: "投資型保險商品業務員",           issuer: "保險事業發展中心",           date: "2021/03", image: "media/certs/insurance-investment-linked.jpg" },
+      { name: "外幣收付非投資型保險商品業務員", issuer: "中華民國人壽保險商業同業公會", date: "2021/03", image: "media/certs/insurance-foreign-currency.jpg" },
+      { name: "財產保險業務員",                 issuer: "中華民國產物保險商業同業公會", date: "2020/12", image: "media/certs/insurance-property.jpg" },
+      { name: "人身保險業務員",                 issuer: "中華民國人壽保險商業同業公會", date: "2020/09", image: "media/certs/insurance-life.jpg" },
+    ] },
+  ],
+
   // About "Off the Clock" section. Places and subjects provided by Peter; intro line is a Claude draft pending review.
   // Originals live in canva-export/life/ (not committed); published copies are resized, EXIF-stripped,
   // and the companion's face in the turtle photo is blurred (no consent to publish).
   life: {
     intro:  "工作上喜歡與技術交手、解決各種難題；而工作外則喜歡往天空飛、向大海深潛，曾在芭達雅挑戰高空跳傘，也曾在小琉球、峇里島、馬爾地夫與斐濟探索海底世界，與海洋生物近距離相遇。不甘於一成不變，喜歡冒險、熱愛嘗試新事物，總期待在不同的地方，遇見不一樣的風景與自己。",
-   
+
+    // Shown in the underwater zone. Only the wallet card is published; cert number, instructor and assistant
+    // names and member numbers are redacted (third parties, no consent).
+    cert: { label: "潛水證照", name: "SDI Open Water Scuba Diver", date: "2026/09", image: "media/certs/sdi-open-water.jpg" },
+
     // zone places each photo on the About sky / sea-level / underwater axis (no altitudes or depths shown).
     photos: [
       { src: "media/life/nurse-sharks-maldives.jpg", zone: "surface", place: "馬爾地夫 - 馬富士", caption: "與護士鯊同游",
