@@ -74,8 +74,44 @@ const nav = [
         });
       })();
     </script>
+    <!-- Cross-page transition opt-in, inline so it is parsed with the document (an external stylesheet can arrive
+         after Chrome decides). Only machine clicks keep the transition; see the script below. -->
+    <style is:inline>@view-transition { navigation: auto; }</style>
+    <script is:inline>
+      // Flying into a case study from a Home machine: the Home page sets this flag and adds a box named
+      // "machine-fly" over the zoomed machine; the case study's machine (.from-machine .machine-view) takes the same
+      // name, so the page transition grows it out of that box. Every other navigation skips the transition.
+      try {
+        if (sessionStorage.getItem("machine-fly")) {
+          document.documentElement.classList.add("from-machine");
+          sessionStorage.removeItem("machine-fly");
+          setTimeout(() => document.documentElement.classList.remove("from-machine"), 1500);
+        }
+      } catch { /* storage blocked: no transition */ }
+      addEventListener("pageswap", (e) => {
+        if (e.viewTransition && !document.querySelector(".machine-fly-ghost")) e.viewTransition.skipTransition();
+      });
+    </script>
   </head>
   <body>
+    <!-- Shared SVG filter: gives a shape blueprint thickness (stacked copies of its outline toward the upper right,
+         the same direction as the stacked sheets behind cards). Used by system-map nodes via CSS. -->
+    <svg class="svg-defs" width="0" height="0" aria-hidden="true" focusable="false">
+      <filter id="bp-extrude" x="-5%" y="-25%" width="115%" height="135%" color-interpolation-filters="sRGB">
+        <feOffset in="SourceAlpha" dx="1" dy="-1" result="o1" />
+        <feOffset in="SourceAlpha" dx="2" dy="-2" result="o2" />
+        <feOffset in="SourceAlpha" dx="3" dy="-3" result="o3" />
+        <feOffset in="SourceAlpha" dx="4" dy="-4" result="o4" />
+        <feMerge result="stack"><feMergeNode in="o1" /><feMergeNode in="o2" /><feMergeNode in="o3" /><feMergeNode in="o4" /></feMerge>
+        <feFlood class="bp-extrude-side" result="side" />
+        <feComposite in="side" in2="stack" operator="in" result="sides" />
+        <feMorphology in="o4" operator="erode" radius="1" result="o4-in" />
+        <feComposite in="o4" in2="o4-in" operator="out" result="ring" />
+        <feFlood class="bp-extrude-edge" result="edge" />
+        <feComposite in="edge" in2="ring" operator="in" result="back-line" />
+        <feMerge><feMergeNode in="sides" /><feMergeNode in="back-line" /><feMergeNode in="SourceGraphic" /></feMerge>
+      </filter>
+    </svg>
     <header class="site-header">
       <div class="wrap header-inner">
         <a class="brand" href={lang_path("/", lang)}>

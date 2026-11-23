@@ -5,7 +5,8 @@
 // Edges are real lineage: a project hangs off every capability group holding one of its `focus` terms.
 // The script morphs each Home section into its node with View Transitions, grows the edges, then runs the DAG
 // once (queued -> running -> done; an in-progress project ends "in progress"), with sealed packets travelling the
-// edges. Hovering or focusing a node traces its upstream and downstream; clicking it morphs back to that section.
+// edges. Drawn as a blueprint: upright nodes with stacked sheets over a receding grid floor, edges as outlined tubes
+// with dash-dot centre lines; the pointer tilt turns the floor and the sheets (src/lib/blueprint.ts). Hovering or focusing a node traces its upstream and downstream; clicking it morphs back to that section.
 // Without JS the button stays hidden and the dialog is never shown. All text comes from existing data.
 import BrandMark from "./BrandMark.astro";
 import { get_profile } from "../i18n/profile";
@@ -125,6 +126,7 @@ const labels = {
 
 <script>
   import { svg_el as el, make_packet, set_clean, place, rand, Route } from "../lib/pipe-packets";
+  import { BASE_VIEW, recede, set_layer_tilt, tilt, type View } from "../lib/blueprint";
 
   const dialog = document.querySelector<HTMLDialogElement>("dialog.pv");
   const opener = document.querySelector<HTMLButtonElement>(".pv-open");
@@ -171,7 +173,21 @@ const labels = {
       });
     };
 
-    // ---------- edges (two layers: every shell under every core, so converging tubes read as one joint) ----------
+    // ---------- blueprint floor: grid paper receding behind the upright nodes; the tilt turns it ----------
+    let view: View = BASE_VIEW;
+    let floor: SVGPathElement | null = null;
+    function draw_floor() {
+      if (!floor) return;
+      const box = canvas.getBoundingClientRect(), r = recede(view), STEP = 28;
+      const dx = r.x / -r.y;                         // horizontal run per pixel of rise along the receding lines
+      let d = "";
+      for (let y = -STEP; y <= box.height + STEP; y += STEP) d += `M${-40} ${y}H${box.width + 40}`;
+      for (let x = -box.height * dx - STEP * 2; x <= box.width + STEP * 2; x += STEP * 2) d += `M${x.toFixed(1)} ${box.height + STEP}L${(x + (box.height + STEP * 2) * dx).toFixed(1)} ${-STEP}`;
+      floor.setAttribute("d", d);
+    }
+
+    // ---------- edges (layers: every shell under every core, so converging tubes read as one joint, then the
+    // dash-dot centre lines of the blueprint) ----------
     interface Edge { from: string; to: string; parts: SVGElement[]; route: Route }
     let edges: Edge[] = [];
     let packets: SVGGElement = el("g", {}, svg) as SVGGElement;
@@ -181,7 +197,9 @@ const labels = {
       svg.setAttribute("viewBox", `0 0 ${box.width} ${box.height}`);
       svg.replaceChildren();
       edges = [];
-      const shells = el("g", {}, svg), cores = el("g", {}, svg);
+      floor = el("path", { class: "pv-floor" }, svg) as SVGPathElement;
+      draw_floor();
+      const shells = el("g", {}, svg), cores = el("g", {}, svg), centers = el("g", {}, svg);
       for (const n of nodes) for (const from of deps(n)) {
         const a = by_id.get(from)!.getBoundingClientRect(), b = n.getBoundingClientRect();
         let d: string;
@@ -197,7 +215,8 @@ const labels = {
         const cls = building(from) || building(n.dataset.node!) ? " is-building" : "";
         const shell = el("path", { d, class: `pv-edge-shell${cls}`, pathLength: 1 }, shells);
         const core = el("path", { d, class: `pv-edge-core${cls}`, pathLength: 1 }, cores) as SVGPathElement;
-        edges.push({ from, to: n.dataset.node!, parts: [shell, core], route: new Route(core) });
+        const center = el("path", { d, class: `pv-edge-center${cls}` }, centers);
+        edges.push({ from, to: n.dataset.node!, parts: [shell, core, center], route: new Route(core) });
       }
       packets = el("g", {}, svg) as SVGGElement;
     }
@@ -353,5 +372,7 @@ const labels = {
       n.addEventListener("blur", () => trace(null));
     }
     new ResizeObserver(() => { if (dialog.open) draw_edges(); }).observe(canvas);
+    // Interaction: moving across the view turns the drawing a little (the floor grid and every node's stacked sheets).
+    tilt(dialog, (v) => { view = v; draw_floor(); set_layer_tilt(canvas, v); });
   }
 </script>

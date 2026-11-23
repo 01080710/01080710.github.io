@@ -1,9 +1,9 @@
 ---
 import Base from "../../layouts/Base.astro";
-import CareerBar from "../../components/CareerBar.astro";
 import { get_profile } from "../../i18n/profile";
-import { lang_from_param, lang_static_paths, use_translations } from "../../i18n/ui";
-import { format_duration } from "../../lib/career-period";
+import { get_projects } from "../../i18n/projects";
+import { lang_from_param, lang_path, lang_static_paths, use_translations } from "../../i18n/ui";
+import { format_duration, format_months, months_between, now_ym, to_months } from "../../lib/career-period";
 import { url } from "../../lib/url";
 
 export const getStaticPaths = lang_static_paths;
@@ -19,6 +19,42 @@ const life_zones = ZONES.map((zone) => ({
   zone,
   photos: profile.life.photos.map((photo, i) => ({ ...photo, i })).filter((photo) => photo.zone === zone),
 })).filter((z) => z.photos.length);
+
+// Career line (01): each job is a machine on one production line, its width proportional to its months; the line
+// runs on to a "next stop" scaffold that links to Contact. Total tenure = sum of the jobs' months (gaps not counted).
+// Works per job: a case study link (named by the project: zh subtitle, en title) or plain text.
+const projects = await get_projects(lang);
+const experience = profile.experience.map((e) => ({
+  ...e,
+  works: e.works.map((w) => {
+    if (!w.project) return { name: w.name ?? "", detail: w.detail, href: "" };
+    const p = projects.find((x) => x.id === w.project);
+    if (!p) throw new Error(`profile experience: no project "${w.project}"`);
+    return { name: lang === "zh" && p.data.subtitle ? p.data.subtitle : p.data.title, detail: w.detail, href: lang_path(`projects/${p.id}/`, lang) };
+  }),
+}));
+const jobs = [...experience].sort((a, b) => to_months(a.start) - to_months(b.start));
+const career = jobs.map((e) => ({
+  company: e.company.replace(/(股份)?有限公司$|,?\s*(Co\.,?\s*)?Ltd\.?$/i, "").trim(),
+  role: e.role, works: e.works.map((w) => w.name).join(lang === "zh" ? "、" : "; "), tags: e.tags, current: !e.end,
+  m0: to_months(e.start), m1: to_months(e.end || now_ym),
+  period: `${e.start} – ${e.end || t("about.present")} · ${format_duration(e.start, e.end, lang)}`,
+}));
+const tenure = `${profile.career_label} · ${format_months(jobs.reduce((n, e) => n + months_between(e.start, e.end), 0), lang)}`;
+const career_text = { next: t("home.open_to_work"), contact: lang_path("contact/", lang) };
+// Approach machine (05): one housing with a cell per step; the list under it carries the text.
+const approach_steps = profile.approach.map((a) => ({ step: a.step, title: a.title }));
+// Factory tour (wide screens): one station per section, in page order (see src/lib/about-factory.ts).
+const factory_data = {
+  titles: ["Background", "Problem-solving Approach", "Certifications", "Core Capabilities", "Engineering Philosophy", "Off the Clock"],
+  jobs: career.map((j) => ({ company: j.company, current: j.current, m0: j.m0, m1: j.m1, period: j.period })),
+  next: career_text.next, steps: approach_steps,
+  zones: life_zones.map((z) => t(`about.zone_${z.zone}`)),
+  certs: profile.certifications.reduce((n, g) => n + g.items.length, 0),
+  capabilities: profile.capabilities.map((c) => c.name),
+  principles: profile.philosophy.map((p) => p.title),
+  contact: { label: "Contact", href: lang_path("contact/", lang) },
+};
 ---
 
 <Base title="About" lang={lang}>
@@ -28,7 +64,12 @@ const life_zones = ZONES.map((zone) => ({
     <p class="lead">{profile.tagline}</p>
   </section>
 
-  <section class="section">
+  <!-- Factory tour (JS, wide screens, motion allowed): the aside holds one pinned blueprint factory, one station per
+       section below; without it (narrow, reduced motion, no JS) the sections read as before. -->
+  <div class="about-layout">
+    <aside class="about-factory" aria-hidden="true" data-factory={JSON.stringify(factory_data)}><svg class="bp-svg af-svg" preserveAspectRatio="xMidYMid meet"></svg></aside>
+    <div class="about-body">
+  <section class="section" data-station="0">
     <h2 class="section-title"><span class="mono">01</span> Background</h2>
     <div class="prose-block">
       {profile.intro.map((p) => <p>{p}</p>)}
@@ -38,9 +79,15 @@ const life_zones = ZONES.map((zone) => ({
       // fully drawn first. Without JS, or with reduced motion, everything stays static and fully visible.
       if (!matchMedia("(prefers-reduced-motion: reduce)").matches) document.documentElement.classList.add("motion-ok");
     </script>
-    <CareerBar experience={profile.experience} label={profile.career_label} lang={lang} />
+    <!-- Career line: drawn by the script below (wide screens animated, narrow ones a still strip that scrolls
+         sideways). The timeline under it carries the full text, so the drawing is a visual summary. -->
+    <figure class="bp-figure career-line" data-jobs={JSON.stringify(career)} data-text={JSON.stringify(career_text)}>
+      <p class="career-tenure mono">{tenure}</p>
+      <div class="bp-scroll"><svg class="bp-svg" aria-hidden="true"></svg></div>
+      <div class="bp-card" aria-hidden="true" hidden><p class="bp-card-title"></p><p class="bp-card-sub mono"></p><p class="bp-card-body"></p><p class="bp-card-tags mono"></p></div>
+    </figure>
     <ol class="timeline">
-      {profile.experience.map((e) => (
+      {experience.map((e) => (
         <li class={e.end ? "" : "is-current"}>
           <div class="timeline-when">
             <span class="mono">{e.start} – {e.end || t("about.present")}</span>
@@ -52,7 +99,14 @@ const life_zones = ZONES.map((zone) => ({
               <span class="timeline-role">{e.role}</span>
               {!e.end && <span class="timeline-current">{t("about.current")}</span>}
             </div>
-            <p>{e.note}</p>
+            <ul class="timeline-works">
+              {e.works.map((w) => (
+                <li>
+                  {w.href ? <a href={w.href}>{w.name}</a> : <span>{w.name}</span>}
+                  {w.detail && <span class="muted small">（{w.detail}）</span>}
+                </li>
+              ))}
+            </ul>
             <ul class="timeline-tags">
               {e.tags.map((tag, i) => <li style={`--i:${i}`}>{tag}</li>)}
             </ul>
@@ -72,8 +126,28 @@ const life_zones = ZONES.map((zone) => ({
     </ol>
   </section>
 
-  <section class="section" id="certifications">
-    <h2 class="section-title"><span class="mono">02</span> Certifications</h2>
+  <section class="section" data-station="1">
+    <h2 class="section-title"><span class="mono">02</span> Problem-solving Approach</h2>
+    <!-- Approach machine: one cell per step; a packet passes through them and lights the matching step below. -->
+    <figure class="bp-figure approach-machine" data-steps={JSON.stringify(approach_steps)}>
+      <div class="bp-scroll"><svg class="bp-svg" aria-hidden="true"></svg></div>
+    </figure>
+    <ol class="approach">
+      {profile.approach.map((a, i) => (
+        <li>
+          <span class="approach-step mono">{a.step}</span>
+          <div>
+            <h3>{a.title}</h3>
+            <p>{a.body}</p>
+            {a.example && <p class="muted small">{t("about.example")}{a.example}</p>}
+          </div>
+        </li>
+      ))}
+    </ol>
+  </section>
+
+  <section class="section" id="certifications" data-station="2">
+    <h2 class="section-title"><span class="mono">03</span> Certifications</h2>
     <p class="muted small">{t("about.certs_note")}</p>
     {profile.certifications.map((group) => (
       <div class="cert-group">
@@ -98,8 +172,8 @@ const life_zones = ZONES.map((zone) => ({
     ))}
   </section>
 
-  <section class="section">
-    <h2 class="section-title"><span class="mono">03</span> Core Capabilities</h2>
+  <section class="section" data-station="3">
+    <h2 class="section-title"><span class="mono">04</span> Core Capabilities</h2>
     <ul class="capability-grid">
       {profile.capabilities.map((c) => (
         <li>
@@ -110,8 +184,8 @@ const life_zones = ZONES.map((zone) => ({
     </ul>
   </section>
 
-  <section class="section">
-    <h2 class="section-title"><span class="mono">04</span> Engineering Philosophy</h2>
+  <section class="section" data-station="4">
+    <h2 class="section-title"><span class="mono">05</span> Engineering Philosophy</h2>
     <div class="principle-list">
       {profile.philosophy.map((item) => (
         <div class="principle">
@@ -122,23 +196,7 @@ const life_zones = ZONES.map((zone) => ({
     </div>
   </section>
 
-  <section class="section">
-    <h2 class="section-title"><span class="mono">05</span> Problem-solving Approach</h2>
-    <ol class="approach">
-      {profile.approach.map((a, i) => (
-        <li>
-          <span class="approach-step mono">{String(i + 1).padStart(2, "0")} {a.step}</span>
-          <div>
-            <h3>{a.title}</h3>
-            <p>{a.body}</p>
-            {a.example && <p class="muted small">{t("about.example")}{a.example}</p>}
-          </div>
-        </li>
-      ))}
-    </ol>
-  </section>
-
-  <section class="section" id="off-the-clock">
+  <section class="section" id="off-the-clock" data-station="5">
     <h2 class="section-title"><span class="mono">06</span> Off the Clock</h2>
     <p class="prose-block">{profile.life.intro}</p>
     <div class="life-depth">
@@ -178,6 +236,8 @@ const life_zones = ZONES.map((zone) => ({
       ))}
     </div>
   </section>
+    </div>
+  </div>
 </Base>
 
 <script>
@@ -196,39 +256,15 @@ const life_zones = ZONES.map((zone) => ({
 </script>
 
 <script>
-  // About entrance: the career bar assembles once when it scrolls into view (segments grow, tenure counts up);
-  // the timeline's line follows scroll progress and reveals each job as the line reaches it. Plays once.
-  import { format_months } from "../../lib/career-period";
-  import type { Lang } from "../../i18n/ui";
-
-  const COUNT_MS  = 1200;   // keep in step with SWEEP_S in CareerBar.astro
-  const BAR_AT    = 0.85;   // start the bar when its top passes 85% of the viewport height
+  // About entrance: the timeline's line follows scroll progress and reveals each job as the line reaches it.
+  // Plays once.
   const LINE_AT   = 0.65;   // the timeline line's tip sits at 65% of the viewport height
 
   const root     = document.documentElement;
-  const bar      = document.querySelector<HTMLElement>(".career-bar");
   const timeline = document.querySelector<HTMLElement>(".timeline");
-
-  function count_up(el: SVGTextElement) {
-    const total = Number(el.dataset.countTotal), label = el.dataset.countLabel ?? "";
-    const lang  = (el.dataset.countLang ?? "zh") as Lang;
-    const start = performance.now();
-    const frame = (now: number) => {
-      const p = Math.min((now - start) / COUNT_MS, 1);
-      const months = Math.round(total * (1 - Math.pow(1 - p, 3)));   // ease-out: fast start, settles on the total
-      el.textContent = `${label} · ${format_months(months, lang) || "0"}`;
-      if (p < 1) requestAnimationFrame(frame);
-    };
-    requestAnimationFrame(frame);
-  }
 
   function update() {
     const vh = window.innerHeight;
-    if (bar && !bar.classList.contains("is-in") && bar.getBoundingClientRect().top < vh * BAR_AT) {
-      bar.classList.add("is-in");
-      const counter = bar.querySelector<SVGTextElement>("[data-count-total]");
-      if (counter) count_up(counter);
-    }
     if (timeline) {
       const rect = timeline.getBoundingClientRect();
       const tip  = vh * LINE_AT - rect.top;
@@ -274,3 +310,142 @@ const life_zones = ZONES.map((zone) => ({
     update_depth();
   }
 </script>
+
+<script>
+  // About machines (src/lib/bp-scene.ts, the Home hero's blueprint language).
+  // Career line: one machine per job on one line, width = months; raw packets come in from the left, are sealed in
+  // the first job and take the stamp colour in the current one, then run on into a "next stop" scaffold that opens
+  // Contact. Hovering a job magnifies it and shows its role, period, note and tags.
+  // Approach machine: five cells (Align -> Deliver); a packet passes through them, lighting the matching step of the
+  // list below; hovering a cell magnifies it and holds its step lit.
+  import { BpScene, type P3 } from "../../lib/bp-scene";
+  import { factory } from "../../lib/about-factory";
+  import { svg_el as el } from "../../lib/pipe-packets";
+
+  interface Job { company: string; role: string; works: string; tags: string[]; current: boolean; m0: number; m1: number; period: string }
+
+  function career(fig: HTMLElement) {
+    const jobs: Job[] = JSON.parse(fig.dataset.jobs ?? "[]");
+    const text = JSON.parse(fig.dataset.text ?? "{}") as { next: string; contact: string };
+    const svg = fig.querySelector<SVGSVGElement>(".bp-svg")!, card = fig.querySelector<HTMLElement>(".bp-card")!;
+    const S = new BpScene(svg);
+    const MPX = 15, X0 = 30, base = jobs[0].m0 - (jobs[0].m0 % 12);
+    const x_of = (m: number) => X0 + (m - base) * MPX;
+    const end_x = x_of(jobs[jobs.length - 1].m1);
+    const nx0 = end_x + 44, nx1 = nx0 + 92;
+    S.floor_grid(0, nx1, 40, -24, 72);
+    S.tube([[-30, 0, 0], [nx0 + 4, 0, 0]]);
+    S.flange([-4, 0, 0], true);
+    // year ticks on the floor
+    const ticks = el("path", { class: "bp-tickline" }, S.layers.grid);
+    const last_year = Math.floor(jobs[jobs.length - 1].m1 / 12);
+    let td = "";
+    for (let y = Math.floor(base / 12); y <= last_year; y++) {
+      const x = x_of(y * 12);
+      td += `M${x} 40 V48`;
+      S.text([x, 48, 0], 12, "bp-tick", String(y));
+    }
+    ticks.setAttribute("d", td);
+    const centers: P3[] = [];
+    jobs.forEach((j, i) => {
+      const x0 = x_of(j.m0) + 4, x1 = x_of(j.m1) - 4, xc = (x0 + x1) / 2;
+      const attrs = { "data-hit": String(i), class: j.current ? "is-current" : "" };
+      S.housing(x0, -24, x1, 22, 0, 34, S.group("back", attrs), S.group("glass", attrs));
+      const lab = S.group("labels", attrs);
+      S.text([xc, -24, 17], -8, "bp-name", j.company, lab);
+      S.text([xc, -24, 17], -22, "bp-sub", j.period.split(" · ")[0], lab);
+      centers.push([xc, 0, 0]);
+    });
+    // next stop: dashed scaffold, opens Contact
+    const nattrs = { "data-hit": "next", class: "is-scaffold" };
+    S.housing(nx0, -24, nx1, 22, 0, 34, S.group("back", nattrs), S.group("glass", nattrs));
+    S.text([(nx0 + nx1) / 2, -24, 17], -8, "bp-name bp-next", text.next, S.group("labels", nattrs));
+    const total = nx0 + 40 + 30;
+    const frac = (x: number) => (x + 30) / total;
+    const cur = jobs.findIndex((j) => j.current);
+    S.flow([[-30, 0, 0], [nx0 + 40, 0, 0]], 1.5, 78, [
+      { at: frac(centers[0][0]), fn: (g) => BpScene.clean(g) },
+      ...(cur >= 0 ? [{ at: frac(centers[cur][0]), fn: (g: SVGGElement) => g.classList.add("is-mine") }] : []),
+    ]);
+    S.fit(14);
+    // hover: magnify the job, show its card; the scaffold opens Contact
+    let hot = -1;
+    const show = (i: number) => {
+      if (i === hot) return;
+      hot = i;
+      svg.querySelectorAll("[data-hit]").forEach((g) => g.classList.toggle("is-open", g.getAttribute("data-hit") === String(i)));
+      if (i < 0) { S.magnify(null); card.hidden = true; return; }
+      const j = jobs[i];
+      S.magnify([centers[i][0], -14, 0], 1.7, { w: 130, h: 70 });
+      card.querySelector(".bp-card-title")!.textContent = `${j.company} · ${j.role}`;
+      card.querySelector(".bp-card-sub")!.textContent = j.period;
+      card.querySelector(".bp-card-body")!.textContent = j.works;
+      card.querySelector(".bp-card-tags")!.textContent = j.tags.join(" · ");
+      card.hidden = false;
+    };
+    svg.addEventListener("pointermove", (e) => {
+      const g = (e.target as Element).closest("[data-hit]"), v = g?.getAttribute("data-hit");
+      svg.style.cursor = v === "next" ? "pointer" : "";
+      if (v && v !== "next") show(Number(v));
+    });
+    svg.addEventListener("pointerleave", () => show(-1));
+    svg.addEventListener("click", (e) => { if ((e.target as Element).closest('[data-hit="next"]')) location.href = text.contact; });
+    S.start(fig);
+  }
+
+  function approach(fig: HTMLElement) {
+    const steps: { step: string; title: string }[] = JSON.parse(fig.dataset.steps ?? "[]");
+    const items = [...(fig.nextElementSibling?.querySelectorAll<HTMLElement>(":scope > li") ?? [])];
+    const svg = fig.querySelector<SVGSVGElement>(".bp-svg")!;
+    const S = new BpScene(svg);
+    const CW = 124, n = steps.length, W = CW * n;
+    S.floor_grid(-60, W + 60, 40, -24, 72);
+    S.tube([[-80, 0, 0], [W + 80, 0, 0]]);
+    S.flange([-8, 0, 0], true); S.flange([W + 8, 0, 0], true);
+    S.housing(0, -28, W, 28, 0, 44, S.group("back"), S.group("glass"));
+    const inside = S.group("house");
+    const cells = steps.map((_, i) => el("rect", { x: i * CW + 4, y: -22, width: CW - 8, height: 44, rx: 3, class: "bp-cell" }, inside));
+    el("path", { d: steps.slice(1).map((_, i) => `M${(i + 1) * CW} -28 V28`).join(" "), class: "bp-divider" }, inside);
+    const hits = S.group("top");
+    steps.forEach((s, i) => {
+      const xc = i * CW + CW / 2, lab = S.group("labels", { "data-hit": String(i) });
+      S.text([xc, -28, 22], -24, "bp-sub bp-step", s.step, lab);
+      S.text([xc, -28, 22], -8, "bp-name", s.title, lab);
+      el("rect", { x: i * CW, y: -40, width: CW, height: 80, class: "bp-hit", "data-hit": String(i) }, hits);
+    });
+    let held = -1;
+    const light = (i: number) => {
+      cells.forEach((c, k) => c.classList.toggle("is-on", k === i));
+      items.forEach((li, k) => li.classList.toggle("is-on", k === i));
+    };
+    const total = W + 160;
+    S.flow([[-80, 0, 0], [W + 80, 0, 0]], 2.4, 92, [
+      ...steps.map((_, i) => ({ at: (i * CW + CW / 2 + 80) / total, fn: () => { if (held < 0) light(i); } })),
+      { at: ((n - 1) * CW + CW / 2 + 80) / total, fn: (g: SVGGElement) => BpScene.clean(g) },
+    ]);
+    S.fit(14);
+    svg.addEventListener("pointermove", (e) => {
+      const v = (e.target as Element).closest("[data-hit]")?.getAttribute("data-hit");
+      if (v == null) return;
+      const i = Number(v);
+      if (i === held) return;
+      held = i; light(i);
+      S.magnify([i * CW + CW / 2, -14, 0], 1.6, { w: 110, h: 72 });
+    });
+    svg.addEventListener("pointerleave", () => { held = -1; light(-1); S.magnify(null); });
+    S.start(fig);
+  }
+
+  const c = document.querySelector<HTMLElement>(".career-line"), a = document.querySelector<HTMLElement>(".approach-machine");
+  const layout = document.querySelector<HTMLElement>(".about-layout"), aside = document.querySelector<HTMLElement>(".about-factory");
+  // Factory tour only on wide screens with motion allowed; otherwise the per-section machines.
+  const tour = !!layout && !!aside && matchMedia("(min-width: 1100px)").matches && !matchMedia("(prefers-reduced-motion: reduce)").matches;
+  document.fonts.ready.then(() => {
+    if (tour) {
+      layout!.classList.add("about-tour");
+      const sections = [...layout!.querySelectorAll<HTMLElement>("[data-station]")].sort((x, y) => Number(x.dataset.station) - Number(y.dataset.station));
+      requestAnimationFrame(() => factory(aside!, sections, JSON.parse(aside!.dataset.factory ?? "{}")));
+    } else { if (c) career(c); if (a) approach(a); }
+  });
+</script>
+

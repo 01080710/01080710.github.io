@@ -6,6 +6,8 @@ import { getCollection, type CollectionEntry } from "astro:content";
 import type { Lang } from "./ui";
 import { map_area_order } from "../data/system-maps";
 import { focus_groups } from "../data/focus-groups";
+import { machines, type MachineKind } from "../data/machines";
+import { lang_path } from "./ui";
 
 export interface LocalizedProject {
   id:   string;
@@ -98,6 +100,35 @@ export async function get_projects(lang: Lang): Promise<LocalizedProject[]> {
         metrics:  p.data.metrics.map((m, i) => ({ ...m, label: en.data.metric_labels[i] })),
         story:    p.data.story?.map((s, i) => ({ ...s, ...en.data.story![i] })),
       },
+    };
+  });
+}
+
+// Production lines drawn on Home (hero) and Contact: one line per company, one machine per project, in the impact
+// map's order. Machine wording comes from data/machines.ts; Chinese pages title a project by its Chinese subtitle.
+export interface LineMachine {
+  area: string; kind: MachineKind; accent: string; name: string; note: string; parts: string[]; outlet: string;
+  href: string; building: boolean; title: string; before: string; after: string;
+}
+export interface ProductionLine { company: string; machines: LineMachine[] }
+export const short_company = (name: string) => name.replace(/(股份)?有限公司$|,?\s*(Co\.,?\s*)?Ltd\.?$/i, "").trim();
+
+export async function get_production_lines(lang: Lang): Promise<ProductionLine[]> {
+  const impact = await get_impact_projects(lang);
+  return [...new Set(impact.map((p) => p.data.system_map!.map))].map((map) => {
+    const items = impact.filter((p) => p.data.system_map!.map === map);
+    return {
+      company: short_company(items[0].data.company),
+      machines: items.map((p) => {
+        const area = p.data.system_map!.area, m = machines[area];
+        return {
+          area, kind: m.kind, accent: p.data.accent, name: m.name[lang], note: m.note[lang],
+          parts: m.parts.map((x) => x[lang]), outlet: m.outlet?.[lang] ?? "",
+          href: lang_path(`projects/${p.id}/`, lang), building: !p.data.home,
+          title: lang === "zh" && p.data.subtitle ? p.data.subtitle : p.data.title,
+          before: p.data.impact!.before, after: p.data.impact!.after,
+        };
+      }),
     };
   });
 }

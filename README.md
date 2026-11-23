@@ -143,12 +143,7 @@ python scripts/deidentify_drop_order.py "<raw.xlsx>" public/data/drop-order-case
 2. Repo → **Settings → Pages → Build and deployment → Source** 選 **GitHub Actions**。
 3. 每次推送到 `main`，`.github/workflows/deploy.yml` 會 build 並部署。
 
-`astro.config.mjs` 會從 `GITHUB_REPOSITORY` 自動推算網址，repo 名稱不需要寫死：
-
-| Repo 名稱 | 網址 |
-|---|---|
-| `<user>.github.io` | `https://<user>.github.io/` |
-| 其他名稱，例如 `portfolio` | `https://<user>.github.io/portfolio/` |
+網站只有一個路徑：**https://01080710.github.io/PCResume/**。`astro.config.mjs` 把 `base` 設為 `/PCResume`、輸出到 `dist/PCResume/`；部署時在 `dist/index.html` 放一個轉址頁，根網址會自動導到 `/PCResume/`。本機 `npm run dev`／`npx astro preview` 的網址是 `http://localhost:4321/PCResume/`。
 
 ## Future Scalability (未來擴充)
 

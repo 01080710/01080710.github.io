@@ -1,7 +1,0 @@
-{
-  "$comment": "Route table for GitHub Pages. Each entry is built and placed under its path. ref \"HEAD\" = the commit being deployed (main); other refs are pinned commit SHAs.",
-  "routes": [
-    { "name": "main",      "path": "/",    "ref": "HEAD",                                     "note": "Main route, currently c8df69d" },
-    { "name": "secondary", "path": "/v1/", "ref": "63a1a53e5996d64a02063cfe328a7fb6bfb04a1b", "note": "Secondary route, 63a1a53" }
-  ]
-}

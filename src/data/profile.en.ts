@@ -3,21 +3,20 @@
 // so a date change is made once in profile.ts and both languages follow.
 import { profile } from "./profile";
 
-// Same order as profile.experience; only role and note are translated.
-// Company names stay in Chinese until official English names are confirmed.
-const experience_text = [
-  { role: "Data Engineer (Data Specialist)",
-    note: "Operations data infrastructure, risk-control reconciliation pipelines, operations accounting automation." },
+// Same order as profile.experience; role and the text of each work are translated (case-study names come from the
+// English project files). Company names stay in Chinese until official English names are confirmed.
+const experience_text: { role: string; works: { name?: string; detail?: string }[] }[] = [
+  { role: "Data Engineer (Data Specialist)", works: [{}, {}, {}, {}] },
   { role: "Data Engineer",
-    note: "RESTful API for an equipment management platform; contributed to a smart monitoring dashboard." },
+    works: [{ detail: "device & site management API, weather evidence, event review API, audit dashboard" }] },
   { role: "Data Analyst",
-    note: "Vehicle-model data crawler, VIN lookup system, OCR + NLP module for an insurance-claims platform, GCP VM/VPN administration." },
+    works: [{ name: "Vehicle-model data crawler" }, { name: "VIN lookup system" }, { name: "OCR + NLP module for an insurance-claims platform" }, { name: "GCP VM/VPN administration" }] },
 ];
 
 if (experience_text.length !== profile.experience.length) {
   throw new Error(
     `profile.en.ts: experience_text has ${experience_text.length} entries but profile.experience has ${profile.experience.length}; ` +
-    "add the English role/note for every job in the same order.",
+    "add the English role and works for every job in the same order.",
   );
 }
 
@@ -113,7 +112,11 @@ export const profile_en: typeof profile = {
 
   career_label: "Data experience",
 
-  experience: profile.experience.map((job, i) => ({ ...job, ...experience_text[i] })),
+  experience: profile.experience.map((job, i) => {
+    const text = experience_text[i];
+    if (text.works.length !== job.works.length) throw new Error(`profile.en.ts: job ${i + 1} needs ${job.works.length} works`);
+    return { ...job, role: text.role, works: job.works.map((w, j) => ({ ...w, ...text.works[j] })) };
+  }),
 
   education: {
     period: profile.education.period,

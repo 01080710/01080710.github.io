@@ -6,7 +6,7 @@ import ImpactMap from "../../components/ImpactMap.astro";
 import PipelineView from "../../components/PipelineView.astro";
 import ProfilePhoto from "../../components/ProfilePhoto.astro";
 import { get_profile } from "../../i18n/profile";
-import { get_keywords } from "../../i18n/projects";
+import { get_keywords, get_production_lines } from "../../i18n/projects";
 import { lang_from_param, lang_path, lang_static_paths, use_translations } from "../../i18n/ui";
 
 export const getStaticPaths = lang_static_paths;
@@ -19,14 +19,30 @@ const t       = use_translations(lang);
 // (company map + one card per project) -> contact card. Project cards and numbers come from the project files (see ImpactMap.astro).
 const { email } = profile.contact;
 const keywords  = await get_keywords(lang);
+
+// Hero production lines: one per company (map), one machine per project (see get_production_lines).
+const hero_lines = await get_production_lines(lang);
+const hero_text = { result: t("home.pipe_result"), open: t("home.machine_open"), building: t("home.building") };
 ---
 
 <Base lang={lang}>
-  <section class="hero hero-split">
-    <!-- Pipeline (wide screens, JS only): drawn by the script below from the real layout; without it the hero is unchanged. -->
-    <svg class="hero-pipes" aria-hidden="true" hidden
-         data-steps={[t("home.pipe_validate"), t("home.pipe_schedule"), t("home.pipe_log")].join("|")}></svg>
+  <section class="hero hero-split" style={`--hp-lines:${hero_lines.length}`}>
+    <!-- Project machines on one production line per company (JS only): drawn by the script below from the real
+         layout on wide screens, as a still illustration under the text on narrow ones. Without JS the hero is unchanged;
+         the impact cards further down carry the same projects and links for keyboard and screen-reader users. -->
+    <div class="hero-scene">
+      <svg class="hero-pipes" aria-hidden="true" hidden
+           data-lines={JSON.stringify(hero_lines)} data-text={JSON.stringify(hero_text)}></svg>
+    </div>
     <button type="button" class="hero-drop" hidden>{t("home.pipe_drop")}</button>
+    <div class="hero-machine-card" aria-hidden="true" hidden>
+      <p class="hmc-title"></p>
+      <dl class="hmc-ba">
+        <div><dt>{t("home.before")}</dt><dd class="hmc-before"></dd></div>
+        <div><dt>{t("home.after")}</dt><dd class="hmc-after"></dd></div>
+      </dl>
+      <p class="hmc-go mono"></p>
+    </div>
     <div class="hero-text">
       <script is:inline>
         // Before first paint: the entrance (pipes snap together, headline and title assemble from scattered
@@ -103,173 +119,378 @@ const keywords  = await get_keywords(lang);
 </Base>
 
 <script>
-  // Hero pipeline, "noise in, order out". Three generic sources (database, API, spreadsheet) feed raw packets of mixed
-  // shapes into one trunk with three stations:
-  //   validate - a scanner checks each packet; bad ones are kicked down a chute into the reject tray (housing shakes)
-  //   schedule - a gate holds the queue and releases one packet per beat, so packets leave evenly spaced
-  //   log      - a stamp presses each packet into a uniform seal
-  // The trunk then rises into the photo; the blob springs on every arrival. Visitors can drop their own packet
-  // (button, or click any empty spot); theirs is highlighted and always passes.
-  // First visit of a session: the pipes snap together piece by piece, then a burst of packets floods in.
-  // Later visits / resize: built at once, simulation pre-warmed. Reduced motion: a still frame of the same scene.
-  // Hidden below 900px, where the photo stacks above the text. Paused while off screen.
-  import { svg_el as el, make_packet, place, set_clean, rand, Route } from "../../lib/pipe-packets";
+  // Hero: the projects as machines on production lines, one line per company (data from the project files and
+  // src/data/machines.ts). Raw packets leave each company's source, run the trunk, turn into one project's machine on
+  // a branch that runs back in depth, and that machine does the project's own job on them (match two reports, line two
+  // lanes up by a key, validate and query, or pass consecutive stages). Good records leave sealed in the project's
+  // colour and rise into the photo; flagged ones drop into the machine's outlet tray. An in-progress project is drawn as
+  // scaffolding and gets no packets.
+  // Drawn as a blueprint: axonometric line work on grid paper, glass housings (src/lib/blueprint.ts). Interaction:
+  // hovering a machine opens it (the housing lifts, the mechanism is labelled) and shows the project's before / after;
+  // clicking flies the camera into it and opens the case study, whose header shows the same machine exploded into its
+  // layers. Dropping a packet (button, or a click on an empty spot) makes the camera follow it to the end. Moving the
+  // pointer turns the drawing a little. First visit of a session: pieces snap together, then packets flood in.
+  // Narrow screens (< 900px): a still illustration of the same scene under the text. Reduced motion: a still frame,
+  // no camera moves, clicks open the case study at once. Paused while off screen.
+  import { svg_el as el, make_packet, place, set_clean, rand } from "../../lib/pipe-packets";
   import { assemble } from "../../lib/scatter-text";
+  import { BASE_VIEW, recede, ring, set_layer_tilt, tilt, type View } from "../../lib/blueprint";
+
+  type Kind = "match" | "align" | "query" | "stages" | "scaffold";
+  interface MachineData {
+    area: string; kind: Kind; accent: string; name: string; note: string; parts: string[]; outlet: string;
+    href: string; building: boolean; title: string; before: string; after: string;
+  }
+  interface LineData { company: string; machines: MachineData[] }
 
   const svg    = document.querySelector<SVGSVGElement>(".hero-pipes");
   const hero   = svg?.closest<HTMLElement>(".hero") ?? null;
   const drop   = hero?.querySelector<HTMLButtonElement>(".hero-drop") ?? null;
+  const card   = hero?.querySelector<HTMLElement>(".hero-machine-card") ?? null;
   const blob   = hero?.querySelector<HTMLElement>(".hero-blob") ?? null;
   const wide   = matchMedia("(min-width: 900px)");
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const LINES: LineData[] = JSON.parse(svg?.dataset.lines ?? "[]");
+  const TEXT: Record<string, string> = JSON.parse(svg?.dataset.text ?? "{}");
 
-  const SPAWN_S = 0.5, REJECT = 0.2, RELEASE_S = 0.42, OUT_V = 130, GAP = 15, GRAVITY = 1600, MAX_IN = 16;
-  const SW = 62, SH = 40;                 // station housing
-  const ASSEMBLED_S = 1.7;                // keep in step with the snap timings below and --hp-arrive
+  const SPAWN_S = 0.62, V = 118, GAP = 15, PROC_S = 1.1, MAX_Q = 3, FLAG_P = 0.22, FAIL_P = 0.15, MAX_TRAY = 4;
+  const MW = 68, MH = 44, DM = 34, DB = 60;      // machine width, height, depth; how far it sits behind the trunk
+  const LINE_GAP = 104;                          // second company's line, below the first
+  const ASSEMBLED_S = 1.7;                       // keep in step with the snap timings below and --hp-arrive
 
-  type Phase = "fly" | "stub" | "trunk" | "fall" | "rest";
-  interface Packet {
-    g: SVGGElement; phase: Phase; stub: number; s: number; v: number;
-    x: number; y: number; a: number; spin: number;
-    bad: boolean; checked: boolean; released: boolean; clean: boolean; bounced: boolean;
-    vx: number; vy: number; t: number; fx: number; fy: number; qx: number; qy: number;
+  // ---------- projection ----------
+  // Pipes run in one front plane, sheared so trunks run down to the right at SLOPE. A point is (x, y, depth) in that
+  // plane; depth recedes up and to the right along R, which the pointer tilt turns. Lengths are measured in 3D, so
+  // turning the view never moves a packet along its route.
+  type P3 = [number, number, number];
+  const SLOPE = (5 * Math.PI) / 180, COS = Math.cos(SLOPE), SIN = Math.sin(SLOPE);
+  let shift = { x: 0, y: 0 };
+  let R = { x: 0, y: 0 };
+  let view: View = BASE_VIEW;
+  let redraw: (() => void)[] = [];
+  const f = (v: number) => v.toFixed(1);
+  const to_screen = (x: number, y: number) => ({ x: COS * x + shift.x, y: SIN * x + y + shift.y });
+  const to_plane = (x: number, y: number) => { const px = (x - shift.x) / COS; return { x: px, y: y - SIN * px - shift.y }; };
+  const proj = (p: P3) => ({ x: p[0] + R.x * p[2], y: p[1] + R.y * p[2] });
+  const at = (x: number, y: number, d: number) => `${f(x + R.x * d)},${f(y + R.y * d)}`;
+  const screen_of = (p: P3) => { const q = proj(p); return to_screen(q.x, q.y); };
+  function set_view(v: View) {
+    view = v;
+    const r = recede(v);
+    R = { x: r.x / COS, y: r.y - (SIN * r.x) / COS };
+    for (const fn of redraw) fn();
   }
-  interface Scene {
-    layer: Element; stubs: Route[]; trunk: Route; inlets: { x: number; y: number }[];
-    queues: Packet[][]; line: Packet[]; loose: Packet[];
-    s_check: number; s_gate: number; s_log: number; xv: number; tray_top: number; floor: number;
-    housing: Element; gate: Element; stamp: Element;
-    spawn_t: number; release_t: number; next_stub: number;
+  const live_draw = (fn: () => void) => { fn(); redraw.push(fn); };
+
+  class Route3 {
+    readonly length: number;
+    private readonly cum: number[] = [0];
+    constructor(private readonly pts: P3[]) {
+      for (let i = 1; i < pts.length; i++) {
+        const a = pts[i - 1], b = pts[i];
+        this.cum.push(this.cum[i - 1] + Math.hypot(b[0] - a[0], b[1] - a[1], b[2] - a[2]));
+      }
+      this.length = this.cum[this.cum.length - 1];
+    }
+    point(s: number): P3 {
+      s = Math.min(Math.max(s, 0), this.length);
+      let i = 1;
+      while (i < this.cum.length - 1 && this.cum[i] < s) i++;
+      const a = this.pts[i - 1], b = this.pts[i], span = this.cum[i] - this.cum[i - 1], u = span ? (s - this.cum[i - 1]) / span : 0;
+      return [a[0] + (b[0] - a[0]) * u, a[1] + (b[1] - a[1]) * u, a[2] + (b[2] - a[2]) * u];
+    }
+    at(s: number) { return proj(this.point(s)); }
   }
-  let scene: Scene | null = null;
-  let build_id = 0;
+  // A rounded corner from a through c to b (quadratic), as points.
+  const bend = (a: P3, c: P3, b: P3, n = 6): P3[] => Array.from({ length: n }, (_, k) => {
+    const t = (k + 1) / n, u = 1 - t;
+    return [u * u * a[0] + 2 * u * t * c[0] + t * t * b[0], u * u * a[1] + 2 * u * t * c[1] + t * t * b[1], u * u * a[2] + 2 * u * t * c[2] + t * t * b[2]] as P3;
+  });
 
   // ---------- drawing ----------
-  let layers: Record<"edge" | "core" | "house" | "packets" | "top", Element>;
-  const tube = (d: string, snap: string) => {
-    el("path", { d, class: "hp-edge hp-piece", style: snap }, layers.edge);
-    el("path", { d, class: "hp-core hp-piece", style: snap }, layers.core);
-  };
-  const flange = (x: number, y: number, vertical: boolean, at: number, parent: Element) =>
-    el("rect", vertical ? { x: x - 3.5, y: y - 13, width: 7, height: 26, rx: 1.5, class: "hp-flange", style: `--d:${at}s` }
-                        : { x: x - 13, y: y - 3.5, width: 26, height: 7, rx: 1.5, class: "hp-flange", style: `--d:${at}s` }, parent);
-
-  // Generic source icons: database (cylinder), API (braces), spreadsheet (grid with a header row).
-  function source_icon(kind: number, c: number, y: number, g: Element) {
-    if (kind === 0) {
-      el("path", { d: `M${c - 9} ${y - 6} V${y + 6} A9 3.2 0 0 0 ${c + 9} ${y + 6} V${y - 6}`, class: "hp-icon" }, g);
-      el("path", { d: `M${c - 9} ${y} A9 3.2 0 0 0 ${c + 9} ${y}`, class: "hp-icon" }, g);
-      el("ellipse", { cx: c, cy: y - 6, rx: 9, ry: 3.2, class: "hp-icon hp-icon-top" }, g);
-    } else if (kind === 1) {
-      const brace = (dir: number) =>
-        `M${c + dir * 3} ${y - 8} Q${c + dir * 7} ${y - 8} ${c + dir * 7} ${y - 4} V${y - 2} Q${c + dir * 7} ${y} ${c + dir * 10} ${y}` +
-        ` Q${c + dir * 7} ${y} ${c + dir * 7} ${y + 2} V${y + 4} Q${c + dir * 7} ${y + 8} ${c + dir * 3} ${y + 8}`;
-      el("path", { d: brace(-1), class: "hp-icon" }, g);
-      el("path", { d: brace(1), class: "hp-icon" }, g);
-    } else {
-      el("rect", { x: c - 10, y: y - 4.5, width: 20, height: 4.5, class: "hp-icon-head" }, g);
-      el("rect", { x: c - 10, y: y - 7.5, width: 20, height: 15, rx: 1.5, class: "hp-icon" }, g);
-      el("path", { d: `M${c - 10} ${y - 2.5} H${c + 10} M${c - 10} ${y + 2.5} H${c + 10} M${c - 3.3} ${y - 7.5} V${y + 7.5} M${c + 3.3} ${y - 7.5} V${y + 7.5}`, class: "hp-icon hp-icon-grid" }, g);
-    }
+  type Layer = "grid" | "back" | "edge" | "core" | "center" | "house" | "packets" | "glass" | "top" | "labels" | "rise";
+  let layers: Record<Layer, Element>;
+  let snap_of = (_k: number) => "";
+  const piece = (layer: Layer, k: number, extra: Record<string, string> = {}) =>
+    el("g", { class: "hp-piece", style: snap_of(k), ...extra }, layers[layer]);
+  function tube(pts: P3[], k: number, parent?: { edge: Element; core: Element; center: Element }) {
+    const host = parent ?? { edge: layers.edge, core: layers.core, center: layers.center };
+    const parts = (["edge", "core", "center"] as const).map((c) => el("path", { class: `hp-${c} hp-piece`, style: snap_of(k) }, host[c]));
+    live_draw(() => {
+      const d = "M" + pts.map((p) => { const q = proj(p); return `${f(q.x)} ${f(q.y)}`; }).join(" L");
+      for (const p of parts) p.setAttribute("d", d);
+    });
   }
+  // A collar around a pipe at p: a circle across the pipe (along x: in the depth/vertical plane), seen as an ellipse.
+  function flange(p: P3, along_x: boolean, k: number, parent: Element) {
+    const c = el("polygon", { class: "hp-flange", style: `--d:${0.6 + k * 0.12}s` }, parent);
+    live_draw(() => { const q = proj(p); c.setAttribute("points", along_x ? ring(q.x, q.y, 12.5, R, { x: 0, y: 1 }) : ring(q.x, q.y, 12.5, { x: 1, y: 0 }, R)); });
+  }
+  // A closed glass housing: x0..x1 by y0..y1 in the plane, centred at depth dc, d deep. Hidden edges go to `back`.
+  function housing(x0: number, y0: number, x1: number, y1: number, dc: number, d: number, back: Element, glass: Element) {
+    const hidden = el("path", { class: "hp-hidden" }, back);
+    const [front, roof, side] = ["hp-front", "hp-roof", "hp-side"].map((c) => el("polygon", { class: `hp-glass ${c}` }, glass));
+    const fz = dc - d / 2, bz = dc + d / 2;
+    live_draw(() => {
+      hidden.setAttribute("d", `M${at(x0, y1, bz)} L${at(x1, y1, bz)} M${at(x0, y0, bz)} L${at(x0, y1, bz)} M${at(x0, y1, fz)} L${at(x0, y1, bz)}`);
+      front.setAttribute("points", [at(x0, y0, fz), at(x1, y0, fz), at(x1, y1, fz), at(x0, y1, fz)].join(" "));
+      roof.setAttribute("points", [at(x0, y0, fz), at(x1, y0, fz), at(x1, y0, bz), at(x0, y0, bz)].join(" "));
+      side.setAttribute("points", [at(x1, y0, fz), at(x1, y0, bz), at(x1, y1, bz), at(x1, y1, fz)].join(" "));
+    });
+  }
+  // An open tray (no roof) at depth dc.
+  function tray(x0: number, y0: number, x1: number, y1: number, dc: number, d: number, back: Element, glass: Element) {
+    const hidden = el("path", { class: "hp-hidden" }, back);
+    const inner = el("path", { class: "hp-tray" }, back);
+    const front = el("polygon", { class: "hp-glass hp-front" }, glass);
+    const side = el("polygon", { class: "hp-glass hp-side" }, glass);
+    const rim = el("path", { class: "hp-tray" }, glass);
+    const fz = dc - d / 2, bz = dc + d / 2;
+    live_draw(() => {
+      hidden.setAttribute("d", `M${at(x0, y1, fz)} L${at(x0, y1, bz)} L${at(x1, y1, bz)}`);
+      inner.setAttribute("d", `M${at(x0, y1, bz)} L${at(x0, y0, bz)} L${at(x1, y0, bz)}`);
+      front.setAttribute("points", [at(x0, y0, fz), at(x1, y0, fz), at(x1, y1, fz), at(x0, y1, fz)].join(" "));
+      side.setAttribute("points", [at(x1, y0, fz), at(x1, y0, bz), at(x1, y1, bz), at(x1, y1, fz)].join(" "));
+      rim.setAttribute("d", `M${at(x0, y0, fz)} L${at(x0, y0, bz)}`);
+    });
+  }
+  function floor_grid(x0: number, x1: number, y: number, near: number, far: number, step = 24) {
+    const path = el("path", { class: "hp-grid" }, layers.grid);
+    live_draw(() => {
+      let d = "";
+      for (let t = near; t <= far + 0.1; t += step) d += `M${at(x0, y, t)} L${at(x1, y, t)}`;
+      for (let x = x0; x <= x1 + 0.1; x += step) d += `M${at(x, y, near)} L${at(x, y, far)}`;
+      path.setAttribute("d", d);
+    });
+  }
+  // Upright text in screen space, anchored to a 3D point.
+  function text_at(p: P3, dy: number, cls: string, value: string, parent: Element) {
+    const t = el("text", { class: cls }, parent);
+    t.textContent = value;
+    live_draw(() => { const s = screen_of(p); t.setAttribute("x", f(s.x)); t.setAttribute("y", f(s.y + dy)); });
+    return t;
+  }
+  // Generic database icon for a company source, drawn on the source's front face.
+  function source_icon(c: number, y: number, g: Element) {
+    el("path", { d: `M${c - 9} ${y - 6} V${y + 6} A9 3.2 0 0 0 ${c + 9} ${y + 6} V${y - 6}`, class: "hp-icon" }, g);
+    el("path", { d: `M${c - 9} ${y} A9 3.2 0 0 0 ${c + 9} ${y}`, class: "hp-icon" }, g);
+    el("ellipse", { cx: c, cy: y - 6, rx: 9, ry: 3.2, class: "hp-icon hp-icon-top" }, g);
+  }
+
+  // ---------- scene ----------
+  interface Machine {
+    d: MachineData; line: number; x: number; y: number; yc: number;
+    in_route: Route3; out_route: Route3; tray_route: Route3 | null; tray_floor: number;
+    queue: Packet[]; cur: Packet | null; busy: number; resting: Packet[];
+    groups: Element[]; glass: Element; mech: Element; flag: Element | null; twin: Element | null; bar: Element | null;
+    ports: Element[]; cells: Element[]; gate: Element | null;
+  }
+  interface Packet {
+    g: SVGGElement; m: Machine; leg: "fly" | "in" | "proc" | "out" | "tray" | "rest"; s: number; v: number;
+    a: number; spin: number; mine: boolean; t: number; outcome: "ok" | "flag" | "fail"; off: { x: number; y: number };
+    fx: number; fy: number; qx: number; qy: number; port: number;
+  }
+  interface Scene { machines: Machine[]; lines: { inlet: P3; machines: Machine[]; next: number; spawn_t: number }[]; loose: Packet[] }
+  let scene: Scene | null = null;
+  let build_id = 0;
+  let inline = false;
 
   function build(animate: boolean) {
     if (!svg || !hero || !drop) return;
     stop();
     scene = null;
+    follow = null;
     const id = ++build_id;
-    if (!wide.matches) { svg.hidden = true; drop.hidden = true; hero.classList.remove("has-pipes"); return; }
-    hero.classList.add("has-pipes");
+    inline = !wide.matches;
+    hero.classList.toggle("has-pipes", !inline);
+    svg.classList.toggle("is-inline", inline);
     svg.hidden = false;
-    const text = hero.querySelector<HTMLElement>(".hero-text")!, img = hero.querySelector<HTMLElement>(".hero-photo img")!;
-    const box = hero.getBoundingClientRect(), tb = text.getBoundingClientRect(), pb = img.getBoundingClientRect();
-    const W = box.width, H = box.height;
+    drop.hidden = true;
+    if (card) card.hidden = true;
+    svg.replaceChildren();
+    redraw = [];
+    cam = { x: 0, y: 0, s: 1 }; cam_goal = { x: 0, y: 0, s: 1 };
+
+    // Layout. Wide: from the live hero (trunk under the text, rising into the photo). Narrow: a fixed 900-wide
+    // drawing scaled to the column, ending in a "result" tower.
+    let W: number, H: number, Y: number, cx: number, px: number, top: number;
+    if (inline) {
+      W = 900; H = 330; Y = 118; cx = 150; px = 800; top = 0;
+      shift = { x: cx * (1 - COS), y: -SIN * cx };
+    } else {
+      const text = hero.querySelector<HTMLElement>(".hero-text")!, img = hero.querySelector<HTMLElement>(".hero-photo img")!;
+      const box = hero.getBoundingClientRect(), tb = text.getBoundingClientRect(), pb = img.getBoundingClientRect();
+      W = box.width; H = box.height;
+      Y = tb.bottom - box.top + 96;
+      cx = Math.max(150, W * 0.15);
+      shift = { x: cx * (1 - COS), y: -SIN * cx };           // pivot on the first merge, so the sources stay put
+      const photo = to_plane(pb.left + pb.width / 2 - box.left, pb.bottom - box.top + 14);
+      px = photo.x; top = photo.y;
+    }
     svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
     svg.classList.toggle("is-static", !animate);
     hero.classList.toggle("hp-animate", animate);
-    svg.replaceChildren();
-    layers = { edge: el("g", {}, svg), core: el("g", {}, svg), house: el("g", {}, svg), packets: el("g", {}, svg), top: el("g", {}, svg) };
+    set_view(view);
+    snap_of = (k: number) => animate ? `--d:${(0.2 + k * 0.12).toFixed(2)}s;--dx:0px;--dy:${k < 2 ? 0 : -24}px` : "";
 
-    const Y   = tb.bottom - box.top + 84;                 // trunk line, under the hero text
-    const ys  = [Y - 36, Y, Y + 36];
-    const sx  = 50;                                        // source ports end here
-    const cx  = Math.max(150, W * 0.18);                   // the three stubs merge here
-    const px  = pb.left + pb.width / 2 - box.left;         // rise into the photo
-    const top = pb.bottom - box.top + 14;
-    const span = px - 16 - cx;
-    const [xv, xs, xl] = [0.2, 0.5, 0.8].map((f) => cx + span * f);   // validate, schedule, log
-    const tray_top = Y + 50, tray_floor = Y + 80;
+    const clip_id = "hp-band";
+    const defs = el("defs", {}, svg);
+    const clip = el("clipPath", { id: clip_id }, defs);
+    const band_top = inline ? 0 : Y - 88;                    // just under the hero text: the camera never covers it
+    band = { top: band_top, bottom: H, width: W };
+    el("rect", { x: -12, y: band_top, width: W + 24, height: inline ? H + 40 : H - band_top }, clip);
+    // plus the column of the rise into the photo, so packets reach it (closed while the camera is zoomed in)
+    rise_clip = null;
+    if (!inline) { const r = to_screen(px, top); rise_clip = el("rect", { x: r.x - 24, y: r.y - 30, width: 48, height: band_top - r.y + 32 }, clip); }
+    const clipped = el("g", { "clip-path": `url(#${clip_id})` }, svg);
+    cam_g = el("g", {}, clipped);
+    const matrix = `matrix(${COS} ${SIN} 0 1 ${shift.x} ${shift.y})`;
+    const plane = el("g", { transform: matrix }, cam_g);
+    const ids: Layer[] = ["grid", "back", "edge", "core", "center", "house", "packets", "glass", "top"];
+    layers = Object.fromEntries(ids.map((k) => [k, el("g", {}, plane)])) as Record<Layer, Element>;
+    layers.labels = el("g", {}, cam_g);
+    layers.rise = el("g", { transform: matrix, class: "hp-rise" }, svg);
+    const rise_tube = { edge: el("g", {}, layers.rise), core: el("g", {}, layers.rise), center: el("g", {}, layers.rise) };
 
-    const at = (k: number) => 0.2 + k * 0.12;              // piece k snaps in here (last one ends ~ASSEMBLED_S)
-    const snap = (k: number, dx: number, dy: number) => `--d:${at(k)}s;--dx:${dx}px;--dy:${dy}px`;
-    const group = (s: string) => el("g", { class: "hp-piece", style: s }, layers.top);
+    const sx = 54;
+    const ys = LINES.map((_, i) => Y + i * LINE_GAP);
+    const x_end = inline ? px : px - 16;                       // where line 1 turns up (photo) or ends (tower)
+    const jx = x_end - 64;                                     // where line 2 rises into line 1
+    floor_grid(0, x_end - 40, ys[ys.length - 1] + 38, -30, 96);
 
-    // k 0-2: source ports with their stubs, bending into the trunk
-    const stub_d = ys.map((y, i) => i === 1 ? `M${sx} ${Y} H${cx}`
-      : `M${sx} ${y} H${cx - 14} Q${cx} ${y} ${cx} ${y + (i === 0 ? 14 : -14)} V${Y}`);
-    ys.forEach((y, i) => {
-      const s = snap(i, -30, 0), g = group(s);
-      tube(stub_d[i], s);
-      el("rect", { x: 0, y: y - 15, width: sx, height: 30, rx: 9, class: "hp-source" }, g);
-      source_icon(i, sx / 2 - 2, y, g);
-      flange(sx + 4, y, true, at(i) + 0.4, g);
-    });
-    // k 3: the trunk, from the merge to the photo column
-    const main_d = `M${cx} ${Y} H${px - 16} Q${px} ${Y} ${px} ${Y - 16}`;
-    const s3 = snap(3, 0, -18);
-    tube(main_d, s3);
-    flange(cx + 14, Y, true, at(3) + 0.4, group(s3));
-    // k 4-6: stations drop onto the trunk
-    const steps = (svg.dataset.steps ?? "").split("|");
-    let housing!: Element, gate!: Element, stamp!: Element;
-    [xv, xs, xl].forEach((x, i) => {
-      const s = snap(4 + i, 0, -26), g = group(s);
-      const house = el("rect", { x: x - SW / 2, y: Y - SH / 2, width: SW, height: SH, rx: 9, class: "hp-station hp-piece", style: s }, layers.house);
-      el("text", { x, y: Y - SH / 2 - 9, class: "hp-step" }, g).textContent = steps[i] ?? "";
-      if (i === 0) {
-        housing = house;
-        el("line", { x1: x, y1: Y - SH / 2 + 5, x2: x, y2: Y + SH / 2 - 5, class: "hp-scan" }, el("g", {}, g));
-      } else if (i === 1) {
-        gate = el("rect", { x: x + 8, y: Y - 11, width: 4, height: 22, rx: 1.5, class: "hp-gate" }, g);
-      } else {
-        stamp = el("rect", { x: x - 8, y: Y - SH / 2 + 3, width: 16, height: 6, rx: 1.5, class: "hp-stamp" }, g);
-      }
-    });
-    // k 7: reject chute and tray under the validator
-    const s7 = snap(7, 0, 24), g7 = group(s7);
-    tube(`M${xv} ${Y + SH / 2 - 2} V${tray_top + 2}`, s7);
-    el("path", { d: `M${xv - 30} ${tray_top} V${tray_floor} H${xv + 30} V${tray_top}`, class: "hp-tray" }, g7);
-    // k 8: the rise into the photo
-    const s8 = snap(8, 0, 26);
-    tube(`M${px} ${Y - 16} V${top}`, s8);
-    flange(px, Y - 22, false, at(8) + 0.4, group(s8));
-
-    // Routes (invisible): one per stub, then the trunk from the merge to the photo.
-    const route_el = (d: string) => el("path", { d, class: "hp-route" }, svg) as SVGPathElement;
-    const stubs = stub_d.map((d) => new Route(route_el(d)));
-    const trunk = new Route(route_el(`${main_d} V${top}`));
-
-    scene = {
-      layer: layers.packets, stubs, trunk, inlets: ys.map((y) => ({ x: sx, y })),
-      queues: [[], [], []], line: [], loose: [],
-      s_check: xv - cx, s_gate: xs - cx, s_log: xl - cx, xv, tray_top, floor: tray_floor - 8,
-      housing, gate, stamp, spawn_t: 0, release_t: RELEASE_S, next_stub: 0,
+    // Tails: line 1 runs on to the photo (or the tower); every later line rises into line 1 at jx.
+    const tail0: P3[] = inline ? [[x_end, Y, 0]]
+      : [[x_end, Y, 0], ...bend([x_end, Y, 0], [px, Y, 0], [px, Y - 16, 0]), [px, top, 0]];
+    const join_of = (li: number): P3[] => {
+      const y = ys[li];
+      return [[jx - 16, y, 0], ...bend([jx - 16, y, 0], [jx, y, 0], [jx, y - 16, 0]), [jx, Y + 16, 0], ...bend([jx, Y + 16, 0], [jx, Y, 0], [jx + 16, Y, 0])];
     };
+    const tail_of = (li: number, from_x: number): P3[] => li === 0
+      ? [[from_x, Y, 0], ...tail0]
+      : [[from_x, ys[li], 0], ...join_of(li), ...tail0];
 
-    if (reduce) { still_frame(); drop.hidden = true; return; }
+    // k 0: company sources; k 1: trunks
+    const machines: Machine[] = [];
+    const lines: Scene["lines"] = [];
+    LINES.forEach((line, li) => {
+      const y = ys[li];
+      const glass = piece("glass", 0);
+      housing(0, y - 15, sx, y + 15, 0, 28, piece("back", 0), glass);
+      const face = el("g", {}, glass);
+      live_draw(() => face.setAttribute("transform", `translate(${f(-R.x * 14)} ${f(-R.y * 14)})`));
+      source_icon(sx / 2 - 2, y, face);
+      text_at([sx / 2, y - 15, 14], -9, "hp-company", line.company, piece("labels", 0));
+      flange([sx + 5, y, 0], true, 0, piece("top", 0));
+      tube(li === 0 ? [[sx, y, 0], [x_end, y, 0]] : [[sx, y, 0], ...join_of(li)], 1);
+      lines.push({ inlet: [sx, y, 0], machines: [], next: 0, spawn_t: rand(0, SPAWN_S) });
+
+      // machines, evenly spaced on the line
+      const a = cx + 6, b = (li === 0 ? x_end : jx) - 64, n = Math.max(line.machines.length, 1);
+      line.machines.forEach((d, mi) => {
+        const k = 2 + machines.length;
+        const xm = a + (b - a) * (mi + 0.5) / n;
+        const yc = y - 6, x0 = xm - MW / 2, x1 = xm + MW / 2, y0 = yc - MH / 2, y1 = yc + MH / 2;
+        const xin = x0 + 16, xout = x1 - 16, front = DB - DM / 2;
+        const attrs = { "data-st": String(machines.length), "data-accent": d.accent };
+        const back_g = piece("back", k, attrs), glass_g = piece("glass", k, attrs), house_g = piece("house", k, attrs);
+        const label_g = piece("labels", k, attrs), top_g = piece("top", k, attrs);
+        const glass_raise = el("g", { class: `hp-raise${d.building ? " is-scaffold" : ""}` }, glass_g);
+        const back_raise = el("g", { class: `hp-raise${d.building ? " is-scaffold" : ""}` }, back_g);
+        housing(x0, y0, x1, y1, DB, DM, back_raise, glass_raise);
+        // branches back to the trunk
+        tube([[xin, y, 0], [xin, y, front + 1]], k);
+        tube([[xout, y, 0], [xout, y, front + 1]], k);
+        // name and note above the roof
+        const roof: P3 = [xm, y0, DB + DM / 2];
+        text_at(roof, -9, "hp-mname", d.name, label_g);
+        text_at(roof, -24, `hp-note${d.building ? " is-always" : ""}`, d.building ? TEXT.building : d.note, label_g);
+        // mechanism, at the machine's depth (moves with the view)
+        const mech = el("g", { class: "hp-mech" }, house_g);
+        live_draw(() => mech.setAttribute("transform", `translate(${f(R.x * DB)} ${f(R.y * DB)})`));
+        const m: Machine = {
+          d, line: li, x: xm, y, yc, queue: [], cur: null, busy: 0, resting: [],
+          in_route: new Route3([lines[li].inlet, [xin, y, 0], [xin, y, front], [xm, yc, DB]]),
+          out_route: new Route3([[xm, yc, DB], [xout, yc, DB], [xout, y, front], [xout, y, 0], ...tail_of(li, xout + 0.01)]),
+          tray_route: null, tray_floor: 0,
+          groups: [back_g, glass_g, house_g, label_g, top_g], glass: glass_g, mech, flag: null, twin: null, bar: null, ports: [], cells: [], gate: null,
+        };
+        const parts = (p: P3, dy: number, i: number) => text_at(p, dy, "hp-part", d.parts[i] ?? "", label_g);
+        if (d.kind === "match") {
+          el("rect", { x: xm - 24, y: yc - 8, width: 16, height: 16, rx: 2, class: "hp-slot" }, mech);
+          el("rect", { x: xm + 8, y: yc - 8, width: 16, height: 16, rx: 2, class: "hp-slot" }, mech);
+          m.twin = el("g", { class: "hp-twin" }, mech);
+          el("path", { d: "M-3.6 -3.6 H3.6 V3.6 H-3.6 Z" }, m.twin);
+          m.twin.setAttribute("transform", `translate(${xm + 16} ${yc})`);
+          parts([xm - 16, yc - 8, DB], -4, 0); parts([xm + 16, yc - 8, DB], -4, 1);
+        } else if (d.kind === "align") {
+          el("path", { d: `M${xm - 30} ${yc - 8} H${xm + 30} M${xm - 30} ${yc + 8} H${xm + 30}`, class: "hp-rail" }, mech);
+          m.bar = el("rect", { x: xm - 30, y: yc - 15, width: 3, height: 30, rx: 1, class: "hp-bar" }, mech);
+          m.twin = el("g", { class: "hp-twin" }, mech);
+          el("path", { d: "M-3.6 -3.6 H3.6 V3.6 H-3.6 Z" }, m.twin);
+          m.twin.setAttribute("transform", `translate(${xm} ${yc + 8})`);
+          parts([x0 + 6, yc - 8, DB], 3, 0); parts([x0 + 6, yc + 8, DB], 3, 1);
+          // the flag on the roof, raised when a pair does not line up
+          m.flag = el("g", { class: "hp-flag" }, top_g);
+          const fp: P3 = [x1 - 10, y0, DB];
+          live_draw(() => { const q = proj(fp); m.flag!.setAttribute("transform", `translate(${f(q.x)} ${f(q.y)})`); });
+          const mast = el("g", { class: "hp-flag-mast" }, m.flag);
+          el("line", { x1: 0, y1: 0, x2: 0, y2: -20, class: "hp-flag-pole" }, mast);
+          el("path", { d: "M0 -20 L11 -16 L0 -12 Z", class: "hp-flag-body" }, mast);
+          m.flag = mast;
+        } else if (d.kind === "query") {
+          m.gate = el("rect", { x: xm - 22, y: yc - 11, width: 4, height: 22, rx: 1.5, class: "hp-gate" }, mech);
+          for (let i = 0; i < 4; i++) m.ports.push(el("rect", { x: xm + 12, y: yc - 15 + i * 8, width: 14, height: 6, rx: 1, class: "hp-port" }, mech));
+          parts([xm - 20, yc - 11, DB], -4, 0); parts([xm + 19, yc - 15, DB], -4, 1);
+        } else if (d.kind === "stages") {
+          for (let i = 0; i < 4; i++) {
+            m.cells.push(el("rect", { x: x0 + 3 + i * (MW - 6) / 4, y: yc - 12, width: (MW - 6) / 4 - 2, height: 24, rx: 2, class: "hp-cell" }, mech));
+            parts([x0 + 3 + (i + 0.5) * (MW - 6) / 4, yc - 12, DB], -4, i);
+          }
+        }
+        if (d.outlet) {
+          const t0 = x1 + 7, t1 = x1 + 31, ty0 = yc - 2, ty1 = yc + 20;
+          tray(t0, ty0, t1, ty1, DB, 26, back_g, glass_g);
+          m.tray_route = new Route3([[xm, yc, DB], [x1 - 4, yc - 10, DB], [(t0 + t1) / 2, yc - 12, DB], [(t0 + t1) / 2, ty1 - 6, DB]]);
+          m.tray_floor = ty1 - 6;
+          text_at([t1, ty1, DB - 13], 11, "hp-part hp-outlet", d.outlet, label_g);
+        }
+        machines.push(m);
+        if (!d.building) lines[li].machines.push(m);
+      });
+    });
+    // line 2 and later: drawn up to and into line 1 (one tube per line, from the source to the join)
+    // k 1 tube for line 1 drawn above; the rise into the photo (or the tower) belongs to line 1's end
+    if (inline) {
+      const gl = piece("glass", 1);
+      housing(px, Y - 58, px + 56, Y + 16, 0, 40, piece("back", 1), gl);
+      text_at([px + 28, Y - 58, 20], -9, "hp-company", TEXT.result, piece("labels", 1));
+    } else {
+      tube([[x_end, Y, 0], ...bend([x_end, Y, 0], [px, Y, 0], [px, Y - 16, 0]), [px, top, 0]], 1, rise_tube);
+      flange([px, Y - 24, 0], false, 1, el("g", {}, layers.rise));
+    }
+
+    scene = { machines, lines, loose: [] };
+    hover_i = -1;
+    if (reduce || inline) {
+      for (let i = 0; i < 300; i++) step(1 / 30, true);
+      render();
+      if (inline) { const b = (cam_g as SVGGElement).getBBox(); svg.setAttribute("viewBox", `${f(b.x - 8)} ${f(b.y - 8)} ${f(b.width + 16)} ${f(b.height + 16)}`); }
+      return;
+    }
     drop.hidden = false;
-    drop.style.left = `${xs - 26}px`;
-    drop.style.top = `${Y + SH / 2 + 14}px`;
-    drop.style.maxWidth = `${px - 40 - (xs - 26)}px`;
+    const at_drop = to_screen(cx + 40, ys[ys.length - 1] + 40);
+    drop.style.left = `${f(at_drop.x)}px`;
+    drop.style.top = `${f(at_drop.y)}px`;
+    drop.style.maxWidth = `${f(W * 0.5)}px`;
     if (animate) {
       setTimeout(() => {
         if (id !== build_id) return;
-        for (let k = 0; k < 8; k++) setTimeout(() => id === build_id && spawn(k % 3, rand(120, 170)), k * 70);
+        for (let k = 0; k < 6; k++) setTimeout(() => id === build_id && spawn(k % scene!.lines.length), k * 90);
         live = true;
         sync();
       }, ASSEMBLED_S * 1000);
     } else {
-      for (let i = 0; i < 240; i++) step(1 / 60, true);   // pre-warm: arrive mid-flow, not empty
+      for (let i = 0; i < 300; i++) step(1 / 30, true);
       render();
       live = true;
       sync();
@@ -277,143 +498,137 @@ const keywords  = await get_keywords(lang);
   }
 
   // ---------- simulation ----------
-  function new_packet(mine: boolean): Packet {
-    return { g: make_packet(scene!.layer, mine), phase: "stub", stub: 0, s: 0, v: rand(70, 140),
-             x: 0, y: 0, a: rand(0, 360), spin: rand(-220, 220), bad: false, checked: false, released: false,
-             clean: false, bounced: false, vx: 0, vy: 0, t: 0, fx: 0, fy: 0, qx: 0, qy: 0 };
+  // Packets that have left their machine (out to the photo, or down into the tray).
+  const outs = new Set<Packet>();
+  function new_packet(m: Machine, mine: boolean): Packet {
+    return { g: make_packet(layers.packets, mine), m, leg: "in", s: 0, v: rand(0.85, 1.15) * V, a: rand(0, 360), spin: rand(-200, 200),
+             mine, t: 0, outcome: "ok", off: { x: 0, y: 0 }, fx: 0, fy: 0, qx: 0, qy: 0, port: 0 };
   }
-  function spawn(stub: number, v?: number) {
-    const sc = scene;
-    if (!sc) return;
-    const waiting = sc.queues.reduce((n, q) => n + q.length, 0) + sc.line.filter((p) => !p.released).length;
-    if (waiting >= MAX_IN) return;
-    const p = new_packet(false);
-    p.stub = stub;
-    p.bad = Math.random() < REJECT;
-    if (v) p.v = v;
-    sc.queues[stub].push(p);
+  function pick(line: Scene["lines"][number], force = false): Machine | null {
+    for (let n = 0; n < line.machines.length; n++) {
+      const m = line.machines[(line.next + n) % line.machines.length];
+      if (force || m.queue.length < MAX_Q) { line.next = (line.next + n + 1) % line.machines.length; return m; }
+    }
+    return null;
+  }
+  function spawn(li: number) {
+    const line = scene?.lines[li], m = line && pick(line);
+    if (!m) return;
+    m.queue.push(new_packet(m, false));
   }
   function drop_at(x: number, y: number) {
-    const sc = scene;
-    if (!sc) return;
-    let stub = 0, best = Infinity;
-    sc.inlets.forEach((p, i) => { const d = Math.hypot(p.x - x, p.y - y); if (d < best) { best = d; stub = i; } });
-    const p = new_packet(true), inlet = sc.inlets[stub];
-    Object.assign(p, { phase: "fly", stub, x, y, fx: x, fy: y, qx: (x + inlet.x) / 2, qy: Math.min(y, inlet.y) - 110,
-                       v: 165, spin: 620 * (Math.random() < 0.5 ? -1 : 1) });
-    sc.loose.push(p);
-    place(p.g, x, y, p.a);
+    if (!scene) return;
+    const p0 = to_plane(x, y);
+    let li = 0, best = Infinity;
+    scene.lines.forEach((l, i) => { const d = Math.hypot(l.inlet[0] - p0.x, l.inlet[1] - p0.y); if (d < best && l.machines.length) { best = d; li = i; } });
+    const line = scene.lines[li], m = pick(line, true);
+    if (!m) return;
+    const p = new_packet(m, true);
+    Object.assign(p, { leg: "fly", fx: p0.x, fy: p0.y, qx: (p0.x + line.inlet[0]) / 2, qy: Math.min(p0.y, line.inlet[1]) - 110, v: 165, spin: 620 });
+    scene.loose.push(p);
+    follow = p;
+    show_card(scene.machines.indexOf(m));
   }
 
-  let last_pulse = 0;
   const bump = (node: Element | null, frames: Keyframe[], ms: number) =>
     node?.animate(frames, { duration: ms, easing: "cubic-bezier(0.34, 1.6, 0.64, 1)" });
+  let last_pulse = 0;
+
+  function begin(m: Machine, p: Packet, quiet: boolean) {
+    m.cur = p; m.busy = PROC_S; p.leg = "proc"; p.t = 0; p.spin = 0;
+    p.outcome = p.mine ? "ok" : m.d.kind === "query" ? (Math.random() < FAIL_P ? "fail" : "ok") : Math.random() < FLAG_P ? "flag" : "ok";
+    p.port = Math.floor(Math.random() * 4);
+    if (quiet) return;
+    if (m.twin) {
+      m.twin.classList.add("is-on");
+      if (m.d.kind === "match") m.twin.animate([{ translate: "0 0" }, { translate: "0 0", offset: 0.35 }, { translate: "-26px 0" }], { duration: PROC_S * 1000, easing: "ease-in-out" });
+    }
+    if (m.bar) m.bar.animate([{ translate: "0 0" }, { translate: "57px 0" }], { duration: PROC_S * 900, easing: "ease-in-out" });
+    if (m.gate) bump(m.gate, [{ translate: "0 0" }, { translate: "0 -16px", offset: 0.3 }, { translate: "0 0" }], 360);
+  }
+  function finish(m: Machine, p: Packet, quiet: boolean) {
+    m.cur = null; m.twin?.classList.remove("is-on");
+    for (const c of m.cells) c.classList.remove("is-on");
+    for (const c of m.ports) c.classList.remove("is-on");
+    p.off = { x: 0, y: 0 };
+    outs.add(p);
+    if (p.outcome === "flag" && m.tray_route) {
+      p.leg = "tray"; p.s = 0; p.g.classList.add("is-flagged");
+      if (!quiet && m.flag) bump(m.flag, [{ scale: "1 0" }, { scale: "1 1", offset: 0.2 }, { scale: "1 1", offset: 0.8 }, { scale: "1 0" }], 1600);
+      return;
+    }
+    p.leg = "out"; p.s = 0; p.a = 0;
+    p.g.setAttribute("data-accent", m.d.accent);
+    if (p.outcome === "fail") p.g.classList.add("is-failed");
+    set_clean(p.g);
+  }
 
   function step(dt: number, quiet: boolean) {
     const sc = scene!;
-    sc.spawn_t += dt;
-    if (sc.spawn_t >= SPAWN_S) { sc.spawn_t = 0; spawn(Math.floor(Math.random() * 3)); }
-
-    // loose packets: visitor drops in flight, rejects falling into the tray, rejects at rest
+    for (let li = 0; li < sc.lines.length; li++) {
+      const line = sc.lines[li];
+      if (!line.machines.length) continue;
+      line.spawn_t += dt;
+      const every = SPAWN_S * (li === 0 ? 1 : 2.2);
+      if (line.spawn_t >= every) { line.spawn_t = 0; spawn(li); }
+    }
+    // visitor packets flying to their line
     for (let k = 0; k < sc.loose.length; k++) {
       const p = sc.loose[k];
-      if (p.phase === "fly") {
-        p.t = Math.min(p.t + dt / 0.55, 1);
-        const u = 1 - p.t, inlet = sc.inlets[p.stub];
-        p.x = u * u * p.fx + 2 * u * p.t * p.qx + p.t * p.t * inlet.x;
-        p.y = u * u * p.fy + 2 * u * p.t * p.qy + p.t * p.t * inlet.y;
-        p.a += p.spin * dt;
-        if (p.t >= 1) { sc.loose.splice(k--, 1); p.phase = "stub"; p.s = 0; sc.queues[p.stub].push(p); }
-      } else if (p.phase === "fall") {
-        p.vy += GRAVITY * dt;
-        p.y += p.vy * dt;
-        if (p.y > sc.tray_top && !p.vx) p.vx = rand(-140, 140);
-        p.x = Math.min(Math.max(p.x + p.vx * dt, sc.xv - 22), sc.xv + 22);
-        p.a += p.spin * dt;
-        if (p.y >= sc.floor) {
-          p.y = sc.floor;
-          if (!p.bounced && p.vy > 150) { p.vy = -p.vy * 0.3; p.vx *= 0.5; p.bounced = true; }
-          else { p.phase = "rest"; p.vx = p.vy = p.spin = 0; }
+      p.t = Math.min(p.t + dt / 0.55, 1);
+      p.a += p.spin * dt;
+      if (p.t >= 1) { sc.loose.splice(k--, 1); p.leg = "in"; p.s = 0; p.v = V * 1.5; p.m.queue.push(p); }
+    }
+    for (const m of sc.machines) {
+      // queue on the way in: first come, first served; packets bunch up behind each other
+      m.queue.forEach((p, k) => {
+        const head = m.cur ? 1 : 0;
+        const limit = k === 0 && !m.cur ? m.in_route.length : (k === 0 ? m.in_route.length - GAP * head : m.queue[k - 1].s - GAP);
+        p.s = Math.max(p.s, Math.min(p.s + p.v * dt, limit));
+        if (p.s < m.in_route.length - 30) p.a += p.spin * dt;
+      });
+      if (!m.cur && m.queue[0] && m.queue[0].s >= m.in_route.length - 0.5) begin(m, m.queue.shift()!, quiet);
+      // processing: the mechanism runs, the packet moves inside the machine
+      if (m.cur) {
+        const p = m.cur;
+        p.t += dt;
+        const u = Math.min(p.t / PROC_S, 1);
+        if (m.d.kind === "match") p.off = { x: -16, y: 0 };
+        else if (m.d.kind === "align") p.off = { x: -24 + 48 * u, y: -8 };
+        else if (m.d.kind === "query") {
+          p.off = { x: u < 0.4 ? -24 + 30 * (u / 0.4) : 6, y: u < 0.4 ? 0 : (-15 + p.port * 8 + 3) * Math.min((u - 0.4) / 0.2, 1) };
+          if (!quiet) m.ports.forEach((c, i) => c.classList.toggle("is-on", u > 0.5 && i === p.port));
+        } else if (m.d.kind === "stages") {
+          const cell = Math.min(3, Math.floor(u * 4));
+          p.off = { x: -MW / 2 + 3 + (cell + 0.5) * (MW - 6) / 4, y: 0 };
+          if (!quiet) m.cells.forEach((c, i) => c.classList.toggle("is-on", i === cell));
         }
+        if (p.t >= PROC_S) finish(m, p, quiet);
       }
     }
-    const resting = sc.loose.filter((p) => p.phase === "rest");
-    if (resting.length > 5) {
-      const old = resting[0];
-      sc.loose.splice(sc.loose.indexOf(old), 1);
-      if (quiet) old.g.remove();
-      else old.g.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300 }).onfinish = () => old.g.remove();
-    }
-
-    // stubs: first in, first out, packets bunch up behind each other
-    sc.queues.forEach((q, i) => {
-      q.forEach((p, k) => {
-        const limit = k === 0 ? sc.stubs[i].length : q[k - 1].s - GAP;
-        p.s = Math.max(p.s, Math.min(p.s + p.v * dt, limit));
-        p.a += p.spin * dt;
-      });
-    });
-    // merge: stubs take turns; a head enters the trunk once its entrance is clear
-    for (let n = 0; n < 3; n++) {
-      const i = (sc.next_stub + n) % 3, head = sc.queues[i][0];
-      if (!head || head.s < sc.stubs[i].length - 0.5) continue;
-      const last = sc.line[sc.line.length - 1];
-      if (last && last.s < GAP) break;
-      sc.queues[i].shift();
-      head.phase = "trunk";
-      head.s = 0;
-      sc.line.push(head);
-      sc.next_stub = (i + 1) % 3;
-      break;
-    }
-
-    // trunk: validate -> queue at the gate -> one release per beat -> stamp -> photo
-    sc.release_t = Math.min(sc.release_t + dt, RELEASE_S);
-    let head_seen = false;
-    for (let k = 0; k < sc.line.length; k++) {
-      const p = sc.line[k];
-      if (!p.released) {
-        const ahead = sc.line[k - 1];
-        const limit = Math.min(sc.s_gate, ahead && !ahead.released ? ahead.s - GAP : Infinity);
-        p.s = Math.max(p.s, Math.min(p.s + p.v * dt, limit));
-        p.a += p.spin * dt;
-        if (!p.checked && p.s >= sc.s_check) {
-          p.checked = true;
-          if (p.bad) {
-            const pt = sc.trunk.at(p.s);
-            Object.assign(p, { phase: "fall", x: pt.x, y: pt.y, vx: 0, vy: 80 });
-            p.g.classList.add("is-rejected");
-            sc.line.splice(k--, 1);
-            sc.loose.push(p);
-            if (!quiet) bump(sc.housing, [{ transform: "translateX(0)" }, { transform: "translateX(-4px)" },
-              { transform: "translateX(4px)" }, { transform: "translateX(-2px)" }, { transform: "translateX(0)" }], 280);
-            continue;
+    // packets leaving: out to the photo, or down into the tray
+    for (const p of [...outs]) {
+      const m = p.m;
+      {
+        if (p.leg === "out") {
+          p.s += p.v * dt;
+          if (p.s >= m.out_route.length) {
+            p.leg = "rest"; p.g.remove(); outs.delete(p);
+            if (follow === p) end_follow();
+            const now = performance.now();
+            if (!quiet && !inline && now - last_pulse > 220) { last_pulse = now; bump(blob, [{ scale: "1" }, { scale: "1.045" }, { scale: "1" }], 420); }
           }
-        }
-        if (!head_seen) {
-          head_seen = true;
-          if (p.s >= sc.s_gate - 0.5 && sc.release_t >= RELEASE_S) {
-            p.released = true;
-            p.spin = 0;
-            sc.release_t = 0;
-            if (!quiet) bump(sc.gate, [{ transform: "translateY(0)" }, { transform: "translateY(-17px)", offset: 0.3 }, { transform: "translateY(0)" }], 320);
-          }
-        }
-      } else {
-        p.s += OUT_V * dt;
-        if (!p.clean && p.s >= sc.s_log) {
-          p.clean = true;
-          p.a = 0;
-          set_clean(p.g);
-          if (!quiet) bump(sc.stamp, [{ transform: "translateY(0)" }, { transform: "translateY(6px)", offset: 0.35 }, { transform: "translateY(0)" }], 240);
-        }
-        if (p.s >= sc.trunk.length) {
-          p.g.remove();
-          sc.line.splice(k--, 1);
-          const now = performance.now();
-          if (!quiet && now - last_pulse > 200) {
-            last_pulse = now;
-            bump(blob, [{ scale: "1" }, { scale: "1.045" }, { scale: "1" }], 420);
+        } else if (p.leg === "tray") {
+          p.s += p.v * 0.8 * dt;
+          if (p.s >= m.tray_route!.length) {
+            p.leg = "rest"; outs.delete(p);
+            if (follow === p) end_follow();
+            m.resting.push(p);
+            p.off = { x: (m.resting.length % 3 - 1) * 7, y: 0 };
+            if (m.resting.length > MAX_TRAY) {
+              const old = m.resting.shift()!;
+              if (quiet) old.g.remove(); else old.g.animate([{ opacity: 1 }, { opacity: 0 }], { duration: 300 }).onfinish = () => old.g.remove();
+            }
           }
         }
       }
@@ -422,29 +637,124 @@ const keywords  = await get_keywords(lang);
 
   function render() {
     const sc = scene!;
-    sc.queues.forEach((q, i) => q.forEach((p) => { const pt = sc.stubs[i].at(p.s); place(p.g, pt.x, pt.y, p.a); }));
-    for (const p of sc.line) { const pt = sc.trunk.at(p.s); place(p.g, pt.x, pt.y, p.a); }
-    for (const p of sc.loose) place(p.g, p.x, p.y, p.a);
+    for (const m of sc.machines) {
+      for (const p of m.queue) { const q = m.in_route.at(p.s); place(p.g, q.x, q.y, p.a); }
+      if (m.cur) { const q = m.in_route.at(m.in_route.length); place(m.cur.g, q.x + m.cur.off.x, q.y + m.cur.off.y, 0); }
+      for (const p of m.resting) { const q = m.tray_route!.at(m.tray_route!.length); place(p.g, q.x + p.off.x, q.y, p.a); }
+    }
+    for (const p of outs) {
+      const r = p.leg === "tray" ? p.m.tray_route! : p.m.out_route, q = r.at(p.s);
+      place(p.g, q.x, q.y, p.leg === "tray" ? p.a : 0);
+    }
+    for (const p of sc.loose) {
+      const inlet = proj(p.m.in_route.point(0)), u = 1 - p.t;
+      place(p.g, u * u * p.fx + 2 * u * p.t * p.qx + p.t * p.t * inlet.x, u * u * p.fy + 2 * u * p.t * p.qy + p.t * p.t * inlet.y, p.a);
+    }
   }
 
-  // Reduced motion: one still frame that tells the same story (raw in, queue, sealed out, rejects in the tray).
-  function still_frame() {
-    const sc = scene!;
-    sc.queues.forEach((q) => [56, 22].forEach((s) => { const p = new_packet(false); p.s = s + rand(0, 8); q.push(p); }));
-    [0, 1, 2].forEach((k) => { const p = new_packet(false); p.phase = "trunk"; p.checked = true; p.s = sc.s_gate - k * GAP; sc.line.push(p); });
-    [1, 2, 3].forEach((k) => {
-      const p = new_packet(false);
-      Object.assign(p, { phase: "trunk", checked: true, released: true, clean: true, a: 0, s: Math.min(sc.s_log + k * 55, sc.trunk.length - 30) });
-      set_clean(p.g);
-      sc.line.unshift(p);
+  // ---------- camera (clipped to the pipeline band, so the text above never moves) ----------
+  let cam_g: Element | null = null;
+  let band = { top: 0, bottom: 0, width: 0 };
+  const HOVER_S = 2.1;                           // hover magnification (labels keep their size, so they spread apart)
+  let rise_clip: Element | null = null;
+  let cam = { x: 0, y: 0, s: 1 }, cam_goal = { x: 0, y: 0, s: 1 };
+  let follow: Packet | null = null;
+  function band_center() { const vb = svg!.viewBox.baseVal; return { x: vb.width * 0.5, y: Math.min(vb.height - 70, (scene ? scene.machines[0]?.y ?? 0 : 0) + 20) }; }
+  function aim(p: { x: number; y: number }, s: number) { const c = band_center(); cam_goal = { s, x: c.x - s * p.x, y: c.y - s * p.y }; }
+  function end_follow() { follow = null; cam_goal = { x: 0, y: 0, s: 1 }; if (hover_i < 0 && card) card.hidden = true; }
+  function packet_screen(p: Packet) {
+    const m = p.m;
+    if (p.leg === "fly") return to_screen(p.fx, p.fy);
+    if (p.leg === "proc") { const q = m.in_route.at(m.in_route.length); return to_screen(q.x + p.off.x, q.y + p.off.y); }
+    const r = p.leg === "out" ? m.out_route : p.leg === "tray" ? m.tray_route! : m.in_route, q = r.at(p.s);
+    return to_screen(q.x, q.y);
+  }
+  function cam_step() {
+    if (follow) {
+      // follow until the packet starts its rise (the rise sits outside the band)
+      if (follow.leg === "out" && follow.s > follow.m.out_route.length - 90) end_follow();
+      else if (follow) aim(packet_screen(follow), 1.9);
+    }
+    const k = 0.1;
+    cam.x += (cam_goal.x - cam.x) * k; cam.y += (cam_goal.y - cam.y) * k; cam.s += (cam_goal.s - cam.s) * k;
+    cam_g?.setAttribute("transform", `translate(${f(cam.x)} ${f(cam.y)}) scale(${cam.s.toFixed(4)})`);
+    const zoomed = cam.s > 1.03;
+    svg?.classList.toggle("is-zoomed", zoomed);
+    svg?.style.setProperty("--cam-s", cam.s.toFixed(4));    // labels divide their size by this, so text stays put
+    if (hover_i >= 0 && card && !card.hidden) place_card(hover_i);
+    rise_clip?.setAttribute("visibility", zoomed ? "hidden" : "visible");
+  }
+
+  // ---------- hover: open the machine, show its project ----------
+  let hover_i = -1;
+  let hover_rect: DOMRect | null = null;          // the hovered machine before zooming: keeps it hovered while it grows
+  const inside = (x: number, y: number, b: DOMRect | null) => !!b && x >= b.left - 6 && x <= b.right + 6 && y >= b.top - 30 && y <= b.bottom + 6;
+  function machine_at(x: number, y: number): number {
+    if (!scene) return -1;
+    if (hover_i >= 0 && (inside(x, y, hover_rect) || inside(x, y, scene.machines[hover_i].glass.getBoundingClientRect()))) return hover_i;
+    if (cam.s > 1.03 && !follow) return -1;      // leaving a magnified machine: zoom back out before picking another
+    let found = -1;
+    scene.machines.forEach((m, i) => {
+      const b = m.glass.getBoundingClientRect();
+      if (x >= b.left - 6 && x <= b.right + 6 && y >= b.top - 30 && y <= b.bottom + 6) found = i;
     });
-    [-12, 10].forEach((dx) => {
-      const p = new_packet(false);
-      Object.assign(p, { phase: "rest", x: sc.xv + dx, y: sc.floor });
-      p.g.classList.add("is-rejected");
-      sc.loose.push(p);
-    });
-    render();
+    return found;
+  }
+  function show_card(i: number) {
+    if (!card || !scene || !hero) return;
+    const m = scene.machines[i];
+    if (!m) { card.hidden = true; return; }
+    const d = m.d;
+    card.dataset.accent = d.accent;
+    card.querySelector(".hmc-title")!.textContent = d.title;
+    card.querySelector(".hmc-before")!.textContent = d.before;
+    card.querySelector(".hmc-after")!.textContent = d.after;
+    card.querySelector(".hmc-go")!.textContent = d.building ? `${TEXT.building} · ${TEXT.open}` : TEXT.open;
+    card.hidden = false;
+    place_card(i);
+  }
+  // beside the machine (as it is drawn now, zoomed or not): to its right, or to its left when there is no room
+  function place_card(i: number) {
+    const m = scene?.machines[i];
+    if (!card || !m || !hero) return;
+    const hb = hero.getBoundingClientRect(), gb = m.glass.getBoundingClientRect();
+    let left = gb.right - hb.left + 14;
+    if (left + card.offsetWidth > hb.width - 8) left = gb.left - hb.left - card.offsetWidth - 14;
+    card.style.left = `${f(Math.max(8, left))}px`;
+    card.style.top = `${f(gb.top - hb.top - 6)}px`;
+  }
+  function set_hover(i: number) {
+    if (i === hover_i || !scene) return;
+    hover_i = i;
+    scene.machines.forEach((m, k) => m.groups.forEach((g) => g.classList.toggle("is-open", k === i)));
+    if (hero) hero.style.cursor = i >= 0 ? "pointer" : "";
+    hover_rect = i >= 0 ? scene.machines[i].glass.getBoundingClientRect() : null;
+    if (i >= 0) show_card(i); else if (!follow && card) card.hidden = true;
+    // Magnify the hovered machine in place (kept inside the band, clear of the text above), so its labels separate.
+    if (follow || reduce) return;
+    if (i < 0) { cam_goal = { x: 0, y: 0, s: 1 }; return; }
+    const m = scene.machines[i], c = to_screen(m.x + R.x * DB, m.yc + R.y * DB), s = HOVER_S;
+    const tx = Math.min(Math.max(c.x, 75 * s + 10), band.width - 80 * s - 10);
+    const ty = Math.min(Math.max(c.y, band.top + 52 * s + 24), band.bottom - 44 * s - 14);
+    cam_goal = { s, x: tx - s * c.x, y: ty - s * c.y };
+  }
+  function fly_into(i: number) {
+    const m = scene?.machines[i];
+    if (!m || !hero) return;
+    try { sessionStorage.setItem("machine-fly", m.d.area); } catch { /* storage blocked: the case study still opens */ }
+    if (reduce) { location.href = m.d.href; return; }
+    follow = null;
+    if (card) card.hidden = true;
+    aim(to_screen(m.x + R.x * DB, m.yc + R.y * DB), 2.6);
+    // a box over the zoomed machine carries the page transition's name, so the case study's machine grows out of it
+    setTimeout(() => {
+      const b = m.glass.getBoundingClientRect(), hb = hero.getBoundingClientRect();
+      const ghost = document.createElement("div");
+      ghost.className = "machine-fly-ghost";
+      Object.assign(ghost.style, { left: `${b.left - hb.left}px`, top: `${b.top - hb.top}px`, width: `${b.width}px`, height: `${b.height}px` });
+      hero.appendChild(ghost);
+      location.href = m.d.href;
+    }, 620);
   }
 
   // ---------- loop ----------
@@ -453,11 +763,12 @@ const keywords  = await get_keywords(lang);
     step(Math.min((now - last) / 1000, 0.05), false);
     last = now;
     render();
+    cam_step();
     raf = requestAnimationFrame(frame);
   }
   function stop() { running = false; live = false; cancelAnimationFrame(raf); }
   function sync() {
-    const go = live && scene && on_screen && !document.hidden && !reduce;
+    const go = live && scene && on_screen && !document.hidden && !reduce && !inline;
     if (go && !running) { running = true; last = performance.now(); raf = requestAnimationFrame(frame); }
     else if (!go && running) { running = false; cancelAnimationFrame(raf); }
   }
@@ -493,7 +804,7 @@ const keywords  = await get_keywords(lang);
   if (svg && hero && drop) {
     const first_run = !reduce && !document.documentElement.classList.contains("hero-seen");
     document.fonts.ready.then(() => {
-      build(first_run);
+      build(first_run && wide.matches);
       if (document.documentElement.classList.contains("ts-pending")) assemble_text();
       let built_w = hero.getBoundingClientRect().width;
       new ResizeObserver(() => {
@@ -510,10 +821,24 @@ const keywords  = await get_keywords(lang);
       drop_at(b.left - box.left + 14, b.top - box.top + b.height / 2);
     });
     hero.addEventListener("click", (e) => {
-      if (!running || (e.target as Element).closest("a, button, input, select, textarea, label")) return;
+      if (inline || (e.target as Element).closest("a, button, input, select, textarea, label")) return;
       if (String(window.getSelection() ?? "").length) return;
+      const hit = machine_at(e.clientX, e.clientY);
+      if (hit >= 0) { fly_into(hit); return; }
+      if (!running) return;
       const box = hero.getBoundingClientRect();
       drop_at(e.clientX - box.left, e.clientY - box.top);
+    });
+    hero.addEventListener("pointermove", (e) => {
+      if (inline || (e.target as Element).closest("a, button")) { set_hover(-1); return; }
+      set_hover(machine_at(e.clientX, e.clientY));
+    });
+    hero.addEventListener("pointerleave", () => set_hover(-1));
+    // Moving across the hero turns the drawing a little (and the stacked sheets of the hero buttons with it).
+    tilt(hero, (v) => {
+      if (inline) return;
+      if (scene) set_view(v);
+      set_layer_tilt(hero, v);
     });
   }
 </script>

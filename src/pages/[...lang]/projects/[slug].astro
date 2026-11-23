@@ -2,6 +2,7 @@
 import { render } from "astro:content";
 import Base from "../../../layouts/Base.astro";
 import SystemMap from "../../../components/SystemMap.astro";
+import MachineView from "../../../components/MachineView.astro";
 import ProjectPeriod from "../../../components/ProjectPeriod.astro";
 import { get_projects } from "../../../i18n/projects";
 import { lang_from_param, lang_path, lang_static_paths, use_translations } from "../../../i18n/ui";
@@ -28,12 +29,16 @@ const { Content } = await render(project.body);
   <article class="case-study" data-accent={p.accent}>
     <a class="back mono" href={lang_path("projects/", lang)}>← All projects</a>
 
-    <header class="page-head">
-      <p class="eyebrow mono">{p.company}</p>
-      <ProjectPeriod data={p} lang={lang} />
-      <h1>{p.title}</h1>
-      {p.subtitle && <p class="project-subtitle">{p.subtitle}</p>}
-      {!p.tldr && <p class="lead">{p.summary}</p>}
+    <!-- Title block, and on the right the project's machine from the Home hero, exploded into its layers. -->
+    <header class:list={["page-head", { "has-machine": p.system_map }]}>
+      <div class="page-head-text">
+        <p class="eyebrow mono">{p.company}</p>
+        <ProjectPeriod data={p} lang={lang} />
+        <h1>{p.title}</h1>
+        {p.subtitle && <p class="project-subtitle">{p.subtitle}</p>}
+        {!p.tldr && <p class="lead">{p.summary}</p>}
+      </div>
+      {p.system_map && <MachineView area={p.system_map.area} accent={p.accent} lang={lang} />}
     </header>
 
     <section class="case-zone zone-tech" aria-label={t("case.zone_tech")}>

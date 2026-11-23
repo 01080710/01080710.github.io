@@ -4,6 +4,7 @@ import BrandMark from "../../components/BrandMark.astro";
 import CopyEmail from "../../components/CopyEmail.astro";
 import SocialIcon from "../../components/SocialIcon.astro";
 import { get_profile } from "../../i18n/profile";
+import { get_production_lines } from "../../i18n/projects";
 import { lang_from_param, lang_static_paths, use_translations } from "../../i18n/ui";
 
 export const getStaticPaths = lang_static_paths;
@@ -13,6 +14,12 @@ const profile = get_profile(lang);
 const t       = use_translations(lang);
 
 const { github, linkedin, email } = profile.contact;
+
+// The card is where the Home production lines end: one incoming pipe per company, carrying sealed packets in the
+// colours of that company's finished projects.
+const lines = (await get_production_lines(lang)).map((l) => ({
+  company: l.company, accents: l.machines.filter((m) => !m.building).map((m) => m.accent),
+}));
 
 // Empty values in profile.ts render as TODO instead of a broken link.
 const sources = [
@@ -29,7 +36,9 @@ const sources = [
   </section>
 
   <!-- Key visual: one business card; pipelines from both sides flow into it (the favicon's data-flow P, scaled up). -->
-  <section class="contact-stage">
+  <!-- Narrow screens: the same lines as a still strip (drawn by the script), since the side pipes are hidden there. -->
+  <div class="bp-scroll contact-strip" data-lines={JSON.stringify(lines)} data-card={profile.name}><svg class="bp-svg" aria-hidden="true"></svg></div>
+  <section class="contact-stage" data-lines={JSON.stringify(lines)}>
     <svg class="stage-pipe is-left" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
       <path d="M0 22 C60 22 40 50 100 50" /><path d="M0 78 C60 78 40 50 100 50" />
     </svg>
@@ -59,6 +68,14 @@ const sources = [
           </li>
         ))}
       </ul>
+      <!-- Filled in when a topic below is sent up into the card (JS); hidden until then. -->
+      <div class="card-letter" hidden>
+        <p class="card-letter-line"><span class="mono">{t("contact.letter_subject")}</span> <b class="card-letter-subject"></b></p>
+        <div class="card-letter-actions">
+          <a class="btn primary card-letter-send" href={email ? `mailto:${email}` : "#"}>{t("contact.letter_send")}</a>
+          <button type="button" class="btn card-letter-copy">{t("contact.letter_copy")}</button>
+        </div>
+      </div>
       <dl class="card-facts">
         <div><dt class="mono">{t("contact.seeking")}</dt><dd>{profile.contact_facts.seeking}</dd></div>
         <div><dt class="mono">{t("contact.reply")}</dt><dd>{profile.contact_facts.reply}</dd></div>
@@ -70,44 +87,69 @@ const sources = [
     </svg>
   </section>
 
-  <section class="section">
-    <h2 class="section-title">{t("contact.topics")}</h2>
-    <ul class="talk-list">
-      {profile.talk_topics.map((topic) => (
-        <li><h3>{topic.title}</h3><p>{topic.body}</p></li>
-      ))}
+  <!-- Topic sorter: each topic is an inlet; a click sends a packet up through sort and stamp into the card, which
+       then offers a mail with that subject. Without JS each topic is a plain mailto link with the subject filled in. -->
+  <section class="section topic-section" data-copied={t("contact.copied")}>
+    <div class="topic-strip">
+      <div class="topic-head">
+        <h2 class="section-title">{t("contact.topics")}</h2>
+        <p class="muted">{t("contact.topic_pick")}</p>
+      </div>
+      <svg class="topic-svg" aria-hidden="true" data-sort={t("contact.sort")} data-stamp={t("contact.stamp")}></svg>
+    </div>
+    <ul class="topic-grid">
+      {profile.talk_topics.map((topic) => {
+        const subject = `${t("contact.letter_prefix")}${topic.title}`;
+        return (
+          <li><a class="topic-card" href={email ? `mailto:${email}?subject=${encodeURIComponent(subject)}` : "#"} data-subject={subject}>
+            <h3>{topic.title}</h3><p>{topic.body}</p><span class="topic-go mono">{t("contact.topic_go")}</span>
+          </a></li>
+        );
+      })}
     </ul>
   </section>
 </Base>
 
 <script>
   // Contact pipes, enhanced (wide screens, JS only; without JS the dashed pipes above stay as they are).
+  // Blueprint line work like the Home hero: outlined tubes with a dash-dot centre line, elliptical collars.
   // Same packet language as the Home hero (src/lib/pipe-packets.ts). Tubes are rebuilt at their real pixel size.
   // First visit of a session: both pipes reach in from the outside -> stop just short of the card -> snap on, then
   // raw packets stream in from the left and are sealed at the coupling before entering the card (the left node
   // springs on each one). Pressing "copy" sends a sealed packet out of the card along each right-hand pipe.
   // Later visits / resize: built at once and pre-warmed. Reduced motion: a still frame, no packet on copy.
   import { svg_el as el, make_packet, place, set_clean, rand, Route } from "../../lib/pipe-packets";
+  import { BASE_VIEW, recede, ring, set_layer_tilt, tilt, type View } from "../../lib/blueprint";
 
   const stage  = document.querySelector<HTMLElement>(".contact-stage");
   const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
   const SPAWN_S = 0.55, GAP = 18, SEAL_AT = 34, MAX_LANE = 7, SNAPPED_MS = 1850;
 
   interface Packet { g: SVGGElement; s: number; v: number; a: number; spin: number; clean: boolean }
-  interface Lane { route: Route; layer: Element; q: Packet[] }
+  interface Lane { route: Route; layer: Element; q: Packet[]; accents: string[] }
+  const LINES: { company: string; accents: string[] }[] = JSON.parse(document.querySelector<HTMLElement>(".contact-stage")?.dataset.lines ?? "[]");
   let lanes: Lane[] = [], outs: Lane[] = [];
   let spawn_t = 0, lane_i = 0, last_pulse = 0;
+  // Collars where the pipes couple onto the card: circles across the pipe, drawn as ellipses for the current view.
+  let collars: { el: Element; x: number; y: number }[] = [];
+  let view: View = BASE_VIEW;
+  function draw_collars() {
+    const r = recede(view);
+    for (const c of collars) c.el.setAttribute("points", ring(c.x, c.y, 13, r, { x: 0, y: 1 }));
+  }
 
   function build() {
     if (!stage) return;
-    lanes = []; outs = [];
+    lanes = []; outs = []; collars = [];
     for (const svg of stage.querySelectorAll<SVGSVGElement>(".stage-pipe")) {
       const { width: w, height: h } = svg.getBoundingClientRect();
       if (!w || !h) continue;                              // hidden on narrow screens
       const left = svg.classList.contains("is-left");
       const a = h * 0.22, b = h * 0.78, m = h * 0.5;
+      // left: one lane per company (top to bottom); right: the two outgoing pipes used by "copy"
+      const ys = left ? LINES.map((_, i) => LINES.length > 1 ? a + ((b - a) * i) / (LINES.length - 1) : m) : [a, b];
       const ds = left
-        ? [`M0 ${a} C${w * 0.6} ${a} ${w * 0.4} ${m} ${w} ${m}`, `M0 ${b} C${w * 0.6} ${b} ${w * 0.4} ${m} ${w} ${m}`]
+        ? ys.map((y) => `M0 ${y} C${w * 0.6} ${y} ${w * 0.4} ${m} ${w} ${m}`)
         : [`M${w} ${a} C${w * 0.4} ${a} ${w * 0.6} ${m} 0 ${m}`, `M${w} ${b} C${w * 0.4} ${b} ${w * 0.6} ${m} 0 ${m}`];
       svg.setAttribute("viewBox", `0 0 ${w} ${h}`);
       svg.removeAttribute("preserveAspectRatio");
@@ -115,20 +157,33 @@ const sources = [
       svg.replaceChildren();
       for (const d of ds) el("path", { d, class: "cs-edge" }, svg);
       for (const d of ds) el("path", { d, class: "cs-core" }, svg);
+      for (const d of ds) el("path", { d, class: "cs-center" }, svg);
       const layer = el("g", {}, svg);
-      const fx = left ? w - 10 : 10;                        // flange where the pipe couples onto the card
-      el("rect", { x: fx - 3.5, y: m - 14, width: 7, height: 28, rx: 1.5, class: "cs-flange" }, svg);
-      for (const d of ds) {
-        const lane = { route: new Route(el("path", { d, class: "cs-route" }, svg) as SVGPathElement), layer, q: [] };
+      const fx = left ? w - 14 : 26;                        // collar where the pipe couples on (right: clear of the card's sheets)
+      collars.push({ el: el("polygon", { class: "cs-flange" }, svg), x: fx, y: m });
+      ds.forEach((d, i) => {
+        const lane = { route: new Route(el("path", { d, class: "cs-route" }, svg) as SVGPathElement), layer, q: [], accents: left ? LINES[i].accents : [] };
         (left ? lanes : outs).push(lane);
-      }
+        if (left) {
+          el("text", { x: w * 0.3, y: ys[i] - 16, class: "cs-company" }, svg).textContent = LINES[i].company;
+          collars.push({ el: el("polygon", { class: "cs-flange" }, svg), x: 18, y: ys[i] });
+        }
+      });
     }
+    draw_collars();
   }
 
+  // Packets arrive already sealed in one of the company's project colours (they come off the Home machines).
+  function sealed(lane: Lane) {
+    const g = make_packet(lane.layer);
+    if (lane.accents.length) g.setAttribute("data-accent", lane.accents[Math.floor(Math.random() * lane.accents.length)]);
+    set_clean(g);
+    return g;
+  }
   function spawn() {
     const lane = lanes[lane_i++ % Math.max(lanes.length, 1)];
     if (!lane || lane.q.length >= MAX_LANE) return;
-    lane.q.push({ g: make_packet(lane.layer), s: 0, v: rand(70, 130), a: rand(0, 360), spin: rand(-220, 220), clean: false });
+    lane.q.push({ g: sealed(lane), s: 0, v: rand(70, 130), a: 0, spin: 0, clean: true });
   }
 
   function step(dt: number, quiet: boolean) {
@@ -163,10 +218,7 @@ const sources = [
   function still_frame() {
     for (const lane of lanes) {
       const len = lane.route.length;
-      [0.62, 0.36, 0.12].forEach((f) => lane.q.push({ g: make_packet(lane.layer), s: len * f, v: 0, a: rand(0, 360), spin: 0, clean: false }));
-      const sealed = { g: make_packet(lane.layer), s: len - SEAL_AT + 6, v: 0, a: 0, spin: 0, clean: true };
-      set_clean(sealed.g);
-      lane.q.unshift(sealed);
+      [0.78, 0.52, 0.26].forEach((f) => lane.q.push({ g: sealed(lane), s: len * f, v: 0, a: 0, spin: 0, clean: true }));
     }
     render();
   }
@@ -228,5 +280,188 @@ const sources = [
     new IntersectionObserver(([e]) => { on_screen = e.isIntersecting; sync(); }).observe(stage);
     document.addEventListener("visibilitychange", sync);
     stage.querySelector(".copy-email")?.addEventListener("click", send);
+    // Moving across the stage turns the drawing a little: the collars and the card's stacked sheets follow.
+    tilt(stage, (v) => { view = v; draw_collars(); set_layer_tilt(stage, v); });
   }
+</script>
+
+<script>
+  // Narrow screens: the company lines as a still strip that scrolls sideways (src/lib/bp-scene.ts), ending in the card.
+  import { BpScene } from "../../lib/bp-scene";
+  const strip = document.querySelector<HTMLElement>(".contact-strip");
+  if (strip && !matchMedia("(min-width: 900px)").matches) {
+    const lines: { company: string; accents: string[] }[] = JSON.parse(strip.dataset.lines ?? "[]");
+    const S = new BpScene(strip.querySelector<SVGSVGElement>(".bp-svg")!);
+    const CX = 380, GAP = 70;
+    S.floor_grid(0, CX + 150, 30 + (lines.length - 1) * GAP, -24, 72);
+    lines.forEach((l, i) => {
+      const y = i * GAP;
+      S.tube(i === 0 ? [[0, 0, 0], [CX, 0, 0]] : [[0, y, 0], [CX - 70, y, 0], [CX - 40, y - 30, 0], [CX - 40, 0, 0]]);
+      S.text([10, y - 12, 0], -6, "bp-name", l.company).setAttribute("text-anchor", "start");
+      S.flow(i === 0 ? [[0, 0, 0], [CX + 20, 0, 0]] : [[0, y, 0], [CX - 70, y, 0], [CX - 40, y - 30, 0], [CX - 40, 0, 0], [CX + 20, 0, 0]],
+        1.2, 70, [{ at: 0, fn: (g) => BpScene.clean(g, l.accents[Math.floor(Math.random() * l.accents.length)]) }]);
+    });
+    const attrs = { class: "is-current" };
+    S.housing(CX, -40, CX + 140, 40, 0, 40, S.group("back", attrs), S.group("glass", attrs));
+    S.text([CX + 70, 0, 0], 4, "bp-name", strip.dataset.card ?? "", S.group("labels", attrs));
+    S.fit(12);
+    S.start(strip);
+  }
+</script>
+
+
+<script>
+  // Topic sorter (wide screens with motion; otherwise the topics fill the card's letter at once).
+  // Under the card a blueprint strip: one inlet per topic card, chutes up into a collector, then a riser through a
+  // sorter (its gate swings toward the topic's side) and a stamp (the packet is sealed) up into the card. Idle raw
+  // packets keep the line moving; a click sends the visitor's packet (stamp colour) and, when it reaches the card,
+  // the card shows the letter: subject + "write the email" (mailto with that subject) + "copy subject".
+  // First visit: the strip draws itself (line work) and the inlets snap in. Copy: the card presses in and a light
+  // trail runs out along each right-hand pipe.
+  import { svg_el as el, make_packet, place, set_clean, rand, Route } from "../../lib/pipe-packets";
+  import { BASE_VIEW, recede } from "../../lib/blueprint";
+
+  const section = document.querySelector<HTMLElement>(".topic-section");
+  const svg = document.querySelector<SVGSVGElement>(".topic-svg");
+  const card = document.querySelector<HTMLElement>(".contact-card");
+  const letter = card?.querySelector<HTMLElement>(".card-letter") ?? null;
+  const topics = [...document.querySelectorAll<HTMLAnchorElement>(".topic-card")];
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const wide = matchMedia("(min-width: 900px)");
+  const R = recede(BASE_VIEW);
+  const f = (v: number) => v.toFixed(1);
+
+  function show_letter(i: number) {
+    if (!letter) return;
+    const a = topics[i], subject = a.dataset.subject ?? "";
+    letter.querySelector(".card-letter-subject")!.textContent = subject;
+    letter.querySelector<HTMLAnchorElement>(".card-letter-send")!.href = a.href;
+    letter.hidden = false;
+    if (!reduce) letter.animate([{ opacity: 0, transform: "translateY(10px)" }, { opacity: 1, transform: "none" }], { duration: 380, easing: "cubic-bezier(0.34, 1.5, 0.64, 1)" });
+    if (!reduce) card?.animate([{ transform: "none" }, { transform: "translate(2px, -2px) scale(1.01)" }, { transform: "none" }], { duration: 420 });
+  }
+  letter?.querySelector(".card-letter-copy")?.addEventListener("click", async (e) => {
+    const btn = e.currentTarget as HTMLButtonElement, text = letter.querySelector(".card-letter-subject")!.textContent ?? "", was = btn.textContent;
+    try { await navigator.clipboard.writeText(text); btn.textContent = section?.dataset.copied ?? "✓"; setTimeout(() => (btn.textContent = was), 1600); } catch { /* manual copy */ }
+  });
+
+  // ---------- the strip ----------
+  interface Run { g: SVGGElement; route: Route; s: number; v: number; i: number; mine: boolean; sorted: boolean; stamped: boolean }
+  let routes: Route[] = [], runs: Run[] = [], layer: Element | null = null;
+  let gate: Element | null = null, stamp: Element | null = null, cx = 0, y_sort = 0, y_stamp = 0;
+  function glass(x0: number, y0: number, x1: number, y1: number, d: number, parent: Element) {
+    const P = (x: number, y: number, t: number) => `${f(x + R.x * t)},${f(y + R.y * t)}`;
+    el("path", { class: "tp-hidden", d: `M${P(x0, y1, d)} L${P(x1, y1, d)} M${P(x0, y0, d)} L${P(x0, y1, d)} M${P(x0, y1, 0)} L${P(x0, y1, d)}` }, parent);
+    el("polygon", { class: "tp-glass", points: [P(x0, y0, 0), P(x1, y0, 0), P(x1, y1, 0), P(x0, y1, 0)].join(" ") }, parent);
+    el("polygon", { class: "tp-glass tp-roof", points: [P(x0, y0, 0), P(x1, y0, 0), P(x1, y0, d), P(x0, y0, d)].join(" ") }, parent);
+    el("polygon", { class: "tp-glass tp-side", points: [P(x1, y0, 0), P(x1, y0, d), P(x1, y1, d), P(x1, y1, 0)].join(" ") }, parent);
+  }
+  function build(first: boolean) {
+    if (!svg || !section || !card) return;
+    runs = []; routes = [];
+    const strip = svg.parentElement!.getBoundingClientRect(), grid = section.querySelector(".topic-grid")!.getBoundingClientRect();
+    const W = strip.width, H = grid.top - strip.top;                  // the strip runs down to the topic cards
+    const top = card.getBoundingClientRect().bottom - strip.top + 4;  // and up into the card (negative: above it)
+    svg.setAttribute("viewBox", `0 0 ${f(W)} ${f(H)}`);
+    svg.style.height = `${f(H)}px`;
+    svg.replaceChildren();
+    cx = card.getBoundingClientRect().left + card.getBoundingClientRect().width / 2 - strip.left;
+    const yc = H - 46;                                                  // collector
+    y_sort = Math.max(yc - 70, 40); y_stamp = Math.max(top + 40, 10);
+    const xs = topics.map((a) => { const r = a.getBoundingClientRect(); return r.left + r.width / 2 - strip.left; });
+    const ds = xs.map((x) => {
+      const dir = x < cx ? 1 : -1;
+      return `M${f(x)} ${f(H + 2)} V${f(yc + 12)} Q${f(x)} ${f(yc)} ${f(x + 12 * dir)} ${f(yc)} H${f(cx - 12 * dir)} Q${f(cx)} ${f(yc)} ${f(cx)} ${f(yc - 12)} V${f(top)}`;
+    });
+    const tubes = el("g", { class: "tp-tubes" }, svg);
+    for (const c of ["tp-edge", "tp-core", "tp-center"]) for (const d of ds) el("path", { d, class: c }, tubes);
+    layer = el("g", {}, svg);
+    const fixtures = el("g", {}, svg);
+    // inlets (one per topic), then the sorter and the stamp on the riser
+    xs.forEach((x, i) => {
+      const g = el("g", { class: "tp-piece", style: `--d:${0.3 + i * 0.12}s;--dx:0px;--dy:18px` }, fixtures);
+      glass(x - 22, H - 22, x + 22, H - 4, 18, g);
+    });
+    const sg = el("g", { class: "tp-piece", style: "--d:0.9s;--dx:0px;--dy:-18px" }, fixtures);
+    glass(cx - 34, y_sort - 18, cx + 34, y_sort + 18, 26, sg);
+    gate = el("line", { x1: cx, y1: y_sort + 12, x2: cx, y2: y_sort - 12, class: "tp-gate", style: `transform-origin:${f(cx)}px ${f(y_sort + 12)}px` }, sg);
+    el("text", { x: cx + 46, y: y_sort + 4, class: "tp-label" }, sg).textContent = svg.dataset.sort ?? "";
+    const tg = el("g", { class: "tp-piece", style: "--d:1.05s;--dx:0px;--dy:-18px" }, fixtures);
+    glass(cx - 30, y_stamp - 16, cx + 30, y_stamp + 16, 24, tg);
+    stamp = el("rect", { x: cx - 9, y: y_stamp - 14, width: 18, height: 6, rx: 1.5, class: "tp-stamp" }, tg);
+    el("text", { x: cx + 42, y: y_stamp + 4, class: "tp-label" }, tg).textContent = svg.dataset.stamp ?? "";
+    routes = ds.map((d) => new Route(el("path", { d, fill: "none", stroke: "none" }, svg) as SVGPathElement));
+    svg.classList.toggle("is-drawing", first);
+    if (first) { svg.querySelectorAll(".tp-tubes path, polygon, .tp-hidden").forEach((p) => p.setAttribute("pathLength", "1")); setTimeout(() => { svg.classList.remove("is-drawing"); svg.querySelectorAll("[pathLength]").forEach((p) => p.removeAttribute("pathLength")); }, 2400); }
+    svg.classList.toggle("tp-assemble", first);
+  }
+  function launch(i: number, mine: boolean) {
+    if (!layer || !routes[i]) return;
+    const g = make_packet(layer, mine);
+    runs.push({ g, route: routes[i], s: 0, v: mine ? 230 : rand(110, 150), i, mine, sorted: false, stamped: false });
+  }
+  let last = 0, idle = 0, running = false, on_screen = true;
+  function frame(now: number) {
+    const dt = Math.min((now - last) / 1000, 0.05); last = now;
+    idle += dt;
+    if (idle > 1.6) { idle = 0; launch(Math.floor(Math.random() * topics.length), false); }
+    for (let k = 0; k < runs.length; k++) {
+      const r = runs[k];
+      r.s += r.v * dt;
+      const p = r.route.at(r.s);
+      if (!r.sorted && p.y <= y_sort) {
+        r.sorted = true;
+        gate?.animate([{ rotate: "0deg" }, { rotate: `${(r.route.at(0).x < cx ? -1 : 1) * 35}deg`, offset: 0.3 }, { rotate: "0deg" }], { duration: 500 });
+      }
+      if (!r.stamped && p.y <= y_stamp) {
+        r.stamped = true; set_clean(r.g);
+        stamp?.animate([{ translate: "0 0" }, { translate: "0 7px", offset: 0.35 }, { translate: "0 0" }], { duration: 260 });
+      }
+      if (r.s >= r.route.length) {
+        r.g.remove(); runs.splice(k--, 1);
+        if (r.mine) show_letter(r.i);
+        continue;
+      }
+      place(r.g, p.x, p.y, r.stamped ? 0 : (r.s * 2) % 360);
+    }
+    if (on_screen && !document.hidden) requestAnimationFrame(frame); else running = false;
+  }
+  const go = () => { if (!running && on_screen && !document.hidden && wide.matches && !reduce) { running = true; last = performance.now(); requestAnimationFrame(frame); } };
+
+  if (section && svg && card) {
+    let first = !reduce;
+    try { if (sessionStorage.getItem("contact-sorter")) first = false; else sessionStorage.setItem("contact-sorter", "1"); } catch { /* replay */ }
+    const animated = () => wide.matches && !reduce;
+    document.fonts.ready.then(() => { if (animated()) { build(first); go(); } });
+    new ResizeObserver(() => { if (animated()) build(false); }).observe(section);
+    new IntersectionObserver(([e]) => { on_screen = e.isIntersecting; go(); }).observe(section);
+    document.addEventListener("visibilitychange", go);
+    topics.forEach((a, i) => a.addEventListener("click", (e) => {
+      e.preventDefault();
+      if (animated() && routes.length) {
+        launch(i, true);
+        // keep the card in view while the packet climbs to it
+        const r = card.getBoundingClientRect();
+        if (r.top < 0 || r.bottom > innerHeight) card.scrollIntoView({ behavior: "smooth", block: "center" });
+      } else {
+        show_letter(i);
+        card.scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "center" });
+      }
+    }));
+  }
+
+  // Copy: the card presses in, and a light trail runs out along each right-hand pipe.
+  document.querySelector(".contact-stage .copy-email")?.addEventListener("click", () => {
+    if (reduce || !card) return;
+    card.animate([{ transform: "none" }, { transform: "translate(3px, -3px) scale(0.985)", offset: 0.25 }, { transform: "none" }], { duration: 380, easing: "cubic-bezier(0.34, 1.6, 0.64, 1)" });
+    const pipe = document.querySelector<SVGSVGElement>(".stage-pipe.is-right.is-tube");
+    if (!pipe) return;
+    const { width: w, height: h } = pipe.getBoundingClientRect(), a = h * 0.22, b = h * 0.78, m = h * 0.5;
+    for (const y of [a, b]) {
+      const trail = el("path", { d: `M0 ${m} C${w * 0.6} ${m} ${w * 0.4} ${y} ${w} ${y}`, class: "cs-trail" }, pipe) as SVGPathElement;
+      const len = trail.getTotalLength();
+      trail.style.strokeDasharray = `70 ${len}`;
+      trail.animate([{ strokeDashoffset: 70 }, { strokeDashoffset: -len }], { duration: 900, easing: "cubic-bezier(0.4, 0, 0.2, 1)" }).onfinish = () => trail.remove();
+    }
+  });
 </script>

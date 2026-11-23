@@ -43,7 +43,7 @@ Peter Chang 的作品集網站（Astro 7 + Markdown + Mermaid，部署到 GitHub
 
 ### 閱讀節奏（避免四頁看起來一樣）
 
-- **頁面分區**：模板 [[slug].astro](src/pages/[...lang]/projects/[slug].astro) 自動排成以下順序，Markdown 不必處理；標題、公司、期間留在區塊外。區塊標籤只用英文。
+- **頁面分區**：模板 [[slug].astro](src/pages/[...lang]/projects/[slug].astro) 自動排成以下順序，Markdown 不必處理；標題、公司、期間留在區塊外，右側是該專案的機台爆炸圖（見〈專案機台〉）。區塊標籤只用英文。
   1. **Tech Choices**：Role → Focus → Stack。
   2. **Quick Read**：系統地圖的放大裁切（只看本專案區域與相鄰節點；左上「看完整地圖 →」連回首頁，右上「本專案負責：…」）→ TL;DR 三格（Problem／Approach／Result）→ metrics。
   3. **Deep Dive**：六章內容。
@@ -77,8 +77,17 @@ Peter Chang 的作品集網站（Astro 7 + Markdown + Mermaid，部署到 GitHub
 - **外部設計素材**（Canva 等）：不直接放上網站，只沿用色票與形狀，用 CSS／SVG 重畫，避免授權問題。
 - **文案語氣**：首頁大標與 hero 介紹段先講使用者價值與為人（熱忱、從使用者角度出發、團隊合作、深耕資料工程與 AI），不以「逆向工程」「沒有權限」開場；技術手段放在能力列表與專案頁。所有個人文案集中在 [profile.ts](src/data/profile.ts)。
 - **雙語同步 MUST**：改 `profile.ts` 的文字時同步改 [profile.en.ts](src/data/profile.en.ts)（日期、標籤、連結只寫在 `profile.ts`）；新增介面字串放 [ui.ts](src/i18n/ui.ts) 的 `zh`、`en` 兩邊；專案頁的英文版在 [src/content/projects-en/](src/content/projects-en/)（同檔名，只放文字：summary、role、metric_labels、tldr 與內文），日期、Stack、數字與系統地圖只寫在中文檔；改中文專案頁的內文或數字時同步改英文檔，缺檔或 metric_labels 數量不符時 build 會失敗。英文 Markdown 裡的影片與 CSV 連結比中文多一層 `../`（網址多了 `/en/`）。英文文案為 Claude 草稿，經 Peter 審稿後才算定稿。
-- **Contact**：獨立頁 `/contact/`（置中標題與一句邀請 → 主視覺數位名片：P 標誌、姓名職稱、Email 含複製、GitHub／LinkedIn、求職資訊 `contact_facts`，兩側管線流入（寬版由 contact.astro 依實際尺寸畫成管子，封包與首頁同一套：每個工作階段第一次進站時從外側伸過來、停在名片前、再卡上接通，之後原始形狀的封包從左側流入、在接頭處蓋章成圓再進名片；按「複製」會有磚紅色的封包沿右側管線送出）→ 可以找我聊清單；生活照只放 About），首頁結尾放迷你名片連過去。文案在 `profile.ts` 的 `contact_invite`、`contact_facts`、`talk_topics`。求職狀態等個人資訊只放 Peter 提供的內容，不自行編寫；網站是靜態站，不做需要外部服務的聯絡表單。
-- **首頁（30 秒介紹）**：hero（價值句 `tagline` 當大標 → `intro[0]` → 職稱與「正在尋找新機會」→ 按鈕 → 「更多關於我」「跳傘與潛水」各一行）→ 專長與工具關鍵字列（由專案自動產生）→ 成果地圖（[ImpactMap.astro](src/components/ImpactMap.astro)：公司控制項依家數自動切換：1 家不顯示、公司簡稱寫進標題「成果地圖 · 海科科技」，2–4 家用分頁標籤，5 家以上用下拉選單；每家公司一張系統地圖全區亮起、各區用專案主題色並標上專案短名，建置中的區域變淡；下方每個專案一張卡：之前 → 之後 ＋ 最多 2 個數字，已上線的照地圖由左到右排、建置中的排最後；窄版地圖收進「查看系統地圖」）→ 迷你名片。動態：hero 下方是一條「雜訊進、秩序出」管線（寬度 900px 以上、需 JS，index.astro 依實際版面繪製，封包共用 [pipe-packets.ts](src/lib/pipe-packets.ts)）：資料庫／API／試算表三個通用圖示入口（不放 CRM、PSP 這類特定系統名）→ 驗證（掃描、壞封包掉進退件槽）→ 排程（閘門等距放行）→ 紀錄（蓋章變成整齊的圓）→ 往上打進照片，色塊每接一顆回彈；訪客可按「丟一筆資料進去」或點空白處投入自己的封包（磚紅色、一定通過）。每個工作階段第一次進站時管件逐節卡上再湧入封包，同時大標與職稱的字從散落各處依閱讀順序飛回原位、像蓋章一樣就位（[scatter-text.ts](src/lib/scatter-text.ts)：真文字留在原位只是先隱形，逐字複本飛完即移除，版面不跳動；介紹段不動，維持可讀）；hero 按鈕列的「管線視圖」開啟 [PipelineView.astro](src/components/PipelineView.astro)：首頁各區用 View Transitions 變形成 DAG 節點（hero → 來源、能力群組 → 能力、成果地圖的專案卡 → 專案節點（全部公司、每家一條泳道）、迷你名片 → 終點、常用工具 → 執行環境軌道），連線是資料血緣（專案的 `focus` 落在哪個能力群組就接哪個），打開後自動 Run 一次（等待 → 執行中 → 完成，建置中的專案停在「建置中」），滑到節點追溯上下游，點節點變回閱讀模式並停在那一區；節點只放標題與狀態，不放數字，之後直接顯示運轉中的狀態；減少動態時顯示同一場景的靜止畫面；站名在 `ui.ts` 的 `home.pipe_*`；成果地圖第一次進入畫面時，區域與卡片依卡片順序逐一亮起，滑到地圖區域會亮對應卡片、點擊進專案頁。About 的 Off the Clock 是「天空 → 海平面 → 水下」垂直軸，每張照片在 `profile.ts` 的 `life.photos[].zone` 歸區，不標高度或深度數字；新增照片要填 `zone`。About 的 02 Certifications 依領域分組（`profile.ts` 的 `certifications`，組內依日期新到舊），每張是縮圖＋名稱＋發證單位＋年月，點開是遮蔽後的證書圖；潛水等生活類證照不放這裡，放 Off the Clock 對應區（`life.cert`）。Core Capabilities 只放 About；專案卡片清單只放 Projects 頁。成果呈現沿用自己的系統地圖與管線風格，不用漸層、光暈、閃爍圓點、數字跳動這類通用儀表板元素。首頁與 Contact 不加章節編號（01、02），專案頁與 About 保留。
+- **Contact**：獨立頁 `/contact/`（置中標題與一句邀請 → 主視覺數位名片：P 標誌、姓名職稱、Email 含複製、GitHub／LinkedIn、求職資訊 `contact_facts`，兩側管線流入（名片是首頁產線的終點：寬版由 contact.astro 依實際尺寸畫成管子，左側一家公司一條管線、標公司簡稱，流入的是已蓋章、該公司已上線專案顏色的圓（`get_production_lines`）；每個工作階段第一次進站時從外側伸過來、停在名片前、再卡上接通；滑過名片會微微浮起、疊層展開；按「複製」會有磚紅色的封包沿右側管線送出；900px 以下兩側管線隱藏，改在名片上方放同樣產線的靜態插圖，可左右捲動）→ 可以找我聊＝**主題分揀寄信機**：名片下方一條藍圖管線，四張主題卡（`talk_topics`）是投入口，點一張就有封包經分揀、蓋章升進名片，名片出現「主旨＋開始寫信（mailto 帶主旨）＋複製主旨」；沒有 JS 時主題卡本身就是帶主旨的 mailto 連結，窄版或減少動態時點了直接填入名片；第一次進站管線線稿畫出、投入口卡上；按「複製」名片壓下、右側管線射出光跡；字串在 `ui.ts` 的 `contact.topic_*`、`contact.letter_*`；生活照只放 About），首頁結尾放迷你名片連過去。文案在 `profile.ts` 的 `contact_invite`、`contact_facts`、`talk_topics`。求職狀態等個人資訊只放 Peter 提供的內容，不自行編寫；網站是靜態站，不做需要外部服務的聯絡表單。
+- **首頁（30 秒介紹）**：hero（價值句 `tagline` 當大標 → `intro[0]` → 職稱與「正在尋找新機會」→ 按鈕 → 「更多關於我」「跳傘與潛水」各一行）→ 專長與工具關鍵字列（由專案自動產生）→ 成果地圖（[ImpactMap.astro](src/components/ImpactMap.astro)：公司控制項依家數自動切換：1 家不顯示、公司簡稱寫進標題「成果地圖 · 海科科技」，2–4 家用分頁標籤，5 家以上用下拉選單；每家公司一張系統地圖全區亮起、各區用專案主題色並標上專案短名，建置中的區域變淡；下方每個專案一張卡：之前 → 之後 ＋ 最多 2 個數字，已上線的照地圖由左到右排、建置中的排最後；窄版地圖收進「查看系統地圖」）→ 迷你名片。動態：hero 下方是**專案機台產線**，畫成軸測藍圖（見〈藍圖語言〉與〈專案機台〉；需 JS，寬度 900px 以上由 index.astro 依實際版面繪製，以下改成可左右捲動的靜態插圖；封包共用 [pipe-packets.ts](src/lib/pipe-packets.ts)）：一家公司一條產線（`--hp-lines` 依家數撐開 hero 下緣），一個專案一台機台，從主幹沿深度方向接支管進機台；機台做的事就是專案的邏輯，好的資料蓋成專案顏色的圓、往上打進照片（色塊每接一顆回彈），對不上的進機台旁的托盤；建置中的專案畫成鷹架、不跑封包。滑過機台：鏡頭就地放大 2.1 倍（`HOVER_S`，限制在 hero 文字下方的管線帶內；字級除以縮放倍率，所以字不變大、彼此拉開）、外殼微微浮起（保持立體，不淡出）、標出機構，旁邊出現該專案的之前／之後卡片；點機台：鏡頭推近後飛進專案頁（跨頁 View Transition，見〈專案機台〉）；訪客可按「丟一筆資料進去」或點空白處投入自己的封包（磚紅色、一定通過），鏡頭會跟著它走到照片前。每個工作階段第一次進站時管件逐節卡上再湧入封包，同時大標與職稱的字從散落各處依閱讀順序飛回原位、像蓋章一樣就位（[scatter-text.ts](src/lib/scatter-text.ts)：真文字留在原位只是先隱形，逐字複本飛完即移除，版面不跳動；介紹段不動，維持可讀）；hero 按鈕列的「管線視圖」開啟 [PipelineView.astro](src/components/PipelineView.astro)：首頁各區用 View Transitions 變形成 DAG 節點（hero → 來源、能力群組 → 能力、成果地圖的專案卡 → 專案節點（全部公司、每家一條泳道）、迷你名片 → 終點、常用工具 → 執行環境軌道），連線是資料血緣（專案的 `focus` 落在哪個能力群組就接哪個），打開後自動 Run 一次（等待 → 執行中 → 完成，建置中的專案停在「建置中」），滑到節點追溯上下游，點節點變回閱讀模式並停在那一區；節點只放標題與狀態，不放數字，之後直接顯示運轉中的狀態；減少動態時顯示同一場景的靜止畫面；機台的名稱、註記、機構標籤與各層文字在 `src/data/machines.ts`，hero 的固定字串在 `ui.ts` 的 `home.pipe_*`、`home.machine_open`；成果地圖第一次進入畫面時，區域與卡片依卡片順序逐一亮起，滑到地圖區域會亮對應卡片、點擊進專案頁。About 寬版（1100px 以上、未開減少動態）是**捲動參觀工廠**（[about-factory.ts](src/lib/about-factory.ts)）：左側固定一座藍圖工廠，一個區塊一站，輸送帶由上往下蛇行（每列由左往右，回程管下到下一列）；捲到哪一區鏡頭就飛到哪一站（目前這站在上方約三分之一、其他站變淡），該站第一次到達時線稿一筆筆畫出再啟動；第一次進站時骨架先畫出、站名滑入；讀者的封包隨捲動沿輸送帶前進，捲到頁尾時鏡頭帶出「Contact →」出口；點某一站會捲到該區。各站依頁面順序：職涯產線、方法機台、證照蓋章機、能力模組架（名稱斜放成註記）、原則控制台（標題在逗號處斷行）、升降機（天空 → 海平面 → 水下，車廂跟著 Off the Clock 的捲動）；站與區塊的對應在 `POS`。窄版或減少動態時不顯示工廠，改回各區塊自己的職涯產線與方法機台。區塊或站的順序要一致（`data-station` 與 `factory_data.titles`）。About 的區塊順序：01 Background → 02 Problem-solving Approach → 03 Certifications → 04 Core Capabilities → 05 Engineering Philosophy → 06 Off the Clock（興趣補充放最後，Peter 決定）。01 Background 在時間軸上方放**職涯產線**（取代舊的職涯時間條）：一份工作一台機台、寬度依月數、地板標年份，封包在第一份工作蓋章、在現職換成磚紅色，最後流進「正在尋找新機會」虛線鷹架（點了到 Contact）；滑過機台放大並顯示職稱、期間、作品與標籤（`profile.ts` 的 `experience`：`works` 有 `project` 的連到該專案頁、名稱取自專案（中文用副標題），其餘寫 `name`；`tags` 對齊專案的 Focus 與主要工具）；時間軸清單由近到遠，產線由舊到新。02 Problem-solving Approach 在清單上方放**方法機台**（步驟名稱前不加編號，避免和章節編號混淆）：一格一個步驟（`approach` 的 `step`、`title`），封包逐格通過、點亮下方清單對應的那一步，滑過某格放大並固定點亮。兩者共用 [bp-scene.ts](src/lib/bp-scene.ts)（放大時字級不變；900px 以下為可左右捲動的靜態插圖）。About 的 Off the Clock 是「天空 → 海平面 → 水下」垂直軸，每張照片在 `profile.ts` 的 `life.photos[].zone` 歸區，不標高度或深度數字；新增照片要填 `zone`。About 的 03 Certifications 依領域分組（`profile.ts` 的 `certifications`，組內依日期新到舊），每張是縮圖＋名稱＋發證單位＋年月，點開是遮蔽後的證書圖；潛水等生活類證照不放這裡，放 Off the Clock 對應區（`life.cert`）。Core Capabilities 只放 About；專案卡片清單只放 Projects 頁。成果呈現沿用自己的系統地圖與管線風格，不用漸層、光暈、閃爍圓點、數字跳動這類通用儀表板元素。首頁與 Contact 不加章節編號（01、02），專案頁與 About 保留。
+- **藍圖語言（3D）**：全站視覺是「工程藍圖」。3D 只給管線與容器，文字、表格、規則圖、log 一律正面平放。
+  - **場景**（首頁 hero 的專案機台、專案頁頁首的機台、Contact 管線、管線視圖）：軸測線稿。管子是外框線加點劃中心線，接頭是橢圓圈；機台是玻璃殼（看得到的面半透明，看不到的稜線用虛線），封包在殼內看得見；地板是格線紙。所有管線與封包都在同一個正面平面上，深度只往右上退（`src/lib/blueprint.ts` 的 `View`：角度 40°、深度半比例）。
+  - **系統地圖**：正面藍圖。座標、`map_crops`、`tag_at`、故事線拍點都不動，只換畫法：格線紙底、線稿節點加上 [Base.astro](src/layouts/Base.astro) 的 `#bp-extrude` 濾鏡（往右上的厚度）、連線標籤用等寬字。
+  - **卡片與按鈕**：背後往右上疊薄層（D 疊層），用 `box-shadow` 畫（`global.css` 檔尾「Blueprint layers」），滑過展開、按下收合。新增卡片類元件時把選擇器加進那一段；疊層方向由 `--lx-k`、`--ly-k` 控制。
+  - **互動**：滑過 hero 機台時外殼浮起；游標在 hero、Contact 舞台、管線視圖上移動時，深度方向跟著微轉（`tilt()`），疊層方向也一起轉。減少動態時不轉、不浮起動畫。
+  - 顏色只用 `--bp-line`（線）、`--bp-grid`（格線）、`--bp-glass`（玻璃面）、`--bp-side`（厚度側面）四個 token，不用漸層、光暈或柔和陰影。
+- **專案機台**（[machines.ts](src/data/machines.ts)）：每個系統地圖區域一台機台，中英文都要填：`kind`（`match` 兩份報表逐筆配對、`align` 兩條線用鍵值對齊、`query` 驗證後到各後台查詢、`stages` 連續關卡、`scaffold` 建置中）、`name`、`note`（掀開時才顯示）、`parts`（機構標籤）、`outlet`（托盤名稱）、`layers`（專案頁頁首爆炸圖，由上往下）。文字只寫專案頁撐得住的事實、不放數字，經 Peter 確認後記在 source-notes。
+  - 專案頁頁首右側是 [MachineView.astro](src/components/MachineView.astro)：同一台機台拆成各層，建置時就畫好（沒有 JS 也完整），JS 只加封包穿層、滑過亮層與微轉。幾何在 [machine-geom.ts](src/lib/machine-geom.ts)，伺服端與瀏覽器共用。
+  - 跨頁轉場只給「點機台」：首頁在放大的機台上放一個 `view-transition-name: machine-fly` 的框並設 `sessionStorage`，Base.astro 讓到達頁的 `.machine-view` 取同名；其他換頁一律在 `pageswap` 跳過轉場。`@view-transition` 寫在 Base.astro 的 inline `<style>`，不要搬回外部 CSS（新頁可能在外部 CSS 解析前就被判定沒有 opt-in，轉場時有時無），也不要包在 `@media` 裡（同樣會中止）；減少動態時首頁直接換頁、不放框，自然不會轉場。
 - **新增互動元件**：沒有 JS 時內容仍要完整可讀（漸進增強）；鍵盤可操作、有 `focus-visible` 樣式、尊重 `prefers-reduced-motion`。
 
 ## 連動關係（改 A 時必須一起檢查 B）
@@ -97,6 +106,10 @@ Peter Chang 的作品集網站（Astro 7 + Markdown + Mermaid，部署到 GitHub
 | `contact_facts`（求職資訊） | 首頁 hero 的「正在尋找新機會」（`ui.ts` 的 `home.open_to_work`）；不再求職時兩者一起拿掉 | 人工 |
 | `life.photos` 新增、刪除、調順序 | `profile.en.ts` 的 `life_photo_text` 同順序同數量；有 `video` 的項目要有同名 jpg 封面 | 數量不符 build 擋；順序人工 |
 | `certifications` 新增、刪除、調順序 | `profile.en.ts` 的 `certification_text` 同組、同順序、同數量；`public/media/certs/` 要有遮蔽後的 `<slug>.jpg` 與 `<slug>-thumb.jpg`；來源與遮蔽做法記在 source-notes | 數量不符 build 擋；身分證格式字串 pytest 擋（圖片內文字只能人工看） |
+| `experience`（新增、改日期或職稱） | About 職涯產線的機台數、寬度（月數）、年份刻度與滑過卡片；時間軸文字 | 人工：截圖看機台標籤有沒有擠在一起（短期工作的機台很窄） |
+| About 區塊新增、刪除或調順序 | `about.astro` 的 `data-station` 與 `factory_data.titles`、[about-factory.ts](src/lib/about-factory.ts) 的站（`ROW`）| 人工：寬版從頭捲到尾，看每一站鏡頭與點亮 |
+| `certifications`、`capabilities`、`philosophy` 數量 | About 工廠的證照卡數、模組數、控制台單元數 | 人工 |
+| `approach` 新增或刪除步驟 | About 方法機台的格數（一格一步，與清單同順序） | 人工 |
 | `capabilities`、`principles`、`approach` 的例子 | 例子裡的數字要和專案頁一致（例如 Unblock 的平台數） | 人工 |
 
 ### 專案頁（`src/content/projects/<id>.md`）
@@ -131,9 +144,16 @@ Peter Chang 的作品集網站（Astro 7 + Markdown + Mermaid，部署到 GitHub
 | 品牌色、P 標誌、姓名或職稱 | 社群預覽圖：改 [scripts/og/og.html](scripts/og/og.html)（色碼寫死，對照 `global.css` 淺色 token），再依檔案開頭的指令重新產生 `public/og.png` | 人工 |
 | 新增任何 CSS token（含 `--shadow`） | `:root` 與 `:root[data-theme="dark"]` 各定義一次 | 人工 |
 | 複製 Email 的行為或文字 | [CopyEmail.astro](src/components/CopyEmail.astro)（首頁、Contact 共用）＋ `ui.ts` 的 `contact.copy*` 兩種語言 | 人工 |
+| 新增專案（新的 `system_map.area`） | [machines.ts](src/data/machines.ts) 要有該區的機台（中英文）；首頁 hero 自動多一台、專案頁頁首自動出現爆炸圖 | 缺項時首頁建置失敗；文字經 Peter 確認、記 source-notes |
+| 專案的 `accent`、`home`（上線與否） | Contact 左側管線的封包顏色（只取已上線專案）與公司管線數 | 人工 |
+| 專案的 `title`、`accent`、`impact`、`home` | 首頁 hero 機台的顏色、滑過卡片的之前／之後、建置中鷹架（`home` 未設）；專案頁頁首機台的顏色 | 人工：滑過每台機台各一次 |
+| [machines.ts](src/data/machines.ts) 的 `layers` 數量或文字 | 專案頁頁首爆炸圖的層數與標籤（英文長句最多約三行，否則會疊到下一層） | 人工：中英文各截圖一次 |
+| 新增卡片或按鈕類元件 | `global.css` 檔尾「Blueprint layers」的選擇器清單（疊層）；系統地圖新增節點用 `.node` 就會自動有厚度 | 人工：截圖看疊層有沒有被父層 `overflow` 裁掉 |
+| `src/lib/blueprint.ts` 的 `View` 或 `tilt()` | 首頁 hero、Contact、管線視圖三處的轉動；`#bp-extrude` 與疊層的方向（右上）要一致 | 人工：三處各移動游標看一次 |
 | GitHub／LinkedIn／Email 圖示 | [SocialIcon.astro](src/components/SocialIcon.astro)；品牌圖示來自 Simple Icons（CC0），換版本時更新註解 | 人工 |
 | `ui.ts` 新增或刪除字串 | `zh`、`en` 兩邊同時改 | 人工 |
 | 頁面結構（首頁、Contact、About 的區塊順序） | 本檔〈網站設計慣例〉對應的描述 | 人工 |
+| 首頁 hero 的結構（`.hero-scene` 包 `.hero-pipes`、`.hero-drop`、`.hero-machine-card`） | index.astro 的腳本與 `global.css` 的 `.hero > :not(...)` 排除清單：新的絕對定位元素要加進排除清單，否則會被推進版面 | 人工 |
 | 首頁區塊的 class（`.hero-text`、`.hero-photo`、`.focus-groups > li`、`.impact-card[data-area]`、`.home-contact`、工具列 `ul`） | [PipelineView.astro](src/components/PipelineView.astro) 的 `data-morph`／`data-target` 選擇器：對不到時變形與「點節點回到那一區」會失效，不會報錯 | 人工：打開管線視圖、點每種節點各一次 |
 | 生活影片 | 原始檔放 `canva-export/life/`（不進 git），網站用剪好的 `public/media/life/*.mp4`＋同名 jpg 封面 | 人工 |
 

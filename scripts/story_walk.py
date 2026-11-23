@@ -11,7 +11,7 @@ from playwright.sync_api import sync_playwright
 CHROME = "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
 args = [a for a in sys.argv[1:] if not a.startswith("--")]
 slug = args[0]
-base = args[1] if len(args) > 1 else "http://localhost:4321"
+base = args[1] if len(args) > 1 else "http://localhost:4321/PCResume"
 shots = sys.argv[sys.argv.index("--shots") + 1] if "--shots" in sys.argv else None
 
 STATE = """() => ({

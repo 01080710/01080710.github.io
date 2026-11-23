@@ -49,17 +49,21 @@ export const profile = {
   career_label: "資料領域年資",
 
   // start / end use YYYY/MM; end = "" means current job (shown as 現在, duration counted to build date).
+  // works: what was built there. `project` links its case study (name from the project: zh subtitle, en title),
+  // otherwise `name` is shown; `detail` adds the parts in brackets. tags: the projects' Focus and main tools
+  // (drafted by Claude from the case studies, confirmed by Peter 2026-11-23).
   experience: [
     { company: "海科科技有限公司",     role: "資料工程師 (Data Specialist)", start: "2025/12", end: "",
-      note: "營運資料基礎設施、風控對帳管線、營運帳務自動化。",
-      tags: ["Data Pipeline", "Reconciliation", "Automation"] },
+      works: [{ project: "credit-card-anomaly-detection" }, { project: "drop-order-monitor" },
+              { project: "account-automation-engine" }, { project: "ticket-data-mart" }],
+      tags: ["Financial Reconciliation", "Anomaly Detection", "Process Automation", "Data Integration", "Python", "API Reverse Engineering", "LarkSheet API"] },
     { company: "維碩科技股份有限公司", role: "資料工程師",                   start: "2025/02", end: "2025/12",
-      note: "設備管理平台 RESTful API；參與智慧監控儀表板。",
-      tags: ["PostgreSQL", "ORM", "Swagger", "RESTful API"] },
+      works: [{ project: "noise-camera-enforcement", detail: "設備與場域管理 API、天候查證、事件審核 API、稽核儀表板" }],
+      tags: ["API Development", "Data Visualization", "FastAPI", "SQLAlchemy / MSSQL", "Docker"] },
     { company: "三興資訊股份有限公司", role: "資料分析師",                   start: "2023/04", end: "2025/02",
-      note: "車型資料爬蟲、車身碼查詢系統、出險平台 OCR + NLP 模組、GCP VM/VPN 管理。",
-      tags: ["Django", "OCR", "NLP", "GCP", "Crawler"] },
-  ],
+      works: [{ name: "車型資料爬蟲" }, { name: "車身碼查詢系統" }, { name: "出險平台 OCR＋NLP 模組" }, { name: "GCP VM／VPN 管理" }],
+      tags: ["Web Crawling", "Django", "OCR", "NLP", "GCP"] },
+  ] as { company: string; role: string; start: string; end: string; works: { project?: string; name?: string; detail?: string }[]; tags: string[] }[],
 
   education: {
     period: "2017 – 2021",

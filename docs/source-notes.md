@@ -530,3 +530,20 @@ frontmatter `period`（開發）／`launch`（上線）／`phases`（分線）�
   - 遮蔽腳本 `canva-export/certificates/mask_certs.py` 刻意留在 canva-export（腳本內含證號與第三方姓名，不可進 git）。重新產生：`python -I canva-export/certificates/mask_certs.py canva-export/certificates public/media/certs`（需 Pillow、PyMuPDF）。
   - 檢查：14 張輸出逐張目視確認；第一輪「投資型」條碼與左下編號、「高業」條碼下緣與左下編號有漏，改用原圖座標補遮後重新確認。
 - 防呆：`tests/test_no_national_id.py` 掃描 src、public、docs、scripts、tests 與 README／CLAUDE.md 的文字檔，出現身分證格式字串即失敗。圖片內的文字掃不到，新增證書圖仍需人工檢查。
+
+## 專案機台：首頁 hero 與專案頁頁首（2026-11-23，Peter 確認）
+
+首頁 hero 的通用管線（驗證、排程、紀錄）整條換成專案機台：一家公司一條產線（海科、維碩兩條，都匯進照片），一個專案一台機台；點機台飛進專案頁，頁首右側是同一台機台拆成各層。內容在 `src/data/machines.ts`。
+
+- 機構與各層文字由 Claude 依各專案頁的 TL;DR、名詞說明與系統地圖起草，Peter 確認「照草稿做」（2026-11-23）。起草時更正一處：Account Engine 不是「把帳戶分到 4 個後台」，而是「名單 → 驗證 → 排程到各 regulator 的 CRM 後台查詢 → 成功與失敗都留紀錄」（依該頁 TL;DR）。
+- Credit Card、Drop-Order 對不上的記錄進「LarkSheet」托盤（依兩頁 TL;DR：不一致的交易／掉單寫入 LarkSheet 交給營運）；Noise Camera 判定無效的進「無效」托盤（依維碩地圖「四項條件 → 有效／無效」）；Account Engine 失敗的照樣送出、封章為紅（「成功與失敗都留紀錄」）。
+- OP Ticket 建置中：只畫鷹架、不跑封包，和成果地圖的「建置中」一致。
+- 第二家公司放第二條產線（Peter 選擇）；專案頁的機台放頁首右側，Quick Read 與故事線不動（Peter 選擇）；手機版首頁為靜態插圖（可左右捲動）。
+- 機台與爆炸圖不放任何數字（數字單一出處）。機台上的封包數量、退件比例是示意的動畫節奏，不代表真實比例。
+- 英文文字為 Claude 草稿，待 Peter 審稿。
+
+## About 經歷改寫（2026-11-23，Peter 確認）
+
+- 每家公司的一句說明改成「作品清單」：海科、維碩的作品連到專案頁（名稱取自專案，中文用副標題）；三興照原說明拆成四項（車型資料爬蟲、車身碼查詢系統、出險平台 OCR＋NLP 模組、GCP VM／VPN 管理），沒有新增事實。
+- 標籤改成對齊專案頁的 Focus 與主要工具。維碩原本寫 PostgreSQL，與 Noise Camera 專案頁 Stack 的 MSSQL 不一致，Peter 選擇改用 MSSQL（`SQLAlchemy / MSSQL`）。
+- 職涯產線維持由舊到新，下方經歷清單由近到遠（Peter 選擇）。About 區塊重排為會動的在前（Background → Approach → Off the Clock → Certifications → Core Capabilities → Philosophy）。

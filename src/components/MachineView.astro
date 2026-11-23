@@ -1,0 +1,134 @@
+---
+// The project's machine from the Home hero, exploded into its layers (src/data/machines.ts), at the top right of the
+// case study. Rendered complete at build time (glass slabs, the pipe down through them, one label per layer), so it
+// reads without JS and the page transition from the Home machine has something to land on. The script adds packets
+// that drop through the layers (each layer lights as a packet passes), hover highlighting and the pointer tilt.
+// An in-progress project is drawn as scaffolding without packets. Reduced motion: the still drawing.
+import { machines } from "../data/machines";
+import type { MapArea } from "../data/system-maps";
+import type { Lang } from "../i18n/ui";
+import { BASE_VIEW } from "../lib/blueprint";
+import { leader, pipe, size, slab, slab_center } from "../lib/machine-geom";
+
+interface Props { area: MapArea; accent: string; lang: Lang }
+const { area, accent, lang } = Astro.props;
+const m = machines[area];
+const n = m.layers.length;
+const { w, h } = size(n, BASE_VIEW);
+const layers = m.layers.map((l, i) => ({ name: l.name[lang], text: l.text[lang], shapes: slab(i, BASE_VIEW), y: slab_center(i, BASE_VIEW).y }));
+const pipe_d = pipe(n, BASE_VIEW);
+const caption = lang === "zh"
+  ? `${m.name.zh}的機台，依資料流向由上往下拆成 ${n} 層：${m.layers.map((l) => `${l.name.zh}，${l.text.zh}`).join("；")}。`
+  : `The ${m.name.en} machine, taken apart into ${n} layers in the order the data flows: ${m.layers.map((l) => `${l.name.en}, ${l.text.en}`).join("; ")}.`;
+---
+
+<figure class:list={["machine-view", { "is-scaffold": m.kind === "scaffold" }]} data-accent={accent} data-n={n} data-kind={m.kind}>
+  <svg class="mv-svg" width={w} height={h} viewBox={`0 0 ${w} ${h}`} aria-hidden="true">
+    <g class="mv-back">{layers.map((l) => <path class="mv-hidden" d={l.shapes.hidden} />)}</g>
+    <g class="mv-pipe"><path class="mv-edge" d={pipe_d} /><path class="mv-core" d={pipe_d} /><path class="mv-center" d={pipe_d} /></g>
+    <g class="mv-packets"></g>
+    <g class="mv-glass">
+      {layers.map((l, i) => (
+        <g class="mv-slab" data-i={i}>
+          <polygon class="mv-front" points={l.shapes.front} />
+          <polygon class="mv-roof" points={l.shapes.roof} />
+          <polygon class="mv-side" points={l.shapes.side} />
+        </g>
+      ))}
+    </g>
+    <g class="mv-leaders">{layers.map((_, i) => <path class="mv-leader" data-i={i} d={leader(i, BASE_VIEW, w)} />)}</g>
+  </svg>
+  <ol class="mv-layers" style={`height:${h}px`}>
+    {layers.map((l, i) => (
+      <li style={`top:${l.y.toFixed(1)}px`} data-i={i}><span class="mv-name mono">{l.name}</span><span class="mv-text">{l.text}</span></li>
+    ))}
+  </ol>
+  <figcaption class="sr-only">{caption}</figcaption>
+</figure>
+
+<script>
+  import { make_packet, place, set_clean } from "../lib/pipe-packets";
+  import { BASE_VIEW, tilt, type View } from "../lib/blueprint";
+  import { leader, pipe, slab, slab_center } from "../lib/machine-geom";
+
+  const reduce = matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const DROP_S = 0.5, HOLD_S = 0.65, OUT_S = 0.7, REST_S = 0.5;
+
+  for (const fig of document.querySelectorAll<HTMLElement>(".machine-view")) {
+    const svg = fig.querySelector<SVGSVGElement>(".mv-svg")!;
+    const n = Number(fig.dataset.n);
+    const right = svg.viewBox.baseVal.width;
+    const slabs = [...fig.querySelectorAll<SVGGElement>(".mv-slab")];
+    const items = [...fig.querySelectorAll<HTMLElement>(".mv-layers li")];
+    const leaders = [...fig.querySelectorAll<SVGPathElement>(".mv-leader")];
+    const hidden = [...fig.querySelectorAll<SVGPathElement>(".mv-hidden")];
+    const pipes = [...fig.querySelectorAll<SVGPathElement>(".mv-pipe path")];
+    const layer = fig.querySelector(".mv-packets")!;
+    let view: View = BASE_VIEW;
+
+    const light = (i: number) => {
+      slabs.forEach((s, k) => s.classList.toggle("is-on", k === i));
+      items.forEach((s, k) => s.classList.toggle("is-on", k === i));
+      leaders.forEach((s, k) => s.classList.toggle("is-on", k === i));
+    };
+    // Hovering a layer (drawing or label) holds its light.
+    let held = -1;
+    for (const el of [...slabs, ...items]) {
+      const i = Number(el.dataset.i);
+      el.addEventListener("pointerenter", () => { held = i; light(i); });
+      el.addEventListener("pointerleave", () => { held = -1; light(-1); });
+    }
+
+    // Moving across the figure turns the drawing a little.
+    tilt(fig, (v) => {
+      view = v;
+      slabs.forEach((g, i) => {
+        const s = slab(i, v), [front, roof, side] = g.querySelectorAll("polygon");
+        front.setAttribute("points", s.front); roof.setAttribute("points", s.roof); side.setAttribute("points", s.side);
+        hidden[i].setAttribute("d", s.hidden);
+        leaders[i].setAttribute("d", leader(i, v, right));
+      });
+      const d = pipe(n, v);
+      for (const p of pipes) p.setAttribute("d", d);
+    });
+
+    if (reduce || fig.classList.contains("is-scaffold")) continue;
+
+    // One packet at a time drops down the pipe, stopping at each layer; it leaves the last one sealed.
+    const cycle = DROP_S + n * (HOLD_S + DROP_S) + OUT_S + REST_S;
+    let t = 0, last = 0, on_screen = true, packet: SVGGElement | null = null;
+    const frame = (now: number) => {
+      const dt = Math.min((now - last) / 1000, 0.05);
+      last = now;
+      t = (t + dt) % cycle;
+      if (!packet || t < dt) { packet?.remove(); packet = make_packet(layer); }
+      // where in the cycle: 0 = entering from the top, then hold at layer 0, drop to 1, ...
+      let y: number, at = -1;
+      const top = slab_center(0, view), first = top.y - 30;
+      let u = t;
+      if (u < DROP_S) y = first + (top.y - first) * (u / DROP_S);
+      else {
+        u -= DROP_S;
+        const k = Math.min(Math.floor(u / (HOLD_S + DROP_S)), n);
+        if (k < n) {
+          const r = u - k * (HOLD_S + DROP_S), c = slab_center(k, view);
+          if (r < HOLD_S) { y = c.y; at = k; }
+          else { const next = k + 1 < n ? slab_center(k + 1, view).y : c.y + 30; y = c.y + (next - c.y) * ((r - HOLD_S) / DROP_S); }
+        } else {
+          const c = slab_center(n - 1, view), r = u - n * (HOLD_S + DROP_S);
+          y = c.y + 30 + 20 * Math.min(r / OUT_S, 1);
+          packet.style.opacity = String(Math.max(0, 1 - r / OUT_S));
+        }
+      }
+      if (at === n - 1 && !packet.classList.contains("is-clean")) set_clean(packet);
+      if (t < DROP_S) packet.style.opacity = "1";
+      place(packet, top.x, y, 0);
+      if (held < 0) light(at);
+      if (on_screen && !document.hidden) requestAnimationFrame(frame); else running = false;
+    };
+    let running = false;
+    const start = () => { if (!running && on_screen && !document.hidden) { running = true; last = performance.now(); requestAnimationFrame(frame); } };
+    new IntersectionObserver(([e]) => { on_screen = e.isIntersecting; start(); }).observe(fig);
+    document.addEventListener("visibilitychange", start);
+  }
+</script>
