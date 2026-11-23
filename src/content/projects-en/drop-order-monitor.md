@@ -9,16 +9,18 @@ metric_labels:
   - "Drop-order cases surfaced automatically through 2026/11/17"
 story:
   - { label: "Map", line: "After a client places an order in the Client Portal, deposits and withdrawals go to CPS, which works with channels in each country to actually move the money; CRM keeps what the client sees: for a deposit, CPS sends a deposit order to CRM; for a withdrawal, CRM sends a payout order to CPS." }
-  - { label: "Write-back", line: "Only CPS knows whether money actually moved, so every order's result has to be written back to CRM. Take two real orders from India: a 9,301 INR deposit via UPI and a 55,704 INR withdrawal via local bank transfer. Normally the channel calls back CPS, and CPS writes back to CRM." }
-  - { label: "Drop order", line: "The trouble starts when a channel's callback fails: operations set CPS to success or failure by hand, but that manual change is not written back to CRM. So the deposit client paid and was not credited, and the withdrawal never went out while CRM shows it as completed and nothing was returned." }
-  - { label: "Why it's hard to see", line: "The catch is that each side looks fine on its own: CPS says the order was handled, and CRM says it is in progress or done. A drop order only shows when the same order's status on both sides is put side by side." }
-  - { label: "Rules", line: "So operations and I agreed, rule by rule, on which status combinations count as a drop order, covering deposits, three kinds of ordinary withdrawals and card withdrawals." }
+  - { label: "Deposit", line: "Only CPS knows whether money actually moved, so results have to be written back to CRM. Start with a 9,301 INR deposit from India: CPS first sends a deposit order that creates the order in CRM, the client pays via UPI, UPI calls back CPS, and CPS writes back to CRM. But when the callback fails, operations set CPS to Success (manual) by hand; that change is not written back, CRM stays at Audit, and the client paid but was not credited." }
+  - { label: "Withdrawal", line: "A withdrawal runs the other way: CRM sends a payout order to CPS, and CRM has already deducted the money and shows Completed. This 55,704 INR local bank transfer also had a failed callback, operations set it to Failed (manual) by hand, and nothing was written back: the money never went out, yet CRM shows it completed and nothing was returned." }
+  - { label: "Why it's hard to see", line: "The catch is that each side looks fine on its own: Audit in CRM is an ordinary in-review status, and Success (manual) in CPS is a normal finished status. Only lining up both sides by the same Order Number shows the mismatch; the withdrawal is the same." }
+  - { label: "Can it be done", line: "So what's needed is continuous checking of both sides. Before building, I thought through four questions: what I could check, I checked myself; what needed operations, I went and asked. Only when all four were confirmed did I start on the rules." }
+  - { label: "Rules", line: "The third check is the rules themselves: operations and I agreed, rule by rule, on which status combinations count as a drop order, covering deposits, three kinds of ordinary withdrawals and card withdrawals." }
   - { label: "Worked example", line: "Back to the two orders: the deposit has CPS at Success (manual) and CRM at Audit; the withdrawal has CRM at Completed and CPS at Failed (manual). Both match the rules and are flagged as drop orders." }
   - { label: "Solution", line: "CRM has no database access, so the pipeline downloads its reports with an operations account and queries CPS directly, comparing every hour; each order is assigned once, and a heartbeat row is written even when nothing is new, proving monitoring never stopped." }
   - { label: "Screens", line: "These are the LarkSheet case sheets as they really look, one per case type: a Handler marks Status as Done or Reversed; a period with nothing new still gets a heartbeat row every hour." }
   - { label: "Running for real", line: "This is a real run at 03:00 on 2026-11-18: query CPS, download the CRM reports and lookup tables, then compare by the five case types and write only new cases; a type with nothing new gets a heartbeat row." }
   - { label: "Output", line: "Cases in LarkSheet look like this: a deposit is marked done once a Handler credits it, a withdrawal reversed once it is reversed; the last row is a heartbeat, meaning that run found nothing new." }
-  - { label: "Result", line: "When an upstream system failed on 2026/11/6, callbacks failed en masse; the 10:00 and 11:00 runs alone surfaced 933 deposit drop orders, against at most 75 in a single run on other days. Twice-daily manual checks could never have kept up." }
+  - { label: "Result: deposits", line: "A real case, 2026/11/6: the upstream side launched 85 channels at once without testing, which hit other routes and left every downstream integration stuck, so callbacks failed en masse. The 10:00 run surfaced 450 deposit drop orders and the 11:00 run another 483, against at most 75 in a single run normally; the cases went straight into LarkSheet, each assigned once, and were handed to operations. With twice-daily manual checks, they would have waited for the next round." }
+  - { label: "Result: withdrawals", line: "The withdrawal case is 2026/10/23: UK card issuers rejected refunds in a batch; operations set CPS to Failed (manual), yet CRM still showed the refunds as successful. The pipeline kept comparing every hour, and the 19:09 run surfaced 117 cases at once, against a normal single-run max of 85; of the 329 cases that day, 220 were card withdrawals, mostly in the UK with the same bank-side failure reason: that batch rejection. All 329 were reversed." }
 impact:
   before: "Manual spot checks; drop orders often surfaced only after complaints"
   after: "Statuses are compared automatically and drop orders go straight out as cases"
@@ -61,22 +63,42 @@ tldr:
 
 <hr data-slide="An order's journey">
 
-Only CPS knows whether money actually moved, yet the client looks at the CRM. So once CPS has handled an order, its result has to be **written back** to the CRM. Take two real orders from India: a 9,301 INR deposit via UPI and a 55,704 INR withdrawal via local bank transfer.
+Only CPS knows whether money actually moved, yet the client looks at the CRM. So once CPS has handled an order, its result has to be **written back** to the CRM. Take two real orders from India: a 9,301 INR deposit via UPI, where CPS first sends a **deposit order** that creates the order in CRM; and a 55,704 INR withdrawal via local bank transfer, where CRM sends a **payout order** to CPS.
 
 Normally the channel sends a **callback** to CPS when it is done, and CPS writes the result back to the CRM. The trouble comes when the callback fails: operations set CPS to "Success (manual)" or "Failed (manual)" by hand, but a manual change is not written back to the CRM, so the two systems are left in different states:
 
-<figure class="split-figure">
+<figure class="split-figure step-figure">
 <div class="split-scroll">
-<svg viewBox="0 0 760 310" role="img" aria-labelledby="jr-title"><title id="jr-title">An order's journey: deposit and withdrawal results must be written back from CPS to CRM, and manual fixes after a failed callback are not</title><defs><marker id="jr-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="sf-head" d="M0,0 L8,4 L0,8 z"/></marker></defs><g data-b="lanes"><text class="sf-s" x="95" y="22">CRM (what the client sees)</text><text class="sf-s" x="410" y="22">CPS (actual payment)</text><text class="sf-s" x="665" y="22">Channel</text><text class="sf-h sf-start" x="20" y="50">Deposit · 9,301 INR · UPI</text><rect class="sf-node" x="20" y="60" width="150" height="48" rx="6"/><text class="sf-t" x="95" y="89">CRM</text><rect class="sf-node" x="335" y="60" width="150" height="48" rx="6"/><text class="sf-t" x="410" y="89">CPS</text><rect class="sf-node" x="590" y="60" width="150" height="48" rx="6"/><text class="sf-t" x="665" y="89">UPI</text><line class="sf-sep" x1="20" y1="166" x2="740" y2="166"/><text class="sf-h sf-start" x="20" y="194">Withdrawal · 55,704 INR · local bank transfer</text><rect class="sf-node" x="20" y="204" width="150" height="48" rx="6"/><text class="sf-t" x="95" y="233">CRM</text><rect class="sf-node" x="335" y="204" width="150" height="48" rx="6"/><text class="sf-t" x="410" y="233">CPS</text><rect class="sf-node" x="590" y="204" width="150" height="48" rx="6"/><text class="sf-t" x="665" y="233">Local bank</text></g><g data-b="d-flow"><path class="sf-line" d="M590 84 H491" marker-end="url(#jr-arrow)"/><path class="sf-line" d="M335 84 H176" marker-end="url(#jr-arrow)"/><text class="sf-s" x="540" y="77">callback</text><text class="sf-s" x="255" y="77">write-back</text><text class="sf-s" x="665" y="128">Money received</text></g><g data-b="d-cb"><text class="sf-miss" x="540" y="102">✕ callback failed</text></g><g data-b="d-manual"><text class="sf-s" x="410" y="128">Set by hand to</text><text class="sf-link" x="410" y="146">Success (manual)</text></g><g data-b="d-stuck"><text class="sf-miss" x="255" y="102">✕ not written back</text><text class="sf-miss" x="95" y="128">Still at Audit</text><text class="sf-bad-t sf-small" x="95" y="146">Paid, not credited</text></g><g data-b="w-flow"><path class="sf-line" d="M170 220 H329" marker-end="url(#jr-arrow)"/><path class="sf-line" d="M485 220 H584" marker-end="url(#jr-arrow)"/><path class="sf-line" d="M590 240 H491" marker-end="url(#jr-arrow)"/><path class="sf-line" d="M335 240 H176" marker-end="url(#jr-arrow)"/><text class="sf-s" x="255" y="214">payout order</text><text class="sf-s" x="540" y="214">pay out</text><text class="sf-s" x="540" y="256">callback</text><text class="sf-s" x="255" y="256">write-back</text><text class="sf-s" x="95" y="276">Completed (deducted)</text><text class="sf-s" x="665" y="276">Transfer failed</text></g><g data-b="w-cb"><text class="sf-miss" x="540" y="274">✕ callback failed</text></g><g data-b="w-manual"><text class="sf-s" x="410" y="276">Set by hand to</text><text class="sf-link" x="410" y="294">Failed (manual)</text></g><g data-b="w-stuck"><text class="sf-miss" x="255" y="274">✕ not written back</text><text class="sf-bad-t sf-small" x="95" y="294">Not paid out, not returned</text></g></svg>
+<svg viewBox="0 0 760 326" role="img" aria-labelledby="jr-title"><title id="jr-title">An order's journey: for a deposit CPS sends a deposit order that creates the CRM order, for a withdrawal CRM sends a payout order to CPS; results must be written back from CPS to CRM, and manual fixes after a failed callback are not</title><defs><marker id="jr-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="sf-head" d="M0,0 L8,4 L0,8 z"/></marker></defs><g data-b="cols"><text class="sf-s" x="95" y="22">CRM (what the client sees)</text><text class="sf-s" x="410" y="22">CPS (actual payment)</text><text class="sf-s" x="665" y="22">Channel</text></g><g data-b="d-lane"><text class="sf-h sf-start" x="20" y="50">Deposit · 9,301 INR · UPI</text><rect class="sf-node" x="20" y="60" width="150" height="48" rx="6"/><text class="sf-t" x="95" y="89">CRM</text><rect class="sf-node" x="335" y="60" width="150" height="48" rx="6"/><text class="sf-t" x="410" y="89">CPS</text><rect class="sf-node" x="590" y="60" width="150" height="48" rx="6"/><text class="sf-t" x="665" y="89">UPI</text></g><g data-b="d-cmd"><path class="sf-line" d="M335 74 H176" marker-end="url(#jr-arrow)"/><text class="sf-s" x="255" y="67">deposit order</text><text class="sf-s" x="95" y="128">Created: Audit (pending)</text></g><g data-b="d-flow"><path class="sf-line" d="M590 94 H491" marker-end="url(#jr-arrow)"/><path class="sf-line" d="M335 94 H176" marker-end="url(#jr-arrow)"/><text class="sf-s" x="540" y="110">callback</text><text class="sf-s" x="255" y="110">write-back</text><text class="sf-s" x="665" y="128">Money received</text></g><g data-b="d-cb"><text class="sf-miss" x="540" y="130">✕ callback failed</text></g><g data-b="d-manual"><text class="sf-s" x="410" y="128">Set by hand to</text><text class="sf-link" x="410" y="146">Success (manual)</text></g><g data-b="d-stuck"><text class="sf-miss" x="255" y="130">✕ not written back</text><text class="sf-bad-t sf-small" x="95" y="146">Paid, not credited</text></g><line class="sf-sep" x1="20" y1="176" x2="740" y2="176"/><g data-b="w-lane"><text class="sf-h sf-start" x="20" y="210">Withdrawal · 55,704 INR · local bank transfer</text><rect class="sf-node" x="20" y="220" width="150" height="48" rx="6"/><text class="sf-t" x="95" y="249">CRM</text><rect class="sf-node" x="335" y="220" width="150" height="48" rx="6"/><text class="sf-t" x="410" y="249">CPS</text><rect class="sf-node" x="590" y="220" width="150" height="48" rx="6"/><text class="sf-t" x="665" y="249">Local bank</text></g><g data-b="w-cmd"><path class="sf-line" d="M170 236 H329" marker-end="url(#jr-arrow)"/><text class="sf-s" x="255" y="230">payout order</text><text class="sf-s" x="95" y="290">Completed (deducted)</text></g><g data-b="w-flow"><path class="sf-line" d="M485 236 H584" marker-end="url(#jr-arrow)"/><path class="sf-line" d="M590 256 H491" marker-end="url(#jr-arrow)"/><path class="sf-line" d="M335 256 H176" marker-end="url(#jr-arrow)"/><text class="sf-s" x="540" y="230">pay out</text><text class="sf-s" x="540" y="272">callback</text><text class="sf-s" x="255" y="272">write-back</text><text class="sf-s" x="665" y="290">Transfer failed</text></g><g data-b="w-cb"><text class="sf-miss" x="540" y="290">✕ callback failed</text></g><g data-b="w-manual"><text class="sf-s" x="410" y="290">Set by hand to</text><text class="sf-link" x="410" y="308">Failed (manual)</text></g><g data-b="w-stuck"><text class="sf-miss" x="255" y="290">✕ not written back</text><text class="sf-bad-t sf-small" x="95" y="308">Not paid out, not returned</text></g></svg>
 </div>
 <figcaption>Figure 1　An order's journey: when a channel's callback to CPS fails, operations fix the CPS status by hand, but that manual fix is not written back to CRM, so a drop order forms (both are real cases from the public CSV on this page)</figcaption>
 </figure>
 
+<hr data-slide="Each side looks fine">
+
+Drop orders are hard to spot because CRM and CPS each look normal on their own; the mismatch only shows when both sides' statuses are lined up by the same Order Number:
+
+<figure class="split-figure step-figure">
+<div class="split-scroll">
+<svg viewBox="0 0 760 270" role="img" aria-labelledby="vw-title"><title id="vw-title">Each side looks fine: Audit in CRM and Success (manual) in CPS are both ordinary statuses; only matching them by the same Order Number shows the mismatch</title><g data-b="v-crm"><text class="sf-s" x="150" y="22">CRM screen</text><rect class="sf-box" x="40" y="40" width="220" height="84" rx="6"/><text class="sf-k" x="150" y="64">Deposit · 9,301 INR</text><text class="sf-good" x="150" y="88">Audit</text><text class="sf-tag-good-t sf-small" x="150" y="110">In review, looks normal</text></g><g data-b="v-cps"><text class="sf-s" x="610" y="22">CPS screen</text><rect class="sf-box" x="500" y="40" width="220" height="84" rx="6"/><text class="sf-k" x="610" y="64">Deposit · 9,301 INR</text><text class="sf-good" x="610" y="88">Success (manual)</text><text class="sf-tag-good-t sf-small" x="610" y="110">Done, looks normal</text></g><g data-b="v-cmp"><path class="sf-line" d="M260 82 H500" stroke-dasharray="5 4"/><text class="sf-link" x="380" y="74">same Order Number</text><rect class="sf-bad" x="306" y="90" width="148" height="26" rx="13"/><text class="sf-bad-t sf-small" x="380" y="107">Mismatch = drop order</text></g><g data-b="v-w"><line class="sf-sep" x1="40" y1="146" x2="720" y2="146"/><rect class="sf-box" x="40" y="166" width="220" height="84" rx="6"/><text class="sf-k" x="150" y="190">Withdrawal · 55,704 INR</text><text class="sf-good" x="150" y="214">Completed</text><text class="sf-tag-good-t sf-small" x="150" y="236">Done, looks normal</text><rect class="sf-box" x="500" y="166" width="220" height="84" rx="6"/><text class="sf-k" x="610" y="190">Withdrawal · 55,704 INR</text><text class="sf-good" x="610" y="214">Failed (manual)</text><text class="sf-tag-good-t sf-small" x="610" y="236">Closed, looks normal</text><path class="sf-line" d="M260 208 H500" stroke-dasharray="5 4"/><text class="sf-link" x="380" y="200">same Order Number</text><rect class="sf-bad" x="306" y="216" width="148" height="26" rx="13"/><text class="sf-bad-t sf-small" x="380" y="233">Mismatch = drop order</text></g></svg>
+</div>
+<figcaption>Figure 2　Each side looks fine: both CRM and CPS show ordinary statuses, and only matching them by the same Order Number reveals the drop order (the same two orders as Figure 1)</figcaption>
+</figure>
+
+<hr data-slide="Can it be done">
+
+So the problem to solve is not "checking faster" but that **nothing keeps checking the same order's status in CRM against CPS**. Before building, I asked four questions:
+
+<figure class="split-figure step-figure">
+<div class="split-scroll">
+<svg viewBox="0 0 760 460" role="img" aria-labelledby="fz-title"><title id="fz-title">Feasibility check before building: I thought through four questions, checked what I could myself and asked operations to confirm the rest; only then were the rules written</title><defs><marker id="fz-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="sf-head" d="M0,0 L8,4 L0,8 z"/></marker></defs><g data-b="cols"><circle class="sf-person" cx="60" cy="34" r="14"/><path class="sf-person" d="M36 84 a24 22 0 0 1 48 0 z"/><text class="sf-t" x="60" y="102">Me (engineer)</text><circle class="sf-parent" cx="716" cy="34" r="14"/><path class="sf-parent" d="M692 84 a24 22 0 0 1 48 0 z"/><text class="sf-t" x="716" y="102">Operations</text><text class="sf-s" x="206" y="22">Questions in my head</text><text class="sf-s" x="470" y="22">Checked myself, or asked operations</text></g><g data-b="q1"><circle class="sf-box" cx="80" cy="162" r="3"/><circle class="sf-box" cx="88" cy="151" r="4.5"/><rect class="sf-box" x="96" y="110" width="220" height="56" rx="28"/><text class="sf-good" x="206" y="143">Can we get the data?</text></g><g data-b="a1"><path class="sf-line" d="M322 140 H462" marker-end="url(#fz-arrow)"/><text class="sf-s" x="392" y="132">ask operations</text><rect class="sf-parent" x="470" y="110" width="210" height="56" rx="14"/><path class="sf-parent" d="M679 130 l15 7 l-15 7"/><text class="sf-small-t" x="575" y="134">CPS: query it directly</text><text class="sf-small-t" x="575" y="152">CRM: download with our account</text></g><g data-b="q2"><circle class="sf-box" cx="80" cy="238" r="3"/><circle class="sf-box" cx="88" cy="227" r="4.5"/><rect class="sf-box" x="96" y="186" width="220" height="56" rx="28"/><text class="sf-good" x="206" y="219">Same order on both sides?</text></g><g data-b="a2"><rect class="sf-child" x="336" y="186" width="264" height="56" rx="10" stroke-dasharray="5 4"/><text class="sf-small-t" x="468" y="210">Checked both sides myself:</text><text class="sf-small-t" x="468" y="228">both have the Order Number ✓</text></g><g data-b="q3"><circle class="sf-box" cx="80" cy="314" r="3"/><circle class="sf-box" cx="88" cy="303" r="4.5"/><rect class="sf-box" x="96" y="262" width="220" height="56" rx="28"/><text class="sf-good" x="206" y="295">What is a drop order?</text></g><g data-b="a3"><path class="sf-line" d="M322 292 H462" marker-end="url(#fz-arrow)"/><text class="sf-s" x="392" y="284">ask operations</text><rect class="sf-parent" x="470" y="262" width="210" height="56" rx="14"/><path class="sf-parent" d="M679 282 l15 7 l-15 7"/><text class="sf-small-t" x="575" y="280">Many statuses;</text><text class="sf-small-t" x="575" y="295">let's agree them one by one</text><text class="sf-link" x="575" y="310">→ the rules on the next slide</text></g><g data-b="q4"><circle class="sf-box" cx="80" cy="390" r="3"/><circle class="sf-box" cx="88" cy="379" r="4.5"/><rect class="sf-box" x="96" y="338" width="220" height="56" rx="28"/><text class="sf-good" x="206" y="371">How often?</text></g><g data-b="a4"><path class="sf-line" d="M322 368 H462" marker-end="url(#fz-arrow)"/><text class="sf-s" x="392" y="360">ask operations</text><rect class="sf-parent" x="470" y="338" width="210" height="56" rx="14"/><path class="sf-parent" d="M679 358 l15 7 l-15 7"/><text class="sf-small-t" x="575" y="371">We need to know every hour</text></g><g data-b="go"><rect class="sf-tag-good" x="200" y="412" width="360" height="38" rx="19"/><text class="sf-tag-good-t sf-tag" x="380" y="436">All four confirmed → write the rules first</text></g></svg>
+</div>
+<figcaption>Figure 3　Feasibility check before building: what I could check, I checked myself; what needed operations, I went and asked (the dialogue is illustrative, based on what was actually agreed; how the data is pulled is under the constraints in Solution Design)</figcaption>
+</figure>
+
 <hr data-slide="Drop-order rules">
 
-When a drop order happens, CRM and CPS each look normal on their own; the mismatch only shows when the same order's status on both sides is put together. So the problem to solve is not "checking faster" but that **nothing keeps checking the same order's status in CRM against CPS**.
-
-First, operations and I agreed rule by rule on "which status combinations count as a drop order"; then the rules were written into code. The table shows the rules for the five case types:
+The third check is the rules themselves. First, operations and I agreed rule by rule on "which status combinations count as a drop order"; then the rules were written into code. The table shows the rules for the five case types:
 
 | Case type | CRM status | CPS status | What it means | Action |
 |---|---|---|---|---|
@@ -153,7 +175,7 @@ One real case for each of the five case types, comparing the status in CRM and C
 </div>
 </section>
 </div>
-<figcaption>Figure 2　Three pain points in the original process (hours are estimates; coverage from the public CSV on this page)</figcaption>
+<figcaption>Figure 4　Three pain points in the original process (hours are estimates; coverage from the public CSV on this page)</figcaption>
 </figure>
 
 <hr data-slide="Why it was worth solving">
@@ -161,24 +183,14 @@ One real case for each of the five case types, comparing the status in CRM and C
 **Why it was worth solving:**
 
 1. **Drop orders are routine, not rare**: after Deposit went live, 220 of 233 days had drop orders; for Withdrawal, 67 of 70 days.
-2. **Upstream failures cause sudden spikes**: on 2026/11/6 an upstream system failed and many client orders got stuck (Figure 3). The 10:00 and 11:00 runs alone surfaced 933 deposit drop orders across 85 channels and 61 countries; manual checks twice a day could not have seen something this big in time.
-3. **Manual cost can't scale with frequency**: each check takes about 1 hour (Figure 2); checking N times as often needs N times the staff.
-
-<figure class="bar-figure">
-<ul class="bar-list">
-<li class="is-peak" style="--v: 100%"><span class="bar-label">11/6 11:00 run</span><span class="bar"></span><span class="bar-value">483</span></li>
-<li class="is-peak" style="--v: 93%"><span class="bar-label">11/6 10:00 run</span><span class="bar"></span><span class="bar-value">450</span></li>
-<li style="--v: 16%"><span class="bar-label">Largest single run on any other day</span><span class="bar"></span><span class="bar-value">75</span></li>
-<li style="--v: 4%"><span class="bar-label">Other 22 runs on 11/6 combined</span><span class="bar"></span><span class="bar-value">18</span></li>
-</ul>
-<figcaption>Figure 3　Deposit drop orders surfaced per run during the 2026/11/6 upstream failure (from the public CSV on this page)</figcaption>
-</figure>
+2. **Upstream failures cause sudden spikes**: on 2026/11/6 an upstream system failed and many client orders got stuck; two runs surfaced far more deposit drop orders than usual (the case is in Result); manual checks twice a day could not have seen something this big in time.
+3. **Manual cost can't scale with frequency**: each check takes about 1 hour (Figure 4); checking N times as often needs N times the staff.
 
 ## Solution Design
 
 <hr data-slide="Pain points and solutions">
 
-**Pain point → solution** (matches the architecture in Figure 4):
+**Pain point → solution** (matches the architecture in Figure 5):
 
 - **Found late** → an hourly scheduled comparison; a new drop order appears on the next top-of-the-hour run.
 - **Tracing layer by layer** → pull the CRM report, CPS data and credit card details together and apply the drop-order rules (see Problem); withdrawal cases automatically carry the reason category and status trail.
@@ -236,7 +248,7 @@ flowchart LR
     OPS --> REV["Checker review"]
 ```
 
-*Figure 4　Deposit and withdrawal drop-order monitoring pipeline (summarized from the project code)*
+*Figure 5　Deposit and withdrawal drop-order monitoring pipeline (summarized from the project code)*
 
 <hr data-slide="Design notes">
 
@@ -247,7 +259,7 @@ flowchart LR
 - **Heartbeat row**: when a case type has no new drop orders, a row with only the detection time is still written, so the sheet shows the difference between "no new cases" and "the pipeline stopped".
 - **Status trail and reason**: withdrawal cases chain the CRM and CPS statuses into one Status Workflow (for example `Risk Audit -> Accepted -> Completed -> Processed -> Failed (manual)`), and the Reason Table adds the reason category and subcategory, so Handlers can reply to the client by reason without opening both back offices.
 - **Traceability**: each run gets a `uid`, and JSON logs carry `service`, `stage` and `status`; raw CPS data is backed up to Lark Drive on every run, so the data compared at the time can be audited later.
-- **Access scope**: the CRM is accessed with an existing operations account (with 2FA), only downloading reports and never writing; CPS runs only SELECT queries; Lark writes to the case sheet and backup folder through a self-built app. CRM and CPS credentials are read from a read-only mounted config file, not written in code. TODO: add who approved the account use.
+- **Access scope**: the CRM is accessed with an existing operations account (with 2FA), only downloading reports and never writing; CPS runs only SELECT queries; Lark writes to the case sheet and backup folder through a self-built app. CRM and CPS credentials are read from a read-only mounted config file, not written in code.
 
 ## Result
 
@@ -290,7 +302,7 @@ There is one sheet per case type. Once a Handler is done, `Status` is set to Don
 
 </div>
 </div>
-<figcaption>Figure 5　The LarkSheet case sheets as they really look (swipe to see all 5 sheets; browser and document path cropped; client IDs, account numbers, order numbers and Handler names blurred; click an image to enlarge)</figcaption>
+<figcaption>Figure 6　The LarkSheet case sheets as they really look (swipe to see all 5 sheets; browser and document path cropped; client IDs, account numbers, order numbers and Handler names blurred; click an image to enlarge)</figcaption>
 </figure>
 
 <hr data-slide="One real run">
@@ -364,6 +376,32 @@ Cases are written to LarkSheet, one sheet per case type. Below are real cases fr
 - The last row is a heartbeat row: that run found no new case and only left the detection time.
 - `Handling` is filled in by the Handler: done (credited) for deposits, reversed (returned) for withdrawals.
 
+<hr data-slide="Deposit case: 11/6">
+
+### Deposit case: the 2026/11/6 upstream failure
+
+That day the upstream side launched 85 channels at once without testing the effect on other routes; it left every downstream integration stuck, channel callbacks failed en masse and many client orders got stuck. The pipeline kept running every hour, and the drop orders showed up in the case sheet at the next top of the hour:
+
+<figure class="split-figure step-figure">
+<div class="split-scroll">
+<svg viewBox="0 0 760 310" role="img" aria-labelledby="tl-title"><title id="tl-title">2026/11/6, 85 channels launched upstream without testing left everything downstream stuck: the 10:00 run surfaced 450 deposit drop orders and the 11:00 run another 483, against at most 75 in a normal single run; cases were written to LarkSheet and handed to operations</title><g data-b="t-axis"><text class="sf-h sf-start" x="40" y="22">Pipeline (24 runs on 11/6, one every hour)</text><line class="sf-line" x1="40" y1="232" x2="470" y2="232"/><line class="sf-line" x1="80" y1="232" x2="80" y2="238"/><line class="sf-line" x1="210" y1="232" x2="210" y2="238"/><line class="sf-line" x1="340" y1="232" x2="340" y2="238"/><line class="sf-line" x1="470" y1="232" x2="470" y2="238"/><text class="sf-s" x="80" y="254">09:00</text><text class="sf-s" x="210" y="254">10:00 run</text><text class="sf-s" x="340" y="254">11:00 run</text><text class="sf-s" x="470" y="254">12:00</text></g><g data-b="t-up"><rect class="sf-bad" x="85" y="36" width="380" height="26" rx="13"/><text class="sf-bad-t sf-small" x="275" y="53">85 channels launched untested upstream · all stuck downstream</text></g><g data-b="t-10"><rect class="sf-trx" x="188" y="92" width="44" height="140" rx="3"/><text class="sf-t" x="210" y="84">450</text></g><g data-b="t-11"><rect class="sf-trx" x="318" y="82" width="44" height="150" rx="3"/><text class="sf-t" x="340" y="74">483</text><line class="sf-sep" x1="40" y1="209" x2="470" y2="209"/><text class="sf-s sf-start" x="44" y="203">Normal single-run max: 75</text><text class="sf-k" x="255" y="276">933 in two runs · 85 channels · 61 countries</text></g><g data-b="t-ops"><defs><marker id="tl-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="sf-head" d="M0,0 L8,4 L0,8 z"/></marker></defs><path class="sf-line" d="M478 150 H519" marker-end="url(#tl-arrow)"/><rect class="sf-box" x="525" y="96" width="215" height="108" rx="6"/><text class="sf-t" x="632" y="128">Written to LarkSheet</text><text class="sf-s" x="632" y="152">Each order assigned once</text><text class="sf-good" x="632" y="182">Handlers take over</text></g><g data-b="t-manual"><line class="sf-sep" x1="40" y1="288" x2="740" y2="288"/><text class="sf-k sf-start" x="40" y="304">With manual checks twice a day, drop orders between checks wait for the next round</text></g></svg>
+</div>
+<figcaption>Figure 7　Deposit drop orders surfaced per run during the 2026/11/6 upstream failure (bar heights proportional to counts; the normal single-run max of 75 was on 2026/09/22; from the public CSV on this page)</figcaption>
+</figure>
+
+<hr data-slide="Withdrawal case: 10/23">
+
+### Withdrawal case: UK card refunds failing en masse on 2026/10/23
+
+That day, UK card issuers rejected refunds in a batch, so card refunds failed en masse; operations set CPS to Failed (manual) by hand, but CRM still showed the refunds as successful. The pipeline kept comparing every hour, and each failed refund became a case at the next top of the hour:
+
+<figure class="split-figure step-figure">
+<div class="split-scroll">
+<svg viewBox="0 0 760 312" role="img" aria-labelledby="wd-title"><title id="wd-title">2026/10/23 withdrawals: the 19:09 run surfaced 117 cases against a normal single-run max of 85; 220 were card withdrawals, concentrated in the UK with the same bank-side failure reason (an issuer-side batch rejection); all 329 cases that day were reversed</title><g data-b="o-axis"><text class="sf-h sf-start" x="40" y="22">Pipeline (24 runs on 10/23, one every hour)</text><line class="sf-line" x1="40" y1="240" x2="522" y2="240"/><text class="sf-s" x="51" y="258">00:00</text><text class="sf-s" x="171" y="258">06:00</text><text class="sf-s" x="291" y="258">12:00</text><text class="sf-s" x="411" y="258">18:00</text><rect class="sf-node" x="44" y="234.9" width="14" height="5.1" rx="2"/><rect class="sf-node" x="84" y="238.7" width="14" height="1.3" rx="2"/><rect class="sf-node" x="104" y="233.6" width="14" height="6.4" rx="2"/><rect class="sf-node" x="124" y="238.7" width="14" height="1.3" rx="2"/><rect class="sf-node" x="144" y="234.9" width="14" height="5.1" rx="2"/><rect class="sf-node" x="164" y="238.7" width="14" height="1.3" rx="2"/><rect class="sf-node" x="184" y="223.3" width="14" height="16.7" rx="2"/><rect class="sf-node" x="204" y="216.9" width="14" height="23.1" rx="2"/><rect class="sf-node" x="224" y="237.4" width="14" height="2.6" rx="2"/><rect class="sf-node" x="264" y="232.3" width="14" height="7.7" rx="2"/><rect class="sf-node" x="284" y="231.0" width="14" height="9.0" rx="2"/><rect class="sf-node" x="304" y="234.9" width="14" height="5.1" rx="2"/><rect class="sf-node" x="444" y="227.2" width="14" height="12.8" rx="2"/><rect class="sf-node" x="464" y="225.9" width="14" height="14.1" rx="2"/><rect class="sf-node" x="484" y="224.6" width="14" height="15.4" rx="2"/><rect class="sf-node" x="504" y="237.4" width="14" height="2.6" rx="2"/></g><g data-b="o-up"><rect class="sf-bad" x="90" y="36" width="380" height="26" rx="13"/><text class="sf-bad-t sf-small" x="280" y="53">UK issuers rejected refunds in a batch · card refunds failing</text></g><g data-b="o-pm"><rect class="sf-trx" x="324" y="200.3" width="14" height="39.7" rx="2"/><text class="sf-t sf-small" x="331" y="193.3">31</text><rect class="sf-trx" x="344" y="166.9" width="14" height="73.1" rx="2"/><text class="sf-t sf-small" x="351" y="159.9">57</text><rect class="sf-trx" x="364" y="210.5" width="14" height="29.5" rx="2"/><text class="sf-t sf-small" x="371" y="203.5">23</text></g><g data-b="o-peak"><rect class="sf-trx" x="424" y="90.0" width="14" height="150.0" rx="2"/><text class="sf-t sf-small" x="431" y="83.0">117</text><line class="sf-sep" x1="40" y1="131.0" x2="522" y2="131.0"/><text class="sf-s sf-start" x="44" y="125.0">Normal single-run max: 85</text></g><g data-b="o-why"><rect class="sf-box" x="536" y="36" width="214" height="104" rx="6"/><text class="sf-t" x="643" y="62">220 card withdrawals</text><text class="sf-s" x="643" y="80">usually about 12 a day</text><text class="sf-s" x="643" y="104">189 in the UK</text><text class="sf-s" x="643" y="122">197 bank-side failures</text></g><g data-b="o-done"><rect class="sf-box" x="536" y="174" width="214" height="66" rx="6"/><text class="sf-t" x="643" y="201">To LarkSheet · 329 that day</text><text class="sf-good" x="643" y="225">All reversed</text></g><g data-b="o-manual"><line class="sf-sep" x1="40" y1="280" x2="750" y2="280"/><text class="sf-k sf-start" x="40" y="300">With manual checks twice a day, drop orders between checks wait for the next round</text></g></svg>
+</div>
+<figcaption>Figure 8　Withdrawal drop orders surfaced per run on 2026/10/23 (bar heights proportional to counts; the normal single-run max of 85 was on 2026/11/08, excluding the backlog in the first run after a stop; from the public CSV on this page)</figcaption>
+</figure>
+
 <hr data-slide="Failure reasons">
 
 ### Withdrawal failure reasons
@@ -379,7 +417,7 @@ Withdrawal cases get a reason category from the Reason Table, and Handlers reply
 <li style="--v: 0.1%"><span class="bar-label">CPS issue, internal error</span><span class="bar"></span><span class="bar-value">7</span></li>
 <li style="--v: 21.7%"><span class="bar-label">Uncategorized (reason blank)</span><span class="bar"></span><span class="bar-value">1,444</span></li>
 </ul>
-<figcaption>Figure 6　Withdrawal failure reason categories (Withdrawal 2026-09-09 ~ 11-17, from the public CSV on this page)</figcaption>
+<figcaption>Figure 9　Withdrawal failure reason categories (Withdrawal 2026-09-09 ~ 11-17, from the public CSV on this page)</figcaption>
 </figure>
 
 - **Client issue** subcategories are mostly bank-side transaction failures, wrong account numbers, invalid accounts and wrong names.
@@ -424,7 +462,7 @@ Source: the full records the pipeline wrote to LarkSheet (public CSV). A "case" 
 <div class="ba-row"><p class="ba-item">Coverage</p><p class="ba-before">Manual Excel comparison, volume not recorded</p><p class="ba-after">Each run compares about 195,000 CPS deposits and about 322,000 CRM deposit/withdrawal records<small>Basis: run log in Result</small></p></div>
 <div class="ba-row"><p class="ba-item">Monitoring continuity</p><p class="ba-before">Depends on shifts; gaps during leave and handovers</p><p class="ba-after">Every run leaves a record: cases when there are new ones, a heartbeat row when not, 6,314 heartbeat rows in total<small>Basis: rows with Tx = - in the public CSV</small></p></div>
 </div>
-<figcaption>Figure 7　Before / After (manual hours are estimates)</figcaption>
+<figcaption>Figure 10　Before / After (manual hours are estimates)</figcaption>
 </figure>
 
 <hr data-slide="Not yet quantified">

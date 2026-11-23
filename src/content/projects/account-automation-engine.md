@@ -29,10 +29,17 @@ story:
     line: "客戶的資料在 CRM，交易帳戶在 MetaTrader；每個帳戶的餘額、保證金與損益，要到各 regulator 自己的 CRM 後台才查得到，總共有 4 套。"
   - label: "為什麼要查"
     at: "ch-1-2"
-    pick: ":scope > p"
-    line: "清退高風險客戶、或把客戶轉歸屬到另一個業務名下，都會動到客戶的錢。所以執行前，OP 必須先確認名單上每個帳戶的狀態。"
+    pick: ".split-figure"
+    beats:
+      - "[data-b=\"sources\"]"
+      - "[data-b=\"list\"]"
+      - "[data-b=\"reveal\"]"
+      - "[data-b=\"card\"]"
+      - "[data-b=\"chain\"]"
+      - "[data-b=\"scale\"]"
+    line: "帳戶關閉、強制清退、轉歸屬，最後都匯流到同一個查詢：名單上的帳戶現在還有什麼？但這些帳戶看起來都一樣，查過才知道哪幾個還有餘額或持倉；漏看一個，持倉就會被強制平倉。"
   - label: "帳戶分散"
-    at: "ch-1-2"
+    at: "ch-1-3"
     pick: ".split-figure"
     dim: "[data-b=\"manual\"], [data-b=\"engine\"]"
     beats:
@@ -41,14 +48,14 @@ story:
       - "[data-b=\"accounts\"]"
     line: "難的是，一個客戶常常有好幾個帳戶：每個 regulator 各有一套後台，客戶在哪裡開戶，帳戶就散在哪裡。"
   - label: "人工與引擎"
-    at: "ch-1-2"
+    at: "ch-1-3"
     pick: ".split-figure"
     beats:
       - "[data-b=\"manual\"]"
       - "[data-b=\"engine\"]"
     line: "人工只能一個後台、一個帳戶地切換查詢；引擎則是收下整份名單，一次跨後台查回。"
   - label: "引擎流程"
-    at: "ch-1-3"
+    at: "ch-1-4"
     pick: ".mermaid"
     beats:
       - "[id*=\"-flowchart-OP-\"], [id*=\"-flowchart-SCH-\"], [id*=\"-L_OP_\"], [data-id^=\"L_OP_\"]"
@@ -56,9 +63,9 @@ story:
       - "[id*=\"-flowchart-QRY-\"], [id*=\"-flowchart-SRC-\"], [id*=\"-L_VAL_QRY\"], [data-id^=\"L_VAL_QRY\"], [id*=\"-L_QRY_\"], [data-id^=\"L_QRY_\"]"
       - "[id*=\"-flowchart-NORM-\"], [id*=\"-flowchart-REC-\"], [id*=\"-flowchart-OUT-\"], [id*=\"-L_SRC_\"], [data-id^=\"L_SRC_\"], [id*=\"-L_NORM_\"], [data-id^=\"L_NORM_\"]"
       - "[id*=\"-flowchart-CLR-\"], [id*=\"-L_REC_CLR\"], [data-id^=\"L_REC_CLR\"], [id*=\"-L_OUT_CLR\"], [data-id^=\"L_OUT_CLR\"]"
-    line: "各團隊的需求看起來不同，其實都是「給名單、回傳同一組欄位」。所以我把它做成引擎：OP 填表、排程撿取，先驗證、再用 API 逆向工程跨後台查詢，成功與失敗都寫進 Record。"
+    line: "既然三種作業都卡在同一個查詢，而且都是「給名單、回傳同一組欄位」，身分、餘額、持倉加上時間欄位，14 個就夠用，所以我把它做成引擎：OP 填表、排程撿取，先驗證、再用 API 逆向工程跨後台查詢，成功與失敗都寫進 Record。"
   - label: "對照範例"
-    at: "ch-1-4"
+    at: "ch-1-5"
     pick: "table"
     beats:
       - "tbody tr:nth-child(1)"
@@ -78,9 +85,13 @@ story:
     at: "ch-5-2"
     pick: "pre"
     beats:
-      - ".line:nth-child(n+1):nth-child(-n+2)"
-      - ".line:nth-child(n+3)"
-    line: "每次申請都會在 Record 留下一列：成功的寫出查了多少帳戶、涵蓋多少國家；缺欄位的申請在查詢前就被攔下，並寫明缺什麼。"
+      - ".line:nth-child(n+1):nth-child(-n+4)"
+      - ".line:nth-child(n+5):nth-child(-n+8)"
+      - ".line:nth-child(n+9):nth-child(-n+12)"
+      - ".line:nth-child(13)"
+      - ".line:nth-child(n+14):nth-child(-n+19)"
+      - ".line:nth-child(n+20)"
+    line: "看一次真實的大批次：5,696 個帳號，引擎依序切進 4 套後台，FCA、ASIC 都查無，結果全在 VFSC 兩套；54 個查無的被收集，分批寫回後清空 Input，全程 11 分半。缺欄位的申請則在查詢前就被攔下。"
   - label: "成果"
     at: "ch-5-4"
     pick: ".bar-figure"
@@ -100,12 +111,12 @@ accent: ocean
 
 <hr data-slide="背景與名詞">
 
-- 帳戶關閉、高風險客戶清退、轉歸屬之前，OP 都要先確認名單上每個客戶的帳戶狀態：userId、Balance、Margin、Profit、Account Server 等。
+- 帳戶關閉（Account Closure）、針對高風險或積壓案件的強制清退（Customer Offboarding）、轉歸屬，這三種作業執行前，OP 都要先確認名單上每個客戶的身分、餘額與持倉。
 - IT 可以提供待處理的 UID 名單，但不提供這些欄位。OP 只能在多個 CRM 後台之間反覆切換 regulator，逐筆查詢、逐筆確認。
 - 需求來自不同團隊，而且常常是整批出現，逐筆查詢的作業模式撐不住批量案件。
 
 <details class="glossary-details">
-<summary>名詞說明<span class="mono">10 個名詞 · 點擊展開</span></summary>
+<summary>名詞說明<span class="mono">11 個名詞 · 點擊展開</span></summary>
 <table>
 <thead><tr><th>名詞</th><th>說明</th></tr></thead>
 <tbody>
@@ -117,28 +128,40 @@ accent: ocean
 <tr><td>Account Server</td><td>交易帳戶所在的交易伺服器（例如 MT5_AU7）</td></tr>
 <tr><td>Trading Account／Rebate Account</td><td>客戶交易用的帳戶／IB（介紹經紀商）收取返佣的帳戶</td></tr>
 <tr><td>Balance／Equity／Margin／Profit／Credit</td><td>餘額／淨值／已用保證金／浮動損益／贈金或信用額度</td></tr>
-<tr><td>清退</td><td>關閉高風險客戶的帳戶並結清；執行前要先確認每個帳戶的餘額、淨值與保證金</td></tr>
+<tr><td>帳戶關閉（Account Closure）</td><td>關閉客戶的交易帳戶；執行前要先確認每個帳戶的身分、餘額與持倉</td></tr>
+<tr><td>強制清退（Customer Offboarding）</td><td>針對高風險或積壓案件，關閉客戶的帳戶，並將餘額歸零、限制帳戶；執行前要先確認每個帳戶的身分、餘額與持倉</td></tr>
 <tr><td>轉歸屬</td><td>把客戶轉到另一個 IB 或業務名下；執行前要先確認客戶名下每個帳戶的狀態</td></tr>
 </tbody>
 </table>
 </details>
 
-<hr data-slide="要查的是什麼">
+<hr data-slide="為什麼要查">
 
-清退（關閉高風險客戶的帳戶並結清）與轉歸屬（把客戶轉到另一個 IB 或業務名下）都會動到客戶的資金或歸屬，所以執行前，OP 必須先確認名單上每個帳戶的 Balance、Margin、Profit 等狀態。
+帳戶關閉、強制清退、轉歸屬三種作業，都會動到客戶的錢或歸屬，所以執行前都要先回答同一個問題：名單上的帳戶，現在還有什麼？麻煩的是，光看名單分不出哪個帳戶還有餘額或持倉，所以每一個都得查過身分、餘額與持倉，再由 OP 判斷能不能執行；漏看一個，就可能出事：
+
+<figure class="split-figure step-figure">
+<div class="split-scroll">
+<svg viewBox="0 0 760 460" role="img" aria-labelledby="wq-title"><title id="wq-title">帳戶關閉、強制清退、轉歸屬匯流到同一個查詢；名單上的帳戶看起來都一樣，查過才知道哪幾個還有餘額或持倉，漏看一個就會出事（示意）</title><defs><marker id="wq-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="sf-head" d="M0,0 L8,4 L0,8 z"/></marker></defs><g data-b="sources"><rect class="sf-child" x="50" y="6" width="160" height="30" rx="6"/><text class="sf-t sf-small-t" x="130" y="26">帳戶關閉</text><path class="sf-line" d="M130 36 C 130 46, 380 40, 380 48" marker-end="url(#wq-arrow)"/><rect class="sf-child" x="300" y="6" width="160" height="30" rx="6"/><text class="sf-t sf-small-t" x="380" y="26">強制清退</text><path class="sf-line" d="M380 36 V48" marker-end="url(#wq-arrow)"/><rect class="sf-child" x="550" y="6" width="160" height="30" rx="6"/><text class="sf-t sf-small-t" x="630" y="26">轉歸屬</text><path class="sf-line" d="M630 36 C 630 46, 380 40, 380 48" marker-end="url(#wq-arrow)"/><rect class="sf-parent" x="150" y="50" width="460" height="28" rx="6"/><text class="sf-t sf-small-t" x="380" y="69">三種作業，都要先回答：名單上的帳戶現在還有什麼？</text><path class="sf-line" d="M380 78 C 380 92, 170 88, 170 100" marker-end="url(#wq-arrow)"/></g><g data-b="list"><text class="sf-h sf-start" x="20" y="116">名單上的帳戶：看起來都一樣</text><rect class="sf-node" x="20" y="130" width="46" height="30" rx="5"/><text class="sf-s" x="43" y="149">?</text><rect class="sf-node" x="74" y="130" width="46" height="30" rx="5"/><text class="sf-s" x="97" y="149">?</text><rect class="sf-node" x="128" y="130" width="46" height="30" rx="5"/><text class="sf-s" x="151" y="149">?</text><rect class="sf-node" x="182" y="130" width="46" height="30" rx="5"/><text class="sf-s" x="205" y="149">?</text><rect class="sf-node" x="236" y="130" width="46" height="30" rx="5"/><text class="sf-s" x="259" y="149">?</text><rect class="sf-node" x="290" y="130" width="46" height="30" rx="5"/><text class="sf-s" x="313" y="149">?</text><rect class="sf-node" x="20" y="168" width="46" height="30" rx="5"/><text class="sf-s" x="43" y="187">?</text><rect class="sf-node" x="74" y="168" width="46" height="30" rx="5"/><text class="sf-s" x="97" y="187">?</text><rect class="sf-node" x="128" y="168" width="46" height="30" rx="5"/><text class="sf-s" x="151" y="187">?</text><rect class="sf-node" x="182" y="168" width="46" height="30" rx="5"/><text class="sf-s" x="205" y="187">?</text><rect class="sf-node" x="236" y="168" width="46" height="30" rx="5"/><text class="sf-s" x="259" y="187">?</text><rect class="sf-node" x="290" y="168" width="46" height="30" rx="5"/><text class="sf-s" x="313" y="187">?</text><rect class="sf-node" x="20" y="206" width="46" height="30" rx="5"/><text class="sf-s" x="43" y="225">?</text><rect class="sf-node" x="74" y="206" width="46" height="30" rx="5"/><text class="sf-s" x="97" y="225">?</text><rect class="sf-node" x="128" y="206" width="46" height="30" rx="5"/><text class="sf-s" x="151" y="225">?</text><rect class="sf-node" x="182" y="206" width="46" height="30" rx="5"/><text class="sf-s" x="205" y="225">?</text><rect class="sf-node" x="236" y="206" width="46" height="30" rx="5"/><text class="sf-s" x="259" y="225">?</text><rect class="sf-node" x="290" y="206" width="46" height="30" rx="5"/><text class="sf-s" x="313" y="225">?</text></g><g data-b="reveal"><path class="sf-line" d="M344 183 H400" marker-end="url(#wq-arrow)"/><text class="sf-s" x="372" y="173">逐一查</text><text class="sf-h sf-start" x="410" y="116">查過才知道：哪幾個不是 0</text><rect class="sf-node" x="410" y="130" width="46" height="30" rx="5"/><text class="sf-s" x="433" y="149">0</text><rect class="sf-node" x="464" y="130" width="46" height="30" rx="5"/><text class="sf-s" x="487" y="149">0</text><rect class="sf-bad" x="518" y="130" width="46" height="30" rx="5"/><text class="sf-bad-t sf-small" x="541" y="149">持倉</text><rect class="sf-node" x="572" y="130" width="46" height="30" rx="5"/><text class="sf-s" x="595" y="149">0</text><rect class="sf-node" x="626" y="130" width="46" height="30" rx="5"/><text class="sf-s" x="649" y="149">0</text><rect class="sf-node" x="680" y="130" width="46" height="30" rx="5"/><text class="sf-s" x="703" y="149">0</text><rect class="sf-node" x="410" y="168" width="46" height="30" rx="5"/><text class="sf-s" x="433" y="187">0</text><rect class="sf-node" x="464" y="168" width="46" height="30" rx="5"/><text class="sf-s" x="487" y="187">0</text><rect class="sf-node" x="518" y="168" width="46" height="30" rx="5"/><text class="sf-s" x="541" y="187">0</text><rect class="sf-node" x="572" y="168" width="46" height="30" rx="5"/><text class="sf-s" x="595" y="187">0</text><rect class="sf-bad" x="626" y="168" width="46" height="30" rx="5"/><text class="sf-bad-t sf-small" x="649" y="187">餘額</text><rect class="sf-node" x="680" y="168" width="46" height="30" rx="5"/><text class="sf-s" x="703" y="187">0</text><rect class="sf-node" x="410" y="206" width="46" height="30" rx="5"/><text class="sf-s" x="433" y="225">0</text><rect class="sf-bad" x="464" y="206" width="46" height="30" rx="5"/><text class="sf-bad-t sf-small" x="487" y="225">持倉</text><rect class="sf-node" x="518" y="206" width="46" height="30" rx="5"/><text class="sf-s" x="541" y="225">0</text><rect class="sf-node" x="572" y="206" width="46" height="30" rx="5"/><text class="sf-s" x="595" y="225">0</text><rect class="sf-node" x="626" y="206" width="46" height="30" rx="5"/><text class="sf-s" x="649" y="225">0</text><rect class="sf-node" x="680" y="206" width="46" height="30" rx="5"/><text class="sf-s" x="703" y="225">0</text></g><g data-b="card"><path class="sf-line sf-thin" d="M487 237 C 487 266, 400 237, 400 266"/><rect class="sf-box" x="20" y="267" width="400" height="135" rx="8"/><text class="sf-t sf-start" x="34" y="289">翻開其中一張</text><line class="sf-sep" x1="150" y1="300" x2="150" y2="392"/><line class="sf-sep" x1="280" y1="300" x2="280" y2="392"/><rect class="sf-bad" x="286" y="298" width="126" height="98" rx="6"/><text class="sf-t" x="85" y="314">身分</text><text class="sf-f" x="85" y="334">UID</text><text class="sf-f" x="85" y="350">mt4_account</text><text class="sf-f" x="85" y="366">server</text><text class="sf-f" x="85" y="382">regulator</text><text class="sf-t" x="215" y="314">餘額</text><text class="sf-f" x="215" y="334">currency</text><text class="sf-f" x="215" y="350">balance</text><text class="sf-f" x="215" y="366">equity</text><text class="sf-f" x="215" y="382">credit</text><text class="sf-t sf-bad-t" x="349" y="314">持倉</text><text class="sf-f" x="349" y="334">margin</text><text class="sf-f" x="349" y="350">marginLevel</text><text class="sf-f" x="349" y="366">profit</text><text class="sf-bad-t sf-small" x="349" y="386">不是 0：有持倉</text></g><g data-b="chain"><path class="sf-line" d="M420 287 H446" marker-end="url(#wq-arrow)"/><rect class="sf-node" x="450" y="270" width="290" height="34" rx="6"/><text class="sf-t sf-small-t" x="595" y="292">漏看這一張，直接清退</text><path class="sf-line" d="M595 304 V318" marker-end="url(#wq-arrow)"/><rect class="sf-bad" x="450" y="322" width="290" height="34" rx="6"/><text class="sf-bad-t" x="595" y="344">持倉被強制平倉</text><text class="sf-s" x="595" y="376">漏看餘額：錢沒退給客戶</text><text class="sf-s" x="595" y="392">漏看身分：某個後台的帳戶沒關到</text><text class="sf-s" x="595" y="408">轉歸屬漏看：返佣算錯</text></g><g data-b="scale"><text class="sf-note" x="380" y="448">這裡只畫 18 個；真實的一批常常上千個帳戶，每一個都得查過</text></g></svg>
+</div>
+<figcaption>圖 1　三種作業匯流到同一個查詢：看起來一樣的帳戶，查過才知道哪幾個不是 0；每個帳戶要看身分、餘額、持倉三組通則欄位（欄位名稱沿用系統原樣），能不能執行由 OP 看完數字後判斷（示意：18 個帳戶、3 個不是 0 的比例為說明用，非實際統計）</figcaption>
+</figure>
+
+<hr data-slide="帳戶散在哪裡">
 
 難的是帳戶並不集中：每個 regulator 各有一套 CRM 後台，客戶在哪個 regulator、哪台交易伺服器（Server）開戶，帳戶就落在哪裡。一個客戶（UID）常有好幾個帳戶，人工只能逐一切換後台、逐筆查詢（耗時見痛點與證據）：
 
-<figure class="split-figure">
+<figure class="split-figure step-figure">
 <div class="split-scroll">
 <svg viewBox="0 0 760 340" role="img" aria-labelledby="ac-title"><title id="ac-title">一個客戶，多個帳戶：帳戶散在不同 regulator 的後台，人工要逐一切換，引擎一次查回</title><defs><marker id="ac-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="sf-head" d="M0,0 L8,4 L0,8 z"/></marker></defs><g data-b="client"><rect class="sf-parent" x="20" y="100" width="140" height="60" rx="8"/><text class="sf-t" x="90" y="126">客戶</text><text class="sf-s" x="90" y="146">一個 UID</text></g><g data-b="backends"><rect class="sf-box" x="220" y="30" width="125" height="170" rx="8"/><text class="sf-t" x="282" y="52">Regulator A</text><text class="sf-s" x="282" y="68">CRM 後台</text><rect class="sf-box" x="355" y="30" width="125" height="170" rx="8"/><text class="sf-t" x="417" y="52">Regulator B</text><text class="sf-s" x="417" y="68">CRM 後台</text><rect class="sf-box" x="490" y="30" width="125" height="170" rx="8"/><text class="sf-t" x="552" y="52">Regulator C</text><text class="sf-s" x="552" y="68">CRM 後台</text><rect class="sf-box" x="625" y="30" width="125" height="170" rx="8"/><text class="sf-t" x="687" y="52">Regulator D</text><text class="sf-s" x="687" y="68">CRM 後台</text><text class="sf-s" x="552" y="120">（這個客戶沒有）</text></g><g data-b="accounts"><path class="sf-line sf-thin" d="M160 130 C 190 130, 200 98, 228 98"/><path class="sf-line sf-thin" d="M160 130 C 190 130, 200 142, 228 142"/><path class="sf-line sf-thin" d="M160 130 C 190 130, 335 98, 363 98"/><path class="sf-line sf-thin" d="M160 130 C 190 130, 605 98, 633 98"/><path class="sf-line sf-thin" d="M160 130 C 190 130, 605 142, 633 142"/><rect class="sf-child" x="230" y="80" width="105" height="36" rx="6"/><text class="sf-t sf-small-t" x="282" y="96">帳戶 #1</text><text class="sf-s" x="282" y="110">MT5</text><rect class="sf-child" x="230" y="124" width="105" height="36" rx="6"/><text class="sf-t sf-small-t" x="282" y="140">帳戶 #2</text><text class="sf-s" x="282" y="154">MT4</text><rect class="sf-child" x="365" y="80" width="105" height="36" rx="6"/><text class="sf-t sf-small-t" x="417" y="96">帳戶 #3</text><text class="sf-s" x="417" y="110">MT5</text><rect class="sf-child" x="635" y="80" width="105" height="36" rx="6"/><text class="sf-t sf-small-t" x="687" y="96">帳戶 #4</text><text class="sf-s" x="687" y="110">MT5</text><rect class="sf-child" x="635" y="124" width="105" height="36" rx="6"/><text class="sf-t sf-small-t" x="687" y="140">帳戶 #5</text><text class="sf-s" x="687" y="154">MT4</text></g><line class="sf-sep" x1="20" y1="222" x2="740" y2="222"/><g data-b="manual"><text class="sf-t sf-start" x="20" y="262">人工</text><rect class="sf-node" x="110" y="240" width="150" height="34" rx="6"/><text class="sf-t sf-small-t" x="185.0" y="262">切到後台 A · 查 2 個</text><path class="sf-line" d="M260 257 H282" marker-end="url(#ac-arrow)"/><rect class="sf-node" x="288" y="240" width="150" height="34" rx="6"/><text class="sf-t sf-small-t" x="363.0" y="262">切到後台 B · 查 1 個</text><path class="sf-line" d="M438 257 H460" marker-end="url(#ac-arrow)"/><rect class="sf-node" x="466" y="240" width="150" height="34" rx="6"/><text class="sf-t sf-small-t" x="541.0" y="262">切到後台 D · 查 2 個</text><text class="sf-s sf-start" x="644" y="262">逐一切換、逐筆查</text></g><g data-b="engine"><text class="sf-t sf-start" x="20" y="314">引擎</text><rect class="sf-parent" x="110" y="292" width="150" height="34" rx="6"/><text class="sf-t sf-small-t" x="185.0" y="314">收下整份名單</text><path class="sf-line" d="M260 309 H282" marker-end="url(#ac-arrow)"/><rect class="sf-parent" x="288" y="292" width="190" height="34" rx="6"/><text class="sf-t sf-small-t" x="383.0" y="314">一次跨後台批量查回</text><path class="sf-line" d="M478 309 H500" marker-end="url(#ac-arrow)"/><rect class="sf-parent" x="506" y="292" width="150" height="34" rx="6"/><text class="sf-t sf-small-t" x="581.0" y="314">Record／Output</text><text class="sf-s sf-start" x="684" y="314"></text></g></svg>
 </div>
-<figcaption>圖 1　一個客戶，多個帳戶：每個 regulator 各有一套 CRM 後台，帳戶落在客戶開戶的地方；人工要逐一切換後台查，引擎收下整份名單一次查回（示意）</figcaption>
+<figcaption>圖 2　一個客戶，多個帳戶：每個 regulator 各有一套 CRM 後台，帳戶落在客戶開戶的地方；人工要逐一切換後台查，引擎收下整份名單一次查回（示意）</figcaption>
 </figure>
 
 <hr data-slide="引擎流程">
 
-各團隊的需求看起來不同，其實都是「給一份 userId／Account 名單，回傳同一組帳戶欄位」。因此要解決的不是「查得不夠快」，而是**同一種查詢每次都由人工逐筆、逐個後台重做**。我把這個共通流程做成引擎：
+三種作業（圖 1）都卡在同一個查詢，而且需求都是「給一份 userId／Account 名單，回傳同一組帳戶欄位」：圖 1 卡片上身分、餘額、持倉三組的 11 個欄位，加上 approvedTime（開戶審核通過時間）、updateTime（後台資料最後更新時間）、comparisionTime（引擎查詢的時間）3 個時間欄位，這 14 個通則欄位就能涵蓋大部分的申請，每一列也都能追溯是什麼時候查的。
+
+因此要解決的不是「查得不夠快」，而是**同一種查詢每次都由人工逐筆、逐個後台重做**。我把這個共通流程做成引擎：
 
 ```mermaid
 flowchart LR
@@ -154,7 +177,7 @@ flowchart LR
     OUT --> CLR
 ```
 
-*圖 2　引擎流程*
+*圖 3　引擎流程*
 
 <hr data-slide="對照範例">
 
@@ -227,7 +250,7 @@ flowchart LR
 </div>
 </section>
 </div>
-<figcaption>圖 3　原流程的三個痛點（人工步驟依 OP 作業整理；每帳戶 45 秒為估計值；批量數據取自引擎的 Record 工作表，2026-06-09 ~ 2026-11-16）</figcaption>
+<figcaption>圖 4　原流程的三個痛點（人工步驟依 OP 作業整理；每帳戶 45 秒為估計值；批量數據取自引擎的 Record 工作表，2026-06-09 ~ 2026-11-16）</figcaption>
 </figure>
 
 <hr data-slide="值得投入的理由">
@@ -235,7 +258,7 @@ flowchart LR
 **值得投入解決的理由：**
 
 1. **需求量是真的**：上線 24 週，每一週都有成功的批量申請（每月使用量見 Result）。
-2. **單批量級已經超過人工能力**：最大的一批（圖 3）人工逐筆查詢，大約要一個人 27 個工作天。
+2. **單批量級已經超過人工能力**：最大的一批（圖 4）人工逐筆查詢，大約要一個人 27 個工作天。
 3. **流程高度重複，適合通則化**：不同團隊的需求表面不同，但都是「給一份 userId／Account 名單，回傳同一組帳戶欄位」。OP 日常的帳戶查詢需求中，約 80% 可以用同一套流程涵蓋。
 
 ## Solution Design
@@ -243,7 +266,7 @@ flowchart LR
 依照三個痛點，拆成五個要解決的面向。下圖是 LarkSheet 上給使用者看的使用規則，表格的「對應」欄指向圖中的各列：
 
 ![帳務營運自動化引擎的使用規則：核心規則與四個標準程序步驟](../../assets/projects/account-automation-engine/rule-zh.png)
-*圖 4　LarkSheet 上的使用規則（節錄 Rule 工作表中文部分，英文版內容相同；點擊可放大）*
+*圖 5　LarkSheet 上的使用規則（節錄 Rule 工作表中文部分，英文版內容相同；點擊可放大）*
 
 | 痛點 | 解決方向 | 對應 |
 |---|---|---|
@@ -311,27 +334,44 @@ flowchart LR
 <video controls muted playsinline preload="metadata" src="../../media/account-automation-engine/crm_system.mp4"></video>
 </div>
 </div>
-<figcaption>圖 5　實際操作錄影（點擊播放）</figcaption>
+<figcaption>圖 6　實際操作錄影（點擊播放）</figcaption>
 </figure>
 
 <hr data-slide="一次實際執行">
 
 ### 一次實際執行的紀錄
 
-每次執行都會在 Record 寫入一列摘要。以下是上線第一天（2026-06-09）的一次成功執行，以及兩種被驗證攔下的申請（申請人姓名已移除）：
+以 2026-11-06 的一次大批次為例：這是引擎執行 log 的節錄，每一行都帶 run id 與 stage。重複的行已省略；申請人、工作表 ID 與帳號清單已移除。最後三行取自 Record 工作表，第一行就是這次執行寫入的摘要，另外兩行是被驗證攔下的申請：
 
 ```text
-2026-06-09 11:31:09  Success | 616 users | 957 accounts validated | 68 countries | 11.96 hrs saved
-                     servers_covered=36  regulators_covered=2  account_types_covered=29
-2026-06-26 15:05:03  Input validation failed: 'Requestor' 欄位為必填欄位。
-2026-07-15 14:10:02  Input validation failed: 未提供任何查詢資料，請至少填寫一個 'Account' 或 'UserId'。
+run=479850e8  2026-11-06  account-search-service
+11:30:03  check_input_execution   Validation result: requestor_ok=True, data_ok=True
+11:30:03  check_specific_column   Extracted IDs successfully. total_ids=5696
+11:30:03  crawler_execution       Starting admin crawler. brands=['FCA', 'ASIC', 'VFSC', 'VFSC2'], total_jobs=5696
+11:30:06  crawler_execution       Regulator switched successfully. brand=FCA
+11:32:43  crawler_execution       No data returned. brand=FCA
+11:32:44  crawler_execution       Regulator switched successfully. brand=ASIC
+11:35:17  crawler_execution       No data returned. brand=ASIC
+11:35:18  crawler_execution       Regulator switched successfully. brand=VFSC
+11:38:07  crawler_execution       Brand execution completed. brand=VFSC, rows=2303
+11:38:09  crawler_execution       Regulator switched successfully. brand=VFSC2
+11:41:25  crawler_execution       Brand execution completed. brand=VFSC2, rows=3339
+11:41:25  crawler_execution       Jobs returned no data across all brands. empty_jobs=[54 個帳號，已遮蔽]
+11:41:25  data_cleaning           Data transformation completed. output_rows=5642
+11:41:28  upload_lark             Append batch success (rows=4000, total=4000)
+11:41:29  upload_lark             Append batch success (rows=1642, total=5642)
+11:41:30  upload_lark             Execution record uploaded successfully.
+11:41:31  upload_lark             Input sheet reset completed.
+Record R-0549  2026-11-06 11:41:25  Success | 3041 users | 5642 accounts validated | 129 countries | 70.53 hrs saved
+Record R-0032  2026-06-26 15:05:03  Input validation failed: 'Requestor' 欄位為必填欄位。
+Record R-0066  2026-07-15 14:10:02  Input validation failed: 未提供任何查詢資料，請至少填寫一個 'Account' 或 'UserId'。
 ```
 
 從這段紀錄可以看到：
 
-- **一次申請就涵蓋 68 個國家、36 個 Server、2 個 regulator**，人工要在多個後台之間切換才能查完。
-- 每一列都帶有申請人、執行時間與節省工時，事後可以追溯誰在什麼時候查了多少帳戶。
-- 輸入不完整時，紀錄會直接說明缺哪個欄位，而不是靜默失敗。
+- **4 套後台都得查過才知道**：引擎依序切進 FCA、ASIC、VFSC、VFSC2（VFSC 的第二套後台），這批帳戶全在 VFSC 兩套，FCA、ASIC 查無；人工一樣得每一套都進去查。
+- **查無不丟棄**：四套都查無的 54 個帳號收進 `empty_jobs`，和結果一起留下。
+- **可追溯、不靜默失敗**：log 的 run id 對得上 Record 的 R-0549；輸入不完整的申請在查詢前就被攔下，並寫明缺哪個欄位。
 
 <figure class="tech-figure">
 <div class="tech-labels">
@@ -381,7 +421,7 @@ Output 每個帳戶一列，共 23 個欄位。以下兩列取自 2026-11-16 的
 <li class="is-peak" style="--v: 100%"><span class="bar-label">2026-10（207 次）</span><span class="bar"></span><span class="bar-value">113,659</span></li>
 <li style="--v: 26.8%"><span class="bar-label">2026-11（至 11/16，38 次）</span><span class="bar"></span><span class="bar-value">30,458</span></li>
 </ul>
-<figcaption>圖 6　每月驗證帳戶數（括號內為成功執行次數；取自 Record 工作表）</figcaption>
+<figcaption>圖 7　每月驗證帳戶數（括號內為成功執行次數；取自 Record 工作表）</figcaption>
 </figure>
 
 <hr data-slide="執行統計">
@@ -421,7 +461,7 @@ Output 每個帳戶一列，共 23 個欄位。以下兩列取自 2026-11-16 的
 <div class="ba-row"><p class="ba-item">使用方式</p><p class="ba-before">需要 OP 親自操作每一個後台</p><p class="ba-after">各團隊自行填表送件，排程每 5 分鐘自動執行<small>依據：Rule 工作表；每月使用量見 Result</small></p></div>
 <div class="ba-row"><p class="ba-item">錯誤輸入</p><p class="ba-before">無紀錄</p><p class="ba-after">不完整的申請在查詢前被攔下，並說明缺少的欄位<small>依據：Record 的 return_msg；攔截次數見 Result</small></p></div>
 </div>
-<figcaption>圖 7　Before / After 對照（工時與成本為估計值，計算基準見下方）</figcaption>
+<figcaption>圖 8　Before / After 對照（工時與成本為估計值，計算基準見下方）</figcaption>
 </figure>
 
 <hr data-slide="尚未量化的部分">
