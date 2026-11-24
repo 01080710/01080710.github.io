@@ -595,3 +595,13 @@ frontmatter `period`（開發）／`launch`（上線）／`phases`（分線）�
 - 每家公司的一句說明改成「作品清單」：海科、維碩的作品連到專案頁（名稱取自專案，中文用副標題）；三興照原說明拆成四項（車型資料爬蟲、車身碼查詢系統、出險平台 OCR＋NLP 模組、GCP VM／VPN 管理），沒有新增事實。
 - 標籤改成對齊專案頁的 Focus 與主要工具。維碩原本寫 PostgreSQL，與 Noise Camera 專案頁 Stack 的 MSSQL 不一致，Peter 選擇改用 MSSQL（`SQLAlchemy / MSSQL`）。
 - 職涯產線維持由舊到新，下方經歷清單由近到遠（Peter 選擇）。About 區塊重排為會動的在前（Background → Approach → Off the Clock → Certifications → Core Capabilities → Philosophy）。
+
+## 技術棧與卡片標籤（2026-11-24）
+
+依 Peter 指示，`stack` 改成分類技術棧（分類見 `src/data/stack-groups.ts`），卡片 `tags` 改成 HR 搜尋關鍵字。工程能力關鍵字的依據：
+
+- Credit Card、Account Engine、Drop-Order：本機原始碼（重試與退避、Semaphore、滾動視窗回補、去重、fail-fast、JSON log、uid、心跳列），細節見各專案段落的「工程機制」紀錄。
+- OP Ticket：頁面「設計重點」與 Result 已寫明的機制（429 依 Retry-After 重試、`tickets.json` 續跑、`(ticket_id, conversation_id)` 主鍵、`run_id` 與 `source` 欄位、195 個 pytest、固定速率）；本次未重新讀原始碼。
+- Noise Camera：頁面已寫明的非同步併發與失敗重試（公開 repo `codis_api.py`），未確認退避方式，所以只寫 `Retry`。
+- 首頁「常用工具」改為各分類攤平後出現在 3 個以上專案的關鍵字（目前 13 個）。
+

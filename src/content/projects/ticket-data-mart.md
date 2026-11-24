@@ -5,7 +5,16 @@ summary: "OP 是工單的中樞，但工單資料過去要向其他單位索取�
 company: "海科科技有限公司"
 period: "2026/11~"
 role: "負責 PoC 的規劃與實作：擷取、比對寫入、驗收與排程"
-stack: ["Python", "requests + ThreadPoolExecutor", "Freshservice API v2", "Playwright", "SQLite3", "openpyxl", "Docker + cron", "pytest"]
+stack:
+  Language:        ["Python", "SQL"]
+  Data Processing: ["openpyxl (Excel)"]
+  Storage:         ["SQLite"]
+  Integration:     ["REST API", "Freshservice API v2", "requests", "Playwright"]
+  Concurrency:     ["ThreadPoolExecutor", "Rate Limiting"]
+  Reliability:     ["Retry & Backoff", "Checkpoint / Resume", "Idempotent Upsert", "Backfill"]
+  Orchestration:   ["cron", "Docker"]
+  Observability:   ["Run ID Tracing", "Data Lineage"]
+  Testing:         ["pytest"]
 focus: ["Data Integration", "ETL"]
 system_map: { map: "hytech", area: "ticket" }
 metrics:
@@ -19,7 +28,7 @@ tldr:
   problem: "OP 是工單的中樞，但資料要向其他單位索取，耗時、維度常錯置，看不到全貌。"
   approach: "在共用 API 額度內回補 Q4 工單與對話，逐則比對後寫入 SQLite，並設定每日排程。"
   result: "OP 拿到全量、格式固定且能對照人效的資料；重跑不重複，中斷可以從斷點續跑。"
-tags: ["Data Engineering", "Backfill", "PoC"]
+tags: ["ETL", "Backfill", "Rate Limiting"]
 categories: ["Data Pipeline"]
 order: 1
 accent: slate

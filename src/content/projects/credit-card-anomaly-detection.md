@@ -6,7 +6,13 @@ company: "海科科技有限公司"
 period: "2026/01~2026/02"
 launch: "2026/02~2026/08"
 role: "與營運端對齊偵測邏輯，負責管線設計與實作"
-stack: ["Python", "API Reverse Engineering", "pyotp (2FA)", "crontab", "Docker", "Lark Bot", "LarkSheet API", "JSON Structured Logging"]
+stack:
+  Language:        ["Python"]
+  Data Processing: ["pandas"]
+  Integration:     ["REST API", "API Reverse Engineering", "TOTP 2FA (pyotp)", "LarkSheet API", "Lark Bot"]
+  Reliability:     ["Retry & Backoff", "Backfill (Rolling Window)", "Deduplication"]
+  Orchestration:   ["cron", "Docker"]
+  Observability:   ["Structured Logging (JSON)", "Heartbeat Monitoring"]
 focus: ["Financial Reconciliation", "Anomaly Detection"]
 system_map: { map: "hytech", area: "credit-card" }
 metrics:
@@ -147,7 +153,7 @@ story:
       - "li:nth-child(2)"
       - "li:nth-child(3)"
     line: "上線之後，被標記的交易都交由營運複核；確認有誤的退款，幾乎都在偵測後撤銷或要求取消。"
-tags: ["Reverse Engineering", "Automation", "Risk Control"]
+tags: ["Data Pipeline", "API Reverse Engineering", "Retry & Backfill"]
 categories: ["Data Pipeline", "Automation"]
 home: true
 order: 2

@@ -74,10 +74,13 @@ summary: "一句話：解決什麼問題、結果是什麼。"
 company: "公司名稱"
 period: "2026/1 – 2026/3"
 role: "個人負責範圍（與團隊共同完成的部分要寫清楚）"
-stack: ["Python", "Asyncio"]
+stack:                       # 標準資料工程技術棧：分類 → 關鍵字，分類只能用 src/data/stack-groups.ts 的 11 類
+  Language:    ["Python", "SQL"]
+  Concurrency: ["asyncio"]
+  Reliability: ["Retry & Backoff"]
 metrics:                     # 選填，最多 3 個，數字要能對回 docs/source-notes.md
   - { value: "95%", label: "人工工作量減少" }
-tags: ["Automation"]
+tags: ["Data Pipeline", "Retry & Backfill", "Data Reconciliation"]   # Projects 卡片的 3 個 HR 搜尋關鍵字
 categories: ["Automation"]   # 必填，Projects 頁篩選用；可選值見 src/data/project-categories.ts
 home: true                   # 選填：首頁成果地圖卡片顯示數字（沒填 = 標「建置中」）；metrics 含 XX 時不可填
 # metrics 每項可加 on_home: true（首頁成果地圖卡片顯示，最多 2 個）；另填 impact: { before, after } 給成果地圖

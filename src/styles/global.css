@@ -885,6 +885,11 @@ nav a[aria-current="page"] { color: var(--fg); font-weight: 600; }
 .case-meta dt { color: var(--muted); font-size: 0.8rem; }
 .case-meta dd { margin: 0; }
 .case-meta .tags { margin: 0; }
+/* Stack: grouped like a standard data-engineering tech stack (group label + keywords per row). */
+.stack-groups { display: grid; gap: 6px; margin: 0; }
+.stack-groups > div { display: grid; grid-template-columns: 9.5em minmax(0, 1fr); gap: 10px; align-items: baseline; }
+.stack-groups dt { font-size: 0.72rem; }
+@media (max-width: 560px) { .stack-groups > div { grid-template-columns: 1fr; gap: 2px; } }
 /* Focus: the project's 1-2 signature techniques, solid accent so they stand out from the shared tool list. */
 .tags-focus li { background: var(--accent); color: var(--surface); font-weight: 600; }
 

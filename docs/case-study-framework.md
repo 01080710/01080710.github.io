@@ -34,7 +34,7 @@
 
 ### Focus 與系統地圖
 
-- **Focus**：frontmatter 填 `focus`（1–2 個），寫這個專案的招牌技術，顯示在 Stack 上方並用強調色標示。Stack 維持工具清單，不必為了差異化刪減。Focus 用 104／LinkedIn 常見的搜尋關鍵字（通用職能詞，例如 Data Integration、Financial Reconciliation），意思須與該頁的 Tech Label 或設計重點一致，不寫頁面上沒有的宣稱，也不用暗示特定工具的詞（例如 CDC、RPA）。
+- **Focus**：frontmatter 填 `focus`（1–2 個），寫這個專案的招牌技術，顯示在 Stack 上方並用強調色標示。Stack 寫成標準資料工程技術棧（分類 → 關鍵字，分類見 `src/data/stack-groups.ts`），除了工具也列原始碼裡真的有的工程能力（Retry & Backoff、Backfill、Structured Logging 等），不必為了差異化刪減。Focus 用 104／LinkedIn 常見的搜尋關鍵字（通用職能詞，例如 Data Integration、Financial Reconciliation），意思須與該頁的 Tech Label 或設計重點一致，不寫頁面上沒有的宣稱，也不用暗示特定工具的詞（例如 CDC、RPA）。
 - **系統地圖**：frontmatter 填 `system_map: { map, area }`，Quick Read 最上方（Problem／Approach／Result 之上）會顯示公司的資金流與系統地圖，並高亮本專案負責的區塊。地圖屬於公司，畫在 `src/components/SystemMap.astro`；換公司時新增一張地圖與一個 `map` 名稱，不要把不同公司的專案畫在同一張圖上。
 - Projects 頁目前不放地圖；出現第二家公司時，改為依公司分組並在每組上方放該公司的地圖（未來擴充）。
 

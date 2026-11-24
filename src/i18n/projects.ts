@@ -6,6 +6,7 @@ import { getCollection, type CollectionEntry } from "astro:content";
 import type { Lang } from "./ui";
 import { map_area_order } from "../data/system-maps";
 import { focus_groups } from "../data/focus-groups";
+import { stack_items } from "../data/stack-groups";
 import { machines, type MachineKind } from "../data/machines";
 import { lang_path } from "./ui";
 
@@ -18,7 +19,7 @@ export interface LocalizedProject {
 
 // Home keyword strip, derived from the project files so it never needs hand upkeep:
 // focus terms are shown in the capability groups of data/focus-groups.ts;
-// tools = `stack` items used in 3+ projects, most used first, so only the signature tools remain.
+// tools = `stack` keywords (all groups flattened) used in 3+ projects, most used first, so only the signature ones remain.
 export interface KeywordGroup { label: string; terms: string[] }
 
 export async function get_keywords(lang: Lang): Promise<{ groups: KeywordGroup[]; tools: string[] }> {
@@ -34,7 +35,7 @@ export async function get_keywords(lang: Lang): Promise<{ groups: KeywordGroup[]
     }))
     .filter((g) => g.terms.length > 0);
   const count = new Map<string, number>();
-  for (const tool of projects.flatMap((p) => p.data.stack)) count.set(tool, (count.get(tool) ?? 0) + 1);
+  for (const tool of projects.flatMap((p) => stack_items(p.data.stack))) count.set(tool, (count.get(tool) ?? 0) + 1);
   const tools = [...count].filter(([, n]) => n >= 3).sort((a, b) => b[1] - a[1]).map(([tool]) => tool);
   return { groups, tools };
 }

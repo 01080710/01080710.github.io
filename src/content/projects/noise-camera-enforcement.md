@@ -5,7 +5,15 @@ summary: "四個零散需求：設備與場域管理 API、天候查證工具、
 company: "維碩科技股份有限公司"
 period: "2025/02~2025/12"
 role: "負責資料串接與可視化：設備與場域管理 API、天候查證工具、事件審核 API、噪音事件稽核儀表板（影像辨識由影像處理團隊負責）"
-stack: ["Python", "FastAPI", "SQLAlchemy / MSSQL", "Swagger (OpenAPI)", "WebSocket", "Docker", "Selenium", "LangChain", "GPT-4o-mini", "Google Maps API", "Plotly", "Streamlit", "Pillow"]
+stack:
+  Language:      ["Python", "SQL"]
+  Storage:       ["MSSQL", "SQLAlchemy"]
+  Integration:   ["REST API", "FastAPI", "OpenAPI (Swagger)", "WebSocket", "Google Maps API", "Selenium (Web Scraping)"]
+  Concurrency:   ["asyncio"]
+  Reliability:   ["Retry"]
+  Orchestration: ["Docker"]
+  Serving & BI:  ["Streamlit", "Plotly", "Pillow"]
+  AI / LLM:      ["LangChain", "GPT-4o-mini"]
 focus: ["API Development", "Data Visualization"]
 system_map: { map: "weishuo", area: "noise-enforcement" }
 impact:
@@ -99,7 +107,7 @@ story:
       - ".ba-row:nth-child(4)"
       - ".ba-row:nth-child(5)"
     line: "四個斷點各自補上：主檔有入口、天候一句話查到、判定與出單在同一處、結果直接看得見。這頁沒有工時紀錄，所以不估算節省多少時間。"
-tags: ["Backend / API", "Data Visualization", "Gov Tech"]
+tags: ["REST API", "Web Scraping", "LLM Integration"]
 categories: ["Backend / API", "Crawler", "AI / ML"]
 home: true
 order: 5

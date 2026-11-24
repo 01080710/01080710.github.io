@@ -2,6 +2,14 @@ import { defineCollection } from "astro:content";
 import { glob } from "astro/loaders";
 import { z } from "astro/zod";
 import { project_categories } from "./data/project-categories";
+import { stack_groups } from "./data/stack-groups";
+
+// Stack = standard data-engineering tech stack: group -> keywords. Only the groups in data/stack-groups.ts are
+// allowed (strict), each used group needs at least one keyword, and at least one group must be present.
+const stack_schema = z
+  .object(Object.fromEntries(stack_groups.map((g) => [g, z.array(z.string()).min(1).optional()])))
+  .strict()
+  .refine((s) => Object.keys(s).length > 0, { message: "stack needs at least one group" });
 
 // Schema for every file in src/content/projects/*.md.
 // A missing or mistyped field fails the build, so a broken project page never ships.
@@ -19,7 +27,7 @@ const projects = defineCollection({
     // Optional per-phase dates (e.g. 入金 / 出金); when set, replaces the period/launch rows with a phase table.
     phases:    z.array(z.object({ name: z.string(), period: z.string(), launch: z.string().optional() })).min(1).optional(),
     role:      z.string(),
-    stack:     z.array(z.string()),
+    stack:     stack_schema,
     // 1-2 signature techniques shown above Stack, so projects sharing the same tools still look different.
     focus:     z.array(z.string()).min(1).max(2).optional(),
     // Headline numbers shown on cards; each value must trace back to docs/source-notes.md.

@@ -8,7 +8,15 @@ phases:
   - { name: "入金", period: "2026/03~2026/03", launch: "2026/03~" }
   - { name: "出金", period: "2026/04~2026/09", launch: "2026/09~" }
 role: "與營運端對齊掉單判定規則，負責管線設計與實作"
-stack: ["Python", "pandas", "SQLAlchemy / MySQL", "API Reverse Engineering", "pyotp (2FA)", "aiohttp", "cron", "LarkSheet API", "Lark Drive API", "JSON Structured Logging"]
+stack:
+  Language:        ["Python", "SQL"]
+  Data Processing: ["pandas", "Polars"]
+  Storage:         ["MySQL", "SQLAlchemy"]
+  Integration:     ["REST API", "API Reverse Engineering", "TOTP 2FA (pyotp)", "LarkSheet API", "Lark Drive API", "Lark Base API"]
+  Concurrency:     ["asyncio", "aiohttp", "Concurrency Control (Semaphore)"]
+  Reliability:     ["Retry & Backoff", "Fail-fast", "Deduplication"]
+  Orchestration:   ["cron", "Docker"]
+  Observability:   ["Structured Logging (JSON)", "Run ID Tracing", "Heartbeat Monitoring"]
 focus: ["Data Reconciliation", "Data Quality Monitoring"]
 system_map: { map: "hytech", area: "drop-order" }
 impact:
@@ -190,7 +198,7 @@ story:
       - "[data-b=\"o-done\"]"
       - "[data-b=\"o-manual\"]"
     line: "出金的案例是 2026/10/23：英國的發卡行端批次拒絕信用卡退款，營運把 CPS 改成交易失敗(人工)，CRM 卻仍顯示退款成功。管線每小時照常比對，19:09 那次一口氣揭露 117 件，平常單次最多 85 件；當天 329 件，其中 220 件是信用卡出金，大多在英國、原因同為銀行端交易失敗，正是這次批次拒絕。這 329 件最後全部完成 Reverse。"
-tags: ["Reconciliation", "Automation", "Operations"]
+tags: ["Data Reconciliation", "SQL", "Error Handling"]
 categories: ["Data Pipeline", "Automation"]
 home: true
 order: 4

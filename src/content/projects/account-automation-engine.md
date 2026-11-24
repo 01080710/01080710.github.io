@@ -6,7 +6,14 @@ company: "海科科技有限公司"
 period: "2026/05~2026/06"
 launch: "2026/06~"
 role: "從 OP 痛點歸納出共通查詢流程，獨立設計並實作批量查詢引擎"
-stack: ["Python", "Asyncio", "aiohttp", "API Reverse Engineering", "pyotp (2FA)", "LarkSheet API", "Docker", "Input Validation", "Data Normalization", "Audit Log"]
+stack:
+  Language:        ["Python"]
+  Data Processing: ["pandas", "Data Normalization"]
+  Integration:     ["REST API", "API Reverse Engineering", "TOTP 2FA (pyotp)", "LarkSheet API"]
+  Concurrency:     ["asyncio", "aiohttp", "Concurrency Control (Semaphore)", "Pagination"]
+  Reliability:     ["Retry & Backoff", "Input Validation"]
+  Orchestration:   ["cron", "Docker"]
+  Observability:   ["Structured Logging (JSON)", "Run ID Tracing", "Audit Log"]
 focus: ["Batch Processing", "Process Automation"]
 system_map: { map: "hytech", area: "account" }
 metrics:
@@ -135,7 +142,7 @@ story:
       - "li:nth-child(3), li:nth-child(4)"
       - "li:nth-child(n+5)"
     line: "上線後，各團隊每個月都自行送件，不再需要工程師；10 月是使用量最高的月份。"
-tags: ["System Architecture", "Automation", "Product Thinking"]
+tags: ["Batch Processing", "Async Concurrency", "Data Validation"]
 categories: ["Automation"]
 home: true
 order: 3
