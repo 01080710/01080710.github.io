@@ -38,7 +38,8 @@ const projects = defineCollection({
       on_home: z.boolean().optional(),
     })).default([]),
     // Home impact map: what changed for the users, one line each, no numbers (numbers live in `metrics`).
-    impact:    z.object({ before: z.string(), after: z.string() }).optional(),
+    // `core` = the engineering theme in a few words, shown under the title of the hero machine's hover card.
+    impact:    z.object({ before: z.string(), after: z.string(), core: z.string().optional() }).optional(),
     // Three-line TL;DR shown in the page head instead of `summary` (no numbers; those live in `metrics`).
     tldr:      z.object({ problem: z.string(), approach: z.string(), result: z.string() }).optional(),
     // Company system map in Quick Read; `area` is this project's highlighted part (see components/SystemMap.astro).
@@ -81,7 +82,7 @@ const projects_en = defineCollection({
     role:          z.string(),
     metric_labels: z.array(z.string()),
     tldr:          z.object({ problem: z.string(), approach: z.string(), result: z.string() }).optional(),
-    impact:        z.object({ before: z.string(), after: z.string() }).optional(),
+    impact:        z.object({ before: z.string(), after: z.string(), core: z.string().optional() }).optional(),
     story:         z.array(z.object({ label: z.string(), line: z.string() })).optional(),
   }),
 });

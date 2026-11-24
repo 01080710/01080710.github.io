@@ -29,6 +29,7 @@ story:
 impact:
   before: "Manual spot checks; drop orders often surfaced only after complaints"
   after: "Statuses are compared automatically and drop orders go straight out as cases"
+  core: "Financial-grade data consistency & fault tolerance"
 tldr:
   problem: "Deposit and withdrawal statuses in the CRM and CPS fall out of sync (drop orders), often found only when a client asks, and tracing them means digging through two systems."
   approach: "Compare order statuses on both sides every hour, flag drop orders by rule, de-duplicate and write them to the LarkSheet case sheet operations already uses."

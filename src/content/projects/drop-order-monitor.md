@@ -22,6 +22,7 @@ system_map: { map: "hytech", area: "drop-order" }
 impact:
   before: "每日人工抽查，掉單常等客訴才發現"
   after: "自動比對兩邊狀態，掉單直接派工"
+  core: "財務級資料一致性與容錯架構"
 tldr:
   problem: "CRM 與 CPS 的出入金狀態不同步（掉單），常常等客戶來問才發現，排查還要逐層翻兩個系統。"
   approach: "每小時自動比對兩邊的訂單狀態，依規則判定掉單，去重後寫入營運已在用的 LarkSheet 案件表。"

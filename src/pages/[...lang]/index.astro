@@ -37,6 +37,7 @@ const hero_text = { result: t("home.pipe_result"), open: t("home.machine_open"),
     <button type="button" class="hero-drop" hidden>{t("home.pipe_drop")}</button>
     <div class="hero-machine-card" aria-hidden="true" hidden>
       <p class="hmc-title"></p>
+      <p class="hmc-core"><span class="mono">{t("home.core")}</span> <span class="hmc-core-text"></span></p>
       <dl class="hmc-ba">
         <div><dt>{t("home.before")}</dt><dd class="hmc-before"></dd></div>
         <div><dt>{t("home.after")}</dt><dd class="hmc-after"></dd></div>
@@ -717,6 +718,8 @@ const hero_text = { result: t("home.pipe_result"), open: t("home.machine_open"),
     const d = m.d;
     card.dataset.accent = d.accent;
     card.querySelector(".hmc-title")!.textContent = d.title;
+    card.querySelector<HTMLElement>(".hmc-core")!.hidden = !d.core;
+    card.querySelector(".hmc-core-text")!.textContent = d.core;
     card.querySelector(".hmc-before")!.textContent = d.before;
     card.querySelector(".hmc-after")!.textContent = d.after;
     card.querySelector(".hmc-go")!.textContent = d.building ? `${TEXT.building} · ${TEXT.open}` : TEXT.open;

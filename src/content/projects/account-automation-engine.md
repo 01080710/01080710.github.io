@@ -23,6 +23,7 @@ metrics:
 impact:
   before: "在多個 CRM 後台之間逐筆切換查詢"
   after: "OP 填完名單就能批量送件，每次申請都可追溯"
+  core: "高併發異質系統整合"
 tldr:
   problem: "OP 確認客戶帳戶狀態時，要在多個 CRM 後台之間切換 regulator、逐筆查詢；整批案件出現時，人力撐不住。"
   approach: "把共通的查詢流程做成以 LarkSheet 為入口的批量引擎：先驗證輸入，再由排程自動查詢，成功與失敗都留紀錄。"

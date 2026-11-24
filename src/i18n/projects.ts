@@ -109,7 +109,7 @@ export async function get_projects(lang: Lang): Promise<LocalizedProject[]> {
 // map's order. Machine wording comes from data/machines.ts; Chinese pages title a project by its Chinese subtitle.
 export interface LineMachine {
   area: string; kind: MachineKind; accent: string; name: string; note: string; parts: string[]; outlet: string;
-  href: string; building: boolean; title: string; before: string; after: string;
+  href: string; building: boolean; title: string; before: string; after: string; core: string;
 }
 export interface ProductionLine { company: string; machines: LineMachine[] }
 export const short_company = (name: string) => name.replace(/(股份)?有限公司$|,?\s*(Co\.,?\s*)?Ltd\.?$/i, "").trim();
@@ -127,7 +127,7 @@ export async function get_production_lines(lang: Lang): Promise<ProductionLine[]
           parts: m.parts.map((x) => x[lang]), outlet: m.outlet?.[lang] ?? "",
           href: lang_path(`projects/${p.id}/`, lang), building: !p.data.home,
           title: lang === "zh" && p.data.subtitle ? p.data.subtitle : p.data.title,
-          before: p.data.impact!.before, after: p.data.impact!.after,
+          before: p.data.impact!.before, after: p.data.impact!.after, core: p.data.impact!.core ?? "",
         };
       }),
     };

@@ -10,6 +10,7 @@ metric_labels:
 impact:
   before: "Ticket data had to be requested from other teams"
   after: "Synced daily, so OP gets the full data itself"
+  core: "SaaS data asset consolidation & governance"
 tldr:
   problem: "OP is the ticket hub, but data had to be requested from other teams: slow, often misaligned, never the whole picture."
   approach: "Backfill Q4 tickets and conversations within the shared API quota, diff them into SQLite, and schedule a daily run."

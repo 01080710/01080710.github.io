@@ -24,6 +24,7 @@ metrics:
 impact:
   before: "工單資料要向其他單位索取"
   after: "每日同步，OP 自己取得全量資料"
+  core: "SaaS 資料資產沉澱與治理"
 tldr:
   problem: "OP 是工單的中樞，但資料要向其他單位索取，耗時、維度常錯置，看不到全貌。"
   approach: "在共用 API 額度內回補 Q4 工單與對話，逐則比對後寫入 SQLite，並設定每日排程。"

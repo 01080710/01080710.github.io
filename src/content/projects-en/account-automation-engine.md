@@ -24,6 +24,7 @@ story:
 impact:
   before: "Switching between CRM back offices to check accounts one by one"
   after: "OP submits a list and gets results in bulk, with every request traceable"
+  core: "High-concurrency heterogeneous system integration"
 tldr:
   problem: "To check client account statuses, OP had to switch regulators across several CRM back offices and look up accounts one by one; batch cases overwhelmed the team."
   approach: "Turned the shared query workflow into a batch engine with LarkSheet as the entry point: validate the input first, query on a schedule, and record both successes and failures."
