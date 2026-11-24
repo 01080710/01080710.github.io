@@ -34,6 +34,23 @@ CSV 為對帳管線的輸出紀錄：每列 `Comparison` = 一次執行時間；
 
 全期間（2026-02-12 ~ 2026-11-06）共 4,189 次執行；8 月後執行覆蓋率下降（8 月 47%、9 月 33%、10 月 15%），依 Peter 指示不納入成效數據。程式為過渡方案：2026/2 底上線，約 2026/8 隨支付平台停用退場。
 
+**工程機制與可靠性（2026-11-24 新增：04「失敗時怎麼辦」、05「出錯時」「重試上限」）**
+
+來源：Payabl 對帳專案的本機原始碼與 git 歷史（不進 repo；原始碼含內部網址與品牌字，不連結、不複製）。log 只用 git 歷史中留存、且落在穩定期內的 2026-03-01 ~ 03-09（9 天、206 次執行）；本機 `logs/` 只有 2026-08 以後（平台停用後），不使用。
+
+- 機制對應的程式位置：登入重試（`login_and_get_token`：urllib3 `Retry` total=5、backoff_factor=1.5、429／5xx；應用層迴圈 5 次；被導回登入頁、token 為空值或 HTML 視為失敗）；CRM 報表兩步重試（CRM 報表下載函式：`MAX_RETRIES = 10`、`RETRY_SLEEP = 5`、逾時 600 秒；失敗時 `continue` 跳過該日）；滾動視窗（`dayrange`：CRM 4 天 Asia/Nicosia、Payabl 2 天 Asia/Taipei）；原始報表留存（`export_csv`：`DATA_DIR/年/月/日/系統/分支`）；本地 log（crontab 每小時一次、輸出到 `/var/log/YYYYMMDD.log`，以 volume 掛載到主機）；帳密讀取 `/run/secrets/credentials.env`（compose 以 `:ro` 掛載）。
+- 04「關鍵程式碼」（2026-11-24，Peter 要求補上）：節錄 `cc_withdraw_crawler.py` 的 CRM 報表下載函式（滾動視窗、POST 產生報表的重試、跳過該日）與 `main.py`（去重、心跳列），23 行。已簡化：網址改成 `generate_url`、下載 CSV 那一步與 Payabl 部分省略、去重欄位抽成 `keys`、心跳列併成一行；函式名稱中的內部系統名稱不出現，其餘識別字照原始碼。
+- 「步驟」= 某個 regulator 某一天的 POST 產生報表或 GET 下載，各算一步。CRM 實際只查 VFSC、VFSC2 兩個 regulator（程式取 `brands[1:3]`）。
+- 382 個步驟重試後成功：同一次執行內，同一步驟先有 `failed` 再有 `success`；依成功的 attempt 分布為第 2 次 181、第 3 次 149、第 4–10 次 52。第 4–10 次只可能出現在調高上限之後。
+- 跳過與補回：`failed after N attempts` 共 6 次（3/3 13:00 VFSC 3/1、3/2；3/3 16:00 VFSC 2/28；3/3 23:00 VFSC2 3/1；3/5 04:00 VFSC 3/1；3/5 15:00 VFSC 3/3），6 次都在下一個整點的執行中 `Download success`。
+- 登入重試：`Login attempt 2/5` 共 5 次，都在第 2 次成功。
+- 重試上限 3 → 10：log 中最後一次 `after 3 attempts` 為 3/3 12:06，第一次 `attempt 4` 為 3/3 13:03；程式 diff 見 commit `31b0043`（`MAX_RETRIES = 3` → `10`）。依 Peter 指示（2026-11-24）頁面只放「52 個步驟在第 4–10 次才成功」，不放改版前後的跳過比例（兩段期間 CRM 狀況不同，不是對照實驗）。
+- 失敗回應全部是 HTTP 500 或 502（POST／Download failed 的訊息分類）。
+- log 節錄（05「出錯時」）：3/3 13:00 與 14:00 兩次執行，取自原始 JSON；移除網址、報表檔名，錯誤訊息只留狀態碼，內部系統名稱的 stage 改為 `download_crm`，以 `...` 省略重複行。
+- 不寫上頁面的部分（依 Peter 指示，2026-11-24）：3/1 00:00 ~ 3/2 08:00 CRM 連續失敗 33 次，程式以 `TypeError` 中止；每日 06:00 的 `KeyError`。頁面只以中性的一句說明「CRM 整個停擺時，表上會少掉那個小時的比對時間列」。
+- 原始碼沒有、所以不宣稱：Semaphore 併發（逐日依序抓取）、run id（logger 只有 service／stage／status）、checkpoint 續跑、Payabl 報表下載重試、Lark API 重試。
+- 待確認：頁面與名詞說明寫 CRM「T ~ T-4」、Payabl「T ~ T-2」，程式的 `dayrange` 是 CRM 4 天（T-3 ~ T）、Payabl 2 天（T-1 ~ T）；3/16 log 也是 3/13 ~ 3/16 四天。新段落依程式寫「最近 4 天／最近 2 天」，舊的 T ~ T-4 寫法待 Peter 決定是否改。
+
 **與原始簡報不一致之處（已在網站上修正或說明）**
 - 圖 4「4 次/日、↑600%」：Peter 確認實際為每日 5 輪（2026-11-16）。自動化排程每小時 1 次，但 3–7 月實際 3,162 次 ÷ 153 天 = 平均每日 20.7 次（中位數 23；跑滿 24 次 36 天、無執行 5 天），5 → 20.7 約 4.1 倍。
 - 圖 4「>24 小時」：與每日 5 輪矛盾，Peter 確認改為「最長約 5 小時」（兩輪間隔，2026-11-16）。
@@ -73,6 +90,24 @@ CSV 為對帳管線的輸出紀錄：每列 `Comparison` = 一次執行時間；
 | 單批最大涵蓋（各欄獨立取最大） | countries 179、servers 40、regulators 4、account types 48 |
 | 有使用的天數 | 112 |
 | 每月成功次數／帳戶 | 6 月 39／58,805、7 月 95／64,060、8 月 83／21,757、9 月 69／92,890、10 月 207／113,659、11 月（至 16 日）38／30,458 |
+
+**工程機制與耗時（2026-11-24 新增：04「一份名單怎麼查完」圖 6、05「名單大小與耗時」圖 8）**
+
+來源：Account Engine 的本機原始碼與執行 log（不進 repo；原始碼含內部網址與品牌字，不連結、不複製）。主題刻意和 Credit Card（失敗與回補）區隔，聚焦在「一份名單展開成大量查詢」的並行設計與耗時。
+
+- 機制對應的程式位置：後台依序切換（`run_admin_jobs` 逐一 `switch_regulator`，再以 `wait_regulator_switched` 輪詢頁面上的 regulator 標籤，timeout 6 秒、間隔 0.3 秒）；共用並行上限（`asyncio.Semaphore(20)`，所有 job 與分頁共用）；分頁（`fetch_job` 先抓第 1 頁取 total，其餘頁 `asyncio.gather`，依 `page_no` 排序）；重試分類（`post_json_with_retry`：429／5xx 等待 `1.5 × attempt` 秒、最多 10 次；401 拋 `PermissionError` 不重試）；job 描述（`payload_type` 產生 `name`／`url`／`build_payload`／`payload_kwargs`）；查無判定（`job_has_data`：4 套都沒資料才列入 `empty_jobs`）；寫回分批（`LarkSheetClient.append_sheet` 每批 4,000 列，檢查 `code != 0`）。
+- 04「並行與重試怎麼定」（2026-11-24，Peter 確認）：Semaphore 20 與重試參數是 Peter 對實際後台測出來的，測試沒有留下各並行數的錯誤數或耗時，頁面只寫結論。Peter 選的測試現象：並行過高時後台回 429／5xx、登入 session 被踢掉；改成全域上限的原因：大名單把後台打爆；重試逐次拉長的原因：429 後立刻重試會再被擋。程式佐證：初版（commit `f1d9f2c`，2026-06-04）每個 job 各自 `Semaphore(page_concurrency=10)`、所有 job 一起 `gather`，整體只受 aiohttp 預設連線上限限制；commit `68a8258`（2026-06-05）改成 `global_sem = asyncio.Semaphore(20)`。重試參數自初版即為 10 次、`1.5 × attempt` 秒，沒有改過。401 中止後 Input 不清空，下一輪（5 分鐘後）重新登入再跑。
+- 04「關鍵程式碼」（2026-11-24，Peter 要求把關鍵程式碼放上頁面）：節錄 `general.py` 的 `run_admin_jobs`（依序切換、共用 `global_sem`）、`fetch_one_page`、`fetch_job`、`post_json_with_retry`，24 行。已簡化：省略 log、例外處理、timeout、回傳結構；401 判斷併成一行；`RETRY_STATUS` 的值改寫在註解；網址全部移除；函式與變數名稱照原始碼。
+- 圖 6 用對照範例的 68 個 userId：68 × 4 = 272 次第一頁查詢，「至少」是因為帳戶超過 100 個的 userId 會多抓分頁。
+- 耗時口徑：本機 log 為 2026-08-01 起（6–7 月只有 git 中的零星檔案，不使用），取到 2026-11-16 與 Record 一致。依 `uid` 分組，`Data transformation completed` 時間與 Record `comparison_time` 相差 5 秒內者視為同一次，共 394 次（Record 同期成功 397 次）。整趟耗時 = 該 uid 第一行到 `Input sheet reset completed`。
+- 分組中位數：100 以下 253 次 13 秒；101–500 60 次 33 秒；501–2,000 62 次 98 秒；2,001 以上 19 次 288 秒（最久 689 秒，即 11/06 R-0549）。分組依 `total_jobs`（= 輸入的不重複 userId 數）。
+- 每套後台每 1,000 個 userId：`Regulator switched successfully` 到同一 brand 的 `Brand execution completed`／`No data returned`，限名單 500 個以上，336 次，中位數 24.9 秒（P10 21.0、P90 33.7）。切換到確認成功中位數 1 秒（1,576 次，最長 9 秒）。
+- 11/06 各後台耗時：FCA 157、ASIC 153、VFSC 169、VFSC2 196 秒；crawler 682 秒；寫回 4,000 + 1,642 列。
+- 不寫上頁面、待 Peter 決定（2026-11-24 發現）：
+  - log 中跑完但對不上 Record 的有 338 次，主要是 Input 只有 1 筆時清空步驟刪除 0 列（`delete_sheet` 從 index 2 起算），同一申請每 5 分鐘重跑；以及執行超過 5 分鐘時下一輪重疊撿取同一份 Input（例：08-10 16:50／16:51、09-03 11:10／11:15）。Record 中多數重跑沒有留下列，但 10-02 16:50～17:00 仍有每 5 分鐘一列、帳戶數 1 的紀錄（R-0319～R-0321），Record 中帳戶數為 1 的成功列共 32 列，可能包含重跑；頁面的 531 次、381,629 帳戶沿用 Record，未扣除。
+  - 沒有申請時，每 5 分鐘的空跑以 ERROR 記錄並拋出例外（8/1～11/16 約 2.7 萬次）。
+  - 程式沒有檢查單次 2,000 筆上限；圖 8 有 19 批超過 2,000 個 userId。
+- 原始碼沒有、所以不宣稱：重疊執行的鎖、checkpoint 續跑。
 
 **與 Peter 提供的草稿不一致之處（頁面已改用 Record 實際值）**
 - 草稿「累計 236,209 Accounts、2,952.61 人時、NT$1.18M」→ 實際 381,629、4,770.36、≈NT$1.91M。推測草稿為較早期的快照，待 Peter 確認。
@@ -151,6 +186,19 @@ CSV 為對帳管線的輸出紀錄：每列 `Comparison` = 一次執行時間；
 - 05 移除每月案件表；出金原因改為長條（圖 4）。06 移除「揭露案件」「突發事件」兩列（已在 05、01）。
 
 **公開資料處理**：`scripts/deidentify_drop_order.py` 產生 `public/data/drop-order-cases-2026.csv`（21,707 列，含 6,314 列心跳）。輸出只保留分類欄位：Case Type、Comparison Time、Tx（訂單編號改 `TX-00001` 流水號，信用卡以 Merchant Order 編號）、Channel Type、CRM／CPS 狀態、幣別、金額、國家、原因類別、子類別、處理狀態。刪除 User ID、Account、所有訂單編號、Handler／Checker／Sales／Operator 姓名、錢包地址／卡號、渠道名稱（含品牌代碼）、Regulator／Server、自由文字（Comment、CRM Reverse Reason、交易叙述）。腳本最後一步檢查輸出不含任何原始 ID、完整人員姓名與品牌字；另外手動掃描 6 位數以上數字、Email（0 筆）。
+
+**規則寫成程式與狀態組合（2026-11-24 新增：04「規則寫成程式」、05「判出的狀態組合」圖 7）**
+
+來源：Drop-Order 的本機原始碼（不進 repo；含內部網址、資料庫連線、商戶代碼與品牌字，不連結、不複製）與公開 CSV。主題刻意和 Credit Card（失敗與回補）、Account Engine（並行與重試）區隔，聚焦在「判定規則表 → 程式 → 實際判出的狀態組合」。
+
+- 程式節錄 24 行：`losttrader_crawler.py` 出金查詢 `w_query_update` 的 `WHERE`（`WITHDRAWAL_STATUS` 為審核拒絕／提交拒絕／交易失敗；另一段 `w_query_approve` 以 `APPROVE_STATUS` 篩審核拒絕／提交未審核／提交拒絕，頁面只以註解帶過），以及 `losttrader_basiclogic.py` 的 `compare_logic`（Deposit、Withdraw_CreditCard、Withdraw_LBT 分支）與 `process_withdraw_report`（`priority_map`、Status Workflow、篩選條件）。已簡化：省略欄位清單、空資料檢查、Reason Table 與 WithdrawType 合併；SELECT 欄位以 `...` 代替，資料表名稱與商戶代碼不出現；欄位名稱與狀態值轉繁體。
+- 信用卡分支在 `compare_logic` 只檢查 CRM 端（Status、Order Status），CPS 失敗條件在 SQL；log 中出金只有 1,037 列、入金 195,438 列（11/18 03:00），反映出金在 SQL 已先篩。
+- 圖 7 口徑：公開 CSV 中 Tx 不是 `-` 的 15,393 件，依 `CRM Status`、`CPS 交易状态`、`CPS 出金状态` 分組，共 28 種組合。入金：Audit 3,412／533、Submit to third party 1,443／2、Processing 1,027／6，其他 5 種合併（Wait for MT4 deposit 38／4、Pending 14／0、Payment Failed 11／3、Success 1／0、Submitted to Third Party 1／0）。出金：處理完成／交易失敗(人工) LBT 6,350、Crypto&Wallet 163、IBT 10、CreditCard 1,027（Success 1,021＋Partial Success 6）；處理完成／交易失敗(銀行退款) 106、0、12、0；處理完成／交易失敗 100、14、0、0；審核拒絕／審核拒絕 276、71、24、0；提交拒絕／（空）0、740、0、0；其他 2 種（審核拒絕／空 Crypto&Wallet 4、交易失敗／交易失敗 LBT 1）。各欄與各類型加總和執行統計一致（入金 6,495、出金 8,898）。
+- 錯誤處理（2026-11-24 新增：04「錯誤處理」圖 6、「錯誤處理的程式碼」，05「出錯的一輪」；Peter 指出頁面遺漏重試與錯誤處理）：程式位置 `Cps_reports`（`SELECT 1` 連線檢查，失敗 `logger.exception` 後 raise）、`read_database_with_retry`（5 次、間隔 3 秒、`status=retry`，用盡 raise）、CRM 報表下載函式（`MAX_RETRIES = 10`、`RETRY_SLEEP = 60`、POST／GET timeout 600 秒）、`run_dw_days_async`（`Semaphore(5)`，每天一個任務，回傳時濾掉 `None`）、`fetch_one_day_dw`（`status == "error"` 視為查無資料、不重試；兩份報表都失敗記 `All reports failed` 並回傳 `None`）、`crm_login`（5 次後 raise）。main.py 沒有 try／except，任何拋出都在寫入前中止整輪。
+- 錯誤處理的統計口徑：現行版本 2026-09-11 部署（log 中 `Successfully connected to CPS database` 首見 09-11），取 2026-09-12 ~ 11-17 的本機 log，依 `uid` 分組 1,418 次執行，`Upload total data to LarkSheet Finish` 1,404 次。CPS：`Withdraw query failed (attempt 1/5)` 10 次分布在 9 次執行，9 次都在同一輪成功（`CPS report downloaded successfully`）。CRM：同一輪中同一步驟（報表 × regulator × 日期；下載以 regulator × 日期）先 `failed` 後 `success` 計為重試後成功，229 次（第 2 次 207、第 3 次 12、第 4–6 次 10）；`No data found ..., skip retry` 9,259 次。`All reports failed` 144 次中，只有 46 次同一輪有 `failed after retries`（真的重試用盡），其餘 98 次是 FCA／ASIC 當天查無資料（DW 函式的查無資料訊息誤寫成 `CC`，且查無資料也會記成 ERROR）；頁面只寫 46 次，46 次都在下一個整點的執行出現該 regulator × 日期的 `Download success`。中止的 14 次（Lark token SSLError 3、Reason Table 讀取逾時 3、CRM 登入被導回 2、CPS 連線失敗 1、其他 5）都沒有任何 `Compare Existing`／`Append` 紀錄。
+- log 節錄（05「出錯的一輪」）：2026-10-20 15:00（uid 0f66cac7），移除網址與檔名，錯誤訊息只留狀態碼，重複的下載行以 `...` 省略；VFSC2 10-15 的 POST 在 15:13:17 回 524，15:14:19 下載成功。
+- 不寫上頁面：查無資料記成 ERROR（`All reports failed`）與訊息誤寫 `CC`；`status == "error"` 一律當查無資料（原本比對 `message == "No data is found"` 的條件被註解掉），頁面只寫「API 以 status: error 回應時不重試」。
+- 待確認：1 件 Deposit 的 CRM Status 為 `Success`，不符合判定規則（CRM 未成功）；可能是案件寫入後 CRM 狀態才更新、或匯出時取到新狀態。頁面把它併在「其他 5 種」，不寫成「全部符合規則」。
 
 ## Reading Rhythm 改版（2026-11-18，四頁統一）
 

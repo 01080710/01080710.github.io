@@ -99,6 +99,35 @@ story:
       - "[id*=\"-flowchart-BK-\"], [id*=\"-flowchart-CMP-\"], [id*=\"-L_CPS_\"], [data-id^=\"L_CPS_\"], [id*=\"-L_CRM_\"], [data-id^=\"L_CRM_\"], [id*=\"-L_CC_\"], [data-id^=\"L_CC_\"], [id*=\"-L_REF_\"], [data-id^=\"L_REF_\"]"
       - "[id*=\"-flowchart-CHK-\"], [id*=\"-flowchart-AP-\"], [id*=\"-flowchart-HB-\"], [id*=\"-flowchart-OPS-\"], [id*=\"-flowchart-REV-\"], [id*=\"-L_CMP_\"], [data-id^=\"L_CMP_\"], [id*=\"-L_CHK_\"], [data-id^=\"L_CHK_\"], [id*=\"-L_AP_\"], [data-id^=\"L_AP_\"], [id*=\"-L_HB_\"], [data-id^=\"L_HB_\"], [id*=\"-L_OPS_\"], [data-id^=\"L_OPS_\"]"
     line: "CRM 沒有開放資料庫，所以我用營運帳號自動下載報表、直接查 CPS，每小時比對一次；同一筆只派工一次，沒有新案件也寫一列心跳，證明監控沒中斷。"
+  - label: "規則寫成程式"
+    at: "ch-4-4"
+    pick: "pre"
+    beats:
+      - ".line:nth-child(n+1):nth-child(-n+5)"
+      - ".line:nth-child(n+7):nth-child(-n+10)"
+      - ".line:nth-child(n+11):nth-child(-n+14)"
+      - ".line:nth-child(n+15):nth-child(-n+17), .line:nth-child(n+21)"
+      - ".line:nth-child(n+18):nth-child(-n+20)"
+    line: "判定規則表在程式裡就是這幾段：CPS 的失敗或被拒，在 SQL 就先篩出來；入金看 CPS 成功、CRM 還沒成功；信用卡看 CRM 已記退款；其他三種出金共用同一條規則，只換渠道類別；最後把 CRM 與 CPS 的狀態依序串成一條軌跡，Handler 不用再開兩個後台對照。"
+  - label: "錯誤處理"
+    at: "ch-4-5"
+    pick: ".split-figure"
+    beats:
+      - "[data-b=\"req\"]"
+      - "[data-b=\"nodata\"]"
+      - "[data-b=\"day\"]"
+      - "[data-b=\"run\"]"
+    line: "但資料不完整時，比對出的「沒有新案件」是假的，還會寫出假的心跳。所以失敗分三層：一個請求失敗就重試，查無資料不重試；一天的報表都失敗才放棄那一天，下一輪補回；CPS 連不上或登入失敗，整輪直接中止、不寫入，表上缺一列心跳就知道要有人看。"
+  - label: "錯誤處理的程式碼"
+    at: "ch-4-6"
+    pick: "pre"
+    beats:
+      - ".line:nth-child(n+1):nth-child(-n+2)"
+      - ".line:nth-child(n+3):nth-child(-n+11)"
+      - ".line:nth-child(n+12):nth-child(-n+14), .line:nth-child(n+19):nth-child(-n+22)"
+      - ".line:nth-child(n+15):nth-child(-n+18)"
+      - ".line:nth-child(n+23)"
+    line: "落在程式裡：先用 SELECT 1 確認 CPS 連得上；查詢失敗重試 5 次，用盡就拋出、整輪中止；CRM 報表每天一個任務，失敗等 60 秒再試，最多 10 次；API 回 status: error 代表查無資料，直接跳過；兩份報表都失敗，只回傳 None、放棄這一天。"
   - label: "操作畫面"
     at: "ch-5-1"
     pick: ".shot-gallery"
@@ -117,8 +146,23 @@ story:
       - ".line:nth-child(n+5):nth-child(-n+10)"
       - ".line:nth-child(n+11)"
     line: "這是 2026-11-18 03:00 的一次實際執行：先查 CPS，再下載 CRM 報表與對照表，接著依 5 種案件類型比對，只寫入新案件；沒有新案件的類型，寫一列心跳。"
-  - label: "輸出結果"
+  - label: "狀態組合"
     at: "ch-5-3"
+    pick: ".split-figure"
+    beats:
+      - "[data-b=\"dep\"]"
+      - "[data-b=\"wd\"]"
+    line: "上線以來判出的案件，攤開成狀態組合：入金幾乎都停在 Audit、Submit to third party、Processing；出金的失敗型態則依渠道不同，LBT 多是交易失敗(人工)，Crypto&Wallet 多是提交拒絕。"
+  - label: "出錯的一輪"
+    at: "ch-5-4"
+    pick: "pre"
+    beats:
+      - ".line:nth-child(n+1):nth-child(-n+5)"
+      - ".line:nth-child(n+6):nth-child(-n+9)"
+      - ".line:nth-child(n+10)"
+    line: "實際出錯時是這樣：2026-10-20 15:00 那一輪，CPS 出金查詢第 1 次失敗、第 2 次成功；CRM 信用卡報表回 524，等 60 秒後成功；最後照常寫入 10 件新案件。9/12 起的 1,418 次執行中，1,404 次完成，另外 14 次在寫入前就中止。"
+  - label: "輸出結果"
+    at: "ch-5-5"
     pick: "table"
     beats:
       - "tbody tr:nth-child(1)"
@@ -126,7 +170,7 @@ story:
       - "tbody tr:nth-child(5)"
     line: "寫進 LarkSheet 的案件長這樣：入金由 Handler 補登後標 done，出金 Reverse 後標 reversed；最後一列是心跳列，代表那次執行沒有新案件。"
   - label: "成果：入金"
-    at: "ch-5-4"
+    at: "ch-5-6"
     pick: ".split-figure"
     beats:
       - "[data-b=\"t-axis\"], [data-b=\"t-up\"]"
@@ -136,7 +180,7 @@ story:
       - "[data-b=\"t-manual\"]"
     line: "實際案例是 2026/11/6：上游一次上線 85 個渠道、上線前沒有測試，影響到其他管路，下游整合全部卡住，回呼大量失敗。10 點那次執行揭露 450 筆入金掉單，11 點再揭露 483 筆，平常單次最多只有 75 筆；案件直接進 LarkSheet、同一筆只派一次，交給營運接手。如果還是每日兩次的人工抽查，要等下一輪才看得到。"
   - label: "成果：出金"
-    at: "ch-5-5"
+    at: "ch-5-7"
     pick: ".split-figure"
     beats:
       - "[data-b=\"o-axis\"], [data-b=\"o-up\"]"
@@ -384,6 +428,83 @@ flowchart LR
 - **可追溯**：每次執行產生一個 `uid`，JSON log 帶 `service`、`stage`、`status`；CPS 原始資料每次備份到 Lark Drive，事後可以查核當時比對的資料。
 - **權限範圍**：CRM 使用營運的既有帳號（含 2FA），只下載報表、不寫入；CPS 只執行 SELECT 查詢；Lark 透過自建 App 寫入案件表與備份資料夾。CRM 與 CPS 的帳密從唯讀掛載的設定檔讀取，不寫在程式碼中。
 
+<hr data-slide="規則寫成程式">
+
+**規則寫成程式：** 01 的判定規則表，每一列都對應到下面一段程式。CPS 的「失敗」在 SQL 就先篩掉，比對時只剩狀態組合要判斷：
+
+```python
+# losttrader_crawler.py：CPS 出金在 SQL 就只取失敗或被拒的訂單
+w_query_update = """SELECT ...
+    WHERE w1.update_time >= %s AND w1.update_time < %s
+      AND (w.WITHDRAWAL_STATUS LIKE '%%審核拒絕%%' OR w.WITHDRAWAL_STATUS LIKE '%%提交拒絕%%'
+           OR w.WITHDRAWAL_STATUS LIKE '%%交易失敗%%')"""      # 另一段查詢看 APPROVE_STATUS
+
+def compare_logic(crm_report, cps_report, cc_report, cps_type, ...):    # losttrader_basiclogic.py
+    if cps_type == 'Deposit':                     # CPS 已成功，CRM 還沒成功
+        df = crm_report.merge(cps_report, left_on='Order Number', right_on='商戶訂單號', how='left')
+        return df[df['交易狀態'].isin(['交易成功', '交易成功(人工)']) & ~df['Status'].str.contains('Succ')]
+    elif cps_type == 'Withdraw_CreditCard':       # CRM 已記退款，CPS 端是失敗的出金
+        df = cps_report.merge(cc_report, left_on='商戶訂單號', right_on='CPS Order ID', how='inner')
+        return df.query("`Status`.str.contains('Completed|Partial Success|Success') "
+                        "and `Order Status`.str.contains('Refunded')")
+    elif cps_type == 'Withdraw_LBT':              # LBT、Crypto&Wallet、IBT 共用同一條規則
+        return process_withdraw_report(cps_report, crm_report, ..., category_filter='LBT')
+def process_withdraw_report(cps_report, crm_report, ..., category_filter):   # CRM 已完成，CPS 失敗或被拒
+    df['status_rank'] = df['Status'].map({'Risk Audit': 1, 'Accepted': 2}).fillna(99)
+    workflow = (df.sort_values(['商戶訂單號', 'status_rank', 'Last Update Time']).groupby('商戶訂單號')
+                ['Status'].agg(lambda x: ' -> '.join(dict.fromkeys(x))))   # 狀態軌跡，再接上 CPS 兩個狀態
+    return df_out[df_out['Category'].str.contains(category_filter)
+                  & df_out['Apply Status'].str.contains('Completed|Partial Success|Success')
+                  & (df_out['交易狀態'].str.contains(transaction_status)
+                     | df_out['出金狀態'].str.contains(withdrawal_status))]
+```
+
+*節錄自 `losttrader_crawler.py`（CPS 出金查詢）與 `losttrader_basiclogic.py`（`compare_logic`、`process_withdraw_report`），已簡化：省略欄位清單、空資料檢查與 Reason Table 合併；Crypto&Wallet 與 IBT 的分支只差 `category_filter`（`'Ewallet|Crypto'`、`'IBT'`），沒有列出。欄位名稱與狀態值轉為繁體（原始碼為簡體），其他識別字照原始碼。*
+
+<hr data-slide="錯誤處理">
+
+**錯誤處理：** 資料不完整時比對出來的「沒有新案件」是假的，還會寫出一列假的心跳。所以失敗依影響範圍分三層處理，只有最外層會讓整輪停下：
+
+<figure class="split-figure step-figure">
+<div class="split-scroll">
+<svg viewBox="0 0 760 300" role="img" aria-labelledby="de-title-zh"><title id="de-title-zh">錯誤處理分三層：一個請求失敗就重試，一天的報表都失敗就放棄那一天，整輪資料不完整就中止、不寫入</title><defs><marker id="de-arrow-zh" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="sf-head" d="M0,0 L8,4 L0,8 z"/></marker></defs><g data-b="run"><rect class="sf-box" x="20" y="16" width="300" height="268" rx="10"/><text class="sf-t sf-start" x="36" y="40">整輪</text><text class="sf-s sf-start" x="36" y="58">每小時一次</text><path class="sf-line" d="M320 44 H344" marker-end="url(#de-arrow-zh)"/><text class="sf-t sf-start" x="352" y="40">中止：不比對、不寫入</text><text class="sf-s sf-start" x="352" y="58">CPS 連不上或重試用盡、CRM 登入 5 次都失敗</text><text class="sf-note sf-start" x="352" y="76">表上缺這一小時的心跳列，就知道要有人看</text></g><g data-b="day"><rect class="sf-box" x="40" y="80" width="260" height="190" rx="8"/><text class="sf-t sf-start" x="56" y="104">一天的報表</text><text class="sf-s sf-start" x="56" y="122">每天一個任務，最多 5 個同時</text><path class="sf-line" d="M300 108 H344" marker-end="url(#de-arrow-zh)"/><text class="sf-t sf-start" x="352" y="112">放棄這一天，其他天照常</text><text class="sf-s sf-start" x="352" y="130">兩份報表都重試用盡才放棄，記一行 ERROR</text><text class="sf-s sf-start" x="352" y="148">下一輪重抓最近 4 天時補回</text></g><g data-b="req"><rect class="sf-parent" x="60" y="140" width="220" height="116" rx="6"/><text class="sf-t sf-start" x="76" y="166">一個請求</text><text class="sf-s sf-start" x="76" y="186">CRM 報表的產生／下載</text><text class="sf-s sf-start" x="76" y="204">CPS 的入金／出金查詢</text><path class="sf-line" d="M280 190 H344" marker-end="url(#de-arrow-zh)"/><text class="sf-t sf-start" x="352" y="186">重試</text><text class="sf-s sf-start" x="352" y="204">CRM 報表：最多 10 次，每次等 60 秒</text><text class="sf-s sf-start" x="352" y="222">CPS 查詢：最多 5 次，每次等 3 秒</text></g><g data-b="nodata"><path class="sf-line" d="M280 236 H344" marker-end="url(#de-arrow-zh)"/><text class="sf-t sf-start" x="352" y="250">查無資料不重試</text><text class="sf-s sf-start" x="352" y="268">API 以 status: error 回應時直接跳過</text></g></svg>
+</div>
+<figcaption>圖 6　錯誤處理分三層：請求重試、放棄單日、整輪中止（實際發生的次數見 Result）</figcaption>
+</figure>
+
+<hr data-slide="錯誤處理的程式碼">
+
+**錯誤處理的程式碼：** 上一張的三層，對應到 `losttrader_crawler.py` 的這幾段：
+
+```python
+# losttrader_crawler.py：CPS 資料庫，先確認連線，查詢失敗就重試
+conn.execute(text("SELECT 1"))                        # 連不上就拋出，整輪中止
+def read_database_with_retry(*, query, ..., max_retry=5, retry_interval=3):
+    for attempt in range(1, max_retry + 1):
+        try:
+            return pl.read_database(query=query, connection=connection, ...)
+        except Exception:
+            logger.exception(f"{query_name} query failed (attempt {attempt}/{max_retry})")
+            if attempt == max_retry:
+                raise                                 # 重試用盡：整輪中止，不寫假的心跳列
+            time.sleep(retry_interval)
+async with SEM:                                       # CRM 報表：每天一個任務，最多 5 個同時
+    for attempt in range(1, MAX_RETRIES + 1):         # 最多 10 次，每次等 RETRY_SLEEP = 60 秒
+        try:
+            data = await resp.json()
+            if data.get("status") == "error":         # API 以 status: error 表示查無資料
+                no_data = True
+                break                                 # 不重試
+        except Exception as e:
+            logger.warning(f"POST failed ({report_name} DW {brand} {day}) attempt {attempt}: {e}")
+            if attempt < MAX_RETRIES:
+                await asyncio.sleep(RETRY_SLEEP)
+    if not dfs:
+        return None                                   # 兩份報表都失敗：記 ERROR，只放棄這一天
+```
+
+*節錄自 `losttrader_crawler.py`（`Cps_reports`、`read_database_with_retry`、`fetch_one_day_dw`），已簡化：省略連線字串、下載那一步的重試（寫法相同）、計時與 log 細節；網址與資料庫名稱已移除，函式與變數名稱照原始碼。*
+
 ## Result
 
 <hr data-slide="操作畫面">
@@ -425,7 +546,7 @@ flowchart LR
 
 </div>
 </div>
-<figcaption>圖 6　LarkSheet 案件表實際畫面（左右滑動看 5 個工作表；已裁掉瀏覽器與文件路徑，客戶 ID、帳號、訂單編號與 Handler 姓名已模糊；點擊圖片可放大）</figcaption>
+<figcaption>圖 7　LarkSheet 案件表實際畫面（左右滑動看 5 個工作表；已裁掉瀏覽器與文件路徑，客戶 ID、帳號、訂單編號與 Handler 姓名已模糊；點擊圖片可放大）</figcaption>
 </figure>
 
 <hr data-slide="一次實際執行">
@@ -482,6 +603,50 @@ flowchart LR
 </div>
 </figure>
 
+<hr data-slide="判出的狀態組合">
+
+### 判出的狀態組合（Deposit 2026-03-30 ~ 11-17；Withdrawal 2026-09-09 ~ 11-17）
+
+上線以來的案件，依 CRM 與 CPS 的狀態組合整理（取自公開 CSV）：
+
+<figure class="split-figure step-figure">
+<div class="split-scroll">
+<svg viewBox="0 0 760 440" role="img" aria-labelledby="dm-title-zh"><title id="dm-title-zh">判出的狀態組合：入金是 CRM 狀態 × CPS 交易狀態，出金是 CPS 失敗型態 × 案件類型，每格是件數</title><g data-b="dep"><text class="sf-h sf-start" x="20" y="20">入金：CPS 已成功，CRM 還沒成功</text><text class="sf-k sf-start" x="20" y="50">CRM 狀態</text><text class="sf-k" x="350" y="50">交易成功</text><text class="sf-k" x="480" y="50">交易成功(人工)</text><text class="sf-f sf-start" x="20" y="78">Audit</text><rect class="sf-parent" x="290" y="60" width="120" height="28" rx="4"/><text class="sf-t" x="350" y="78">3,412</text><rect class="sf-node" x="420" y="60" width="120" height="28" rx="4"/><text class="sf-t" x="480" y="78">533</text><text class="sf-f sf-start" x="20" y="110">Submit to third party</text><rect class="sf-parent" x="290" y="92" width="120" height="28" rx="4"/><text class="sf-t" x="350" y="110">1,443</text><rect class="sf-node" x="420" y="92" width="120" height="28" rx="4"/><text class="sf-t" x="480" y="110">2</text><text class="sf-f sf-start" x="20" y="142">Processing</text><rect class="sf-parent" x="290" y="124" width="120" height="28" rx="4"/><text class="sf-t" x="350" y="142">1,027</text><rect class="sf-node" x="420" y="124" width="120" height="28" rx="4"/><text class="sf-t" x="480" y="142">6</text><text class="sf-f sf-start" x="20" y="174">其他 5 種（Wait for MT4 deposit 等）</text><rect class="sf-node" x="290" y="156" width="120" height="28" rx="4"/><text class="sf-t" x="350" y="174">65</text><rect class="sf-node" x="420" y="156" width="120" height="28" rx="4"/><text class="sf-t" x="480" y="174">7</text></g><line class="sf-sep" x1="20" y1="200" x2="740" y2="200"/><g data-b="wd"><text class="sf-h sf-start" x="20" y="226">出金：CRM 已完成（信用卡為 Success），CPS 失敗或被拒</text><text class="sf-k sf-start" x="20" y="256">CPS 交易狀態／出金狀態</text><text class="sf-k" x="342.5" y="256">LBT</text><text class="sf-k" x="457.5" y="256">Crypto&Wallet</text><text class="sf-k" x="572.5" y="256">IBT</text><text class="sf-k" x="687.5" y="256">CreditCard</text><text class="sf-f sf-start" x="20" y="284">處理完成／交易失敗(人工)</text><rect class="sf-parent" x="290" y="266" width="105" height="26" rx="4"/><text class="sf-t" x="342.5" y="283">6,350</text><rect class="sf-node" x="405" y="266" width="105" height="26" rx="4"/><text class="sf-t" x="457.5" y="283">163</text><rect class="sf-node" x="520" y="266" width="105" height="26" rx="4"/><text class="sf-t" x="572.5" y="283">10</text><rect class="sf-parent" x="635" y="266" width="105" height="26" rx="4"/><text class="sf-t" x="687.5" y="283">1,027</text><text class="sf-f sf-start" x="20" y="313">處理完成／交易失敗(銀行退款)</text><rect class="sf-node" x="290" y="295" width="105" height="26" rx="4"/><text class="sf-t" x="342.5" y="312">106</text><rect class="sf-node" x="405" y="295" width="105" height="26" rx="4"/><text class="sf-s" x="457.5" y="312">—</text><rect class="sf-node" x="520" y="295" width="105" height="26" rx="4"/><text class="sf-t" x="572.5" y="312">12</text><rect class="sf-node" x="635" y="295" width="105" height="26" rx="4"/><text class="sf-s" x="687.5" y="312">—</text><text class="sf-f sf-start" x="20" y="342">處理完成／交易失敗</text><rect class="sf-node" x="290" y="324" width="105" height="26" rx="4"/><text class="sf-t" x="342.5" y="341">100</text><rect class="sf-node" x="405" y="324" width="105" height="26" rx="4"/><text class="sf-t" x="457.5" y="341">14</text><rect class="sf-node" x="520" y="324" width="105" height="26" rx="4"/><text class="sf-s" x="572.5" y="341">—</text><rect class="sf-node" x="635" y="324" width="105" height="26" rx="4"/><text class="sf-s" x="687.5" y="341">—</text><text class="sf-f sf-start" x="20" y="371">審核拒絕／審核拒絕</text><rect class="sf-node" x="290" y="353" width="105" height="26" rx="4"/><text class="sf-t" x="342.5" y="370">276</text><rect class="sf-node" x="405" y="353" width="105" height="26" rx="4"/><text class="sf-t" x="457.5" y="370">71</text><rect class="sf-node" x="520" y="353" width="105" height="26" rx="4"/><text class="sf-t" x="572.5" y="370">24</text><rect class="sf-node" x="635" y="353" width="105" height="26" rx="4"/><text class="sf-s" x="687.5" y="370">—</text><text class="sf-f sf-start" x="20" y="400">提交拒絕／—</text><rect class="sf-node" x="290" y="382" width="105" height="26" rx="4"/><text class="sf-s" x="342.5" y="399">—</text><rect class="sf-node" x="405" y="382" width="105" height="26" rx="4"/><text class="sf-t" x="457.5" y="399">740</text><rect class="sf-node" x="520" y="382" width="105" height="26" rx="4"/><text class="sf-s" x="572.5" y="399">—</text><rect class="sf-node" x="635" y="382" width="105" height="26" rx="4"/><text class="sf-s" x="687.5" y="399">—</text><text class="sf-f sf-start" x="20" y="429">其他 2 種</text><rect class="sf-node" x="290" y="411" width="105" height="26" rx="4"/><text class="sf-t" x="342.5" y="428">1</text><rect class="sf-node" x="405" y="411" width="105" height="26" rx="4"/><text class="sf-t" x="457.5" y="428">4</text><rect class="sf-node" x="520" y="411" width="105" height="26" rx="4"/><text class="sf-s" x="572.5" y="428">—</text><rect class="sf-node" x="635" y="411" width="105" height="26" rx="4"/><text class="sf-s" x="687.5" y="428">—</text></g></svg>
+</div>
+<figcaption>圖 8　判出的狀態組合：每格是案件數，件數上千的格子以主題色框出；狀態值轉為繁體（CSV 保留來源系統的簡體字）</figcaption>
+</figure>
+
+- **入金集中在 3 種 CRM 狀態**：Audit、Submit to third party、Processing，都是 CPS 已成功、CRM 還停在途中。
+- **出金的失敗型態依渠道不同**：LBT 以「處理完成／交易失敗(人工)」為主，Crypto&Wallet 以「提交拒絕」為主，所以三種出金共用一條規則，但各自分表、各自看原因。
+
+<hr data-slide="出錯的一輪">
+
+### 出錯的一輪：重試後照常完成
+
+- 以下是 2026-10-20 15:00 那次執行的 log 節錄，取自原始 log 檔（JSON），這裡保留時間、等級、stage 與訊息。
+- 重複的下載紀錄已省略；內部網址與報表檔名已移除，錯誤訊息只留 HTTP 狀態碼。
+
+```text
+15:00:06  INFO   Download DataSource  Successfully connected to CPS database.
+15:00:18  INFO   Download DataSource  Deposit query finished, rows=159927.
+15:03:01  ERROR  Download DataSource  Withdraw query failed (attempt 1/5)
+15:03:04  INFO   Download DataSource  Executing Withdraw query (attempt 2/5)
+15:05:31  INFO   Download DataSource  CPS report downloaded successfully. deposit_rows=159927, withdraw_rows=939
+   ...                         (CRM 出入金報表，4 個 regulator × 近 4 天，全部成功)
+15:10:18  INFO   Download DataSource  No data found (fcs-cc-detail CC VFSC 2026-10-18), skip retry
+15:13:17  WARN   Download DataSource  POST failed (cc-detail CC VFSC2 2026-10-15) attempt 1: 524, took 125.1s
+15:14:19  INFO   Download DataSource  Download success (CC VFSC2 2026-10-15): <report>.csv, rows=10578
+15:15:15  INFO   Compare Existing Data - Deposit        Total new mismatch cases to upload: 4
+15:15:19  INFO   Compare Existing Data - Withdraw_LBT   Total new mismatch cases to upload: 6
+15:15:22  INFO   LarkSheet Upload Complete              Upload total data to LarkSheet Finish
+```
+
+從這段紀錄可以看到：
+
+- **CPS 出金查詢第 1 次失敗**，3 秒後第 2 次成功；**CRM 信用卡報表回 524**，等 60 秒後重試成功；FCS 報表查無資料，直接跳過不重試。
+- 這一輪仍然完成比對，寫入 Deposit 4 件、LBT 6 件新案件。
+- **2026-09-12 ~ 11-17 的 1,418 次執行**：1,404 次完成；出現 CPS 查詢失敗的 9 輪，都在同一輪重試成功；CRM 報表有 229 個步驟重試後成功；某一天的報表重試用盡而放棄的有 46 次，46 次都在下一個整點補回；14 次在寫入前中止，那些小時都沒有心跳列。
+
 <hr data-slide="輸出格式">
 
 ### 輸出格式
@@ -509,7 +674,7 @@ flowchart LR
 <div class="split-scroll">
 <svg viewBox="0 0 760 310" role="img" aria-labelledby="tl-title"><title id="tl-title">2026/11/6 上游一次上線 85 個渠道、未經測試，下游整合全部卡住：10:00 執行揭露 450 筆入金掉單、11:00 再揭露 483 筆，平常單次最多 75 筆；案件寫入 LarkSheet 後交給營運接手</title><g data-b="t-axis"><text class="sf-h sf-start" x="40" y="22">管線（11/6 全天 24 次執行，每小時一次）</text><line class="sf-line" x1="40" y1="232" x2="470" y2="232"/><line class="sf-line" x1="80" y1="232" x2="80" y2="238"/><line class="sf-line" x1="210" y1="232" x2="210" y2="238"/><line class="sf-line" x1="340" y1="232" x2="340" y2="238"/><line class="sf-line" x1="470" y1="232" x2="470" y2="238"/><text class="sf-s" x="80" y="254">09:00</text><text class="sf-s" x="210" y="254">10:00 執行</text><text class="sf-s" x="340" y="254">11:00 執行</text><text class="sf-s" x="470" y="254">12:00</text></g><g data-b="t-up"><rect class="sf-bad" x="100" y="36" width="350" height="26" rx="13"/><text class="sf-bad-t sf-small" x="275" y="53">上游一次上線 85 個渠道、未經測試 · 下游全部卡住</text></g><g data-b="t-10"><rect class="sf-trx" x="188" y="92" width="44" height="140" rx="3"/><text class="sf-t" x="210" y="84">450</text></g><g data-b="t-11"><rect class="sf-trx" x="318" y="82" width="44" height="150" rx="3"/><text class="sf-t" x="340" y="74">483</text><line class="sf-sep" x1="40" y1="209" x2="470" y2="209"/><text class="sf-s sf-start" x="44" y="203">平常單次最多 75 筆</text><text class="sf-k" x="255" y="276">兩次合計 933 筆 · 85 種渠道 · 61 個國家</text></g><g data-b="t-ops"><defs><marker id="tl-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="sf-head" d="M0,0 L8,4 L0,8 z"/></marker></defs><path class="sf-line" d="M478 150 H519" marker-end="url(#tl-arrow)"/><rect class="sf-box" x="525" y="96" width="215" height="108" rx="6"/><text class="sf-t" x="632" y="128">寫入 LarkSheet</text><text class="sf-s" x="632" y="152">同一筆只派工一次</text><text class="sf-good" x="632" y="182">營運 Handler 接手</text></g><g data-b="t-manual"><line class="sf-sep" x1="40" y1="288" x2="740" y2="288"/><text class="sf-k sf-start" x="40" y="304">如果是人工抽查：每日 2 次，兩次之間的掉單要等下一輪才看得到</text></g></svg>
 </div>
-<figcaption>圖 7　2026/11/6 上游異常時，每次執行揭露的入金掉單筆數（長條高度依筆數比例；平常單次最多 75 筆發生在 2026/09/22；取自本頁公開 CSV）</figcaption>
+<figcaption>圖 9　2026/11/6 上游異常時，每次執行揭露的入金掉單筆數（長條高度依筆數比例；平常單次最多 75 筆發生在 2026/09/22；取自本頁公開 CSV）</figcaption>
 </figure>
 
 <hr data-slide="出金案例：10/23">
@@ -522,7 +687,7 @@ flowchart LR
 <div class="split-scroll">
 <svg viewBox="0 0 760 312" role="img" aria-labelledby="wd-title"><title id="wd-title">2026/10/23 出金：19:09 那次執行揭露 117 件，平常單次最多 85 件；220 件為信用卡出金、集中在英國、原因同為銀行端交易失敗（發卡行端批次拒絕退款）；當天 329 件最後全部 Reverse</title><g data-b="o-axis"><text class="sf-h sf-start" x="40" y="22">管線（10/23 全天 24 次執行，每小時一次）</text><line class="sf-line" x1="40" y1="240" x2="522" y2="240"/><text class="sf-s" x="51" y="258">00:00</text><text class="sf-s" x="171" y="258">06:00</text><text class="sf-s" x="291" y="258">12:00</text><text class="sf-s" x="411" y="258">18:00</text><rect class="sf-node" x="44" y="234.9" width="14" height="5.1" rx="2"/><rect class="sf-node" x="84" y="238.7" width="14" height="1.3" rx="2"/><rect class="sf-node" x="104" y="233.6" width="14" height="6.4" rx="2"/><rect class="sf-node" x="124" y="238.7" width="14" height="1.3" rx="2"/><rect class="sf-node" x="144" y="234.9" width="14" height="5.1" rx="2"/><rect class="sf-node" x="164" y="238.7" width="14" height="1.3" rx="2"/><rect class="sf-node" x="184" y="223.3" width="14" height="16.7" rx="2"/><rect class="sf-node" x="204" y="216.9" width="14" height="23.1" rx="2"/><rect class="sf-node" x="224" y="237.4" width="14" height="2.6" rx="2"/><rect class="sf-node" x="264" y="232.3" width="14" height="7.7" rx="2"/><rect class="sf-node" x="284" y="231.0" width="14" height="9.0" rx="2"/><rect class="sf-node" x="304" y="234.9" width="14" height="5.1" rx="2"/><rect class="sf-node" x="444" y="227.2" width="14" height="12.8" rx="2"/><rect class="sf-node" x="464" y="225.9" width="14" height="14.1" rx="2"/><rect class="sf-node" x="484" y="224.6" width="14" height="15.4" rx="2"/><rect class="sf-node" x="504" y="237.4" width="14" height="2.6" rx="2"/></g><g data-b="o-up"><rect class="sf-bad" x="90" y="36" width="380" height="26" rx="13"/><text class="sf-bad-t sf-small" x="280" y="53">英國發卡行端批次拒絕退款 · 信用卡退款大量失敗</text></g><g data-b="o-pm"><rect class="sf-trx" x="324" y="200.3" width="14" height="39.7" rx="2"/><text class="sf-t sf-small" x="331" y="193.3">31</text><rect class="sf-trx" x="344" y="166.9" width="14" height="73.1" rx="2"/><text class="sf-t sf-small" x="351" y="159.9">57</text><rect class="sf-trx" x="364" y="210.5" width="14" height="29.5" rx="2"/><text class="sf-t sf-small" x="371" y="203.5">23</text></g><g data-b="o-peak"><rect class="sf-trx" x="424" y="90.0" width="14" height="150.0" rx="2"/><text class="sf-t sf-small" x="431" y="83.0">117</text><line class="sf-sep" x1="40" y1="131.0" x2="522" y2="131.0"/><text class="sf-s sf-start" x="44" y="125.0">平常單次最多 85 件</text></g><g data-b="o-why"><rect class="sf-box" x="536" y="36" width="214" height="104" rx="6"/><text class="sf-t" x="643" y="62">信用卡出金 220 件</text><text class="sf-s" x="643" y="80">平常每日約 12 件</text><text class="sf-s" x="643" y="104">189 件在英國</text><text class="sf-s" x="643" y="122">197 件為銀行端交易失敗</text></g><g data-b="o-done"><rect class="sf-box" x="536" y="174" width="214" height="66" rx="6"/><text class="sf-t" x="643" y="201">寫入 LarkSheet · 當天 329 件</text><text class="sf-good" x="643" y="225">全部 Reverse 完成</text></g><g data-b="o-manual"><line class="sf-sep" x1="40" y1="280" x2="750" y2="280"/><text class="sf-k sf-start" x="40" y="300">如果是人工抽查：每日 2 次，兩次之間的掉單要等下一輪才看得到</text></g></svg>
 </div>
-<figcaption>圖 8　2026/10/23 每次執行揭露的出金掉單件數（長條高度依件數比例；平常單次最多 85 件發生在 2026/11/08，已排除停機後第一次執行的累積量；取自本頁公開 CSV）</figcaption>
+<figcaption>圖 10　2026/10/23 每次執行揭露的出金掉單件數（長條高度依件數比例；平常單次最多 85 件發生在 2026/11/08，已排除停機後第一次執行的累積量；取自本頁公開 CSV）</figcaption>
 </figure>
 
 <hr data-slide="失敗原因">
@@ -540,7 +705,7 @@ flowchart LR
 <li style="--v: 0.1%"><span class="bar-label">CPS 問題、內部疏失</span><span class="bar"></span><span class="bar-value">7</span></li>
 <li style="--v: 21.7%"><span class="bar-label">未分類（原因欄位空白）</span><span class="bar"></span><span class="bar-value">1,444</span></li>
 </ul>
-<figcaption>圖 9　出金失敗原因類別（Withdrawal 2026-09-09 ~ 11-17，取自本頁公開 CSV）</figcaption>
+<figcaption>圖 11　出金失敗原因類別（Withdrawal 2026-09-09 ~ 11-17，取自本頁公開 CSV）</figcaption>
 </figure>
 
 - **客戶問題**的子類別以銀行端交易失敗、帳號錯誤、無效帳戶、姓名錯誤為主。
@@ -585,7 +750,7 @@ flowchart LR
 <div class="ba-row"><p class="ba-item">比對範圍</p><p class="ba-before">人工 Excel 比對，筆數未紀錄</p><p class="ba-after">每次比對 CPS 入金約 19.5 萬筆、CRM 出入金約 32.2 萬筆<small>依據：Result 的執行 log</small></p></div>
 <div class="ba-row"><p class="ba-item">監控連續性</p><p class="ba-before">依賴人工排班，請假、交接時有空窗</p><p class="ba-after">每次執行都留下紀錄：有新案件寫案件，沒有就寫心跳列，共 6,314 列心跳<small>依據：公開 CSV 中 Tx 為 - 的列</small></p></div>
 </div>
-<figcaption>圖 10　Before / After 對照（人工工時為估計值）</figcaption>
+<figcaption>圖 12　Before / After 對照（人工工時為估計值）</figcaption>
 </figure>
 
 <hr data-slide="尚未量化">

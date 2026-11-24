@@ -6,7 +6,7 @@ company: "海科科技有限公司"
 period: "2026/01~2026/02"
 launch: "2026/02~2026/08"
 role: "與營運端對齊偵測邏輯，負責管線設計與實作"
-stack: ["Python", "API Reverse Engineering", "crontab", "Lark Bot", "LarkSheet API", "JSON Structured Logging"]
+stack: ["Python", "API Reverse Engineering", "pyotp (2FA)", "crontab", "Docker", "Lark Bot", "LarkSheet API", "JSON Structured Logging"]
 focus: ["Financial Reconciliation", "Anomaly Detection"]
 system_map: { map: "hytech", area: "credit-card" }
 metrics:
@@ -113,8 +113,34 @@ story:
       - "tbody tr:nth-child(-n+2)"
       - "tbody tr:nth-child(3)"
     line: "對不上的交易會寫進 LarkSheet：前兩列是兩邊都有、金額不同；最後一列是 Payabl 已退款、CRM 卻查無紀錄。營運就在這張表上複核。"
-  - label: "成果"
+  - label: "出錯時"
     at: "ch-5-4"
+    pick: "pre"
+    beats:
+      - ".line:nth-child(n+1):nth-child(-n+4)"
+      - ".line:nth-child(n+5):nth-child(-n+6)"
+      - ".line:nth-child(n+7):nth-child(-n+9)"
+      - ".line:nth-child(n+10)"
+    line: "但 CRM 的報表 API 並不穩定。3/3 13:00 這一輪，VFSC 3/1、3/2 的報表各重試 10 次仍失敗，所以只跳過這兩天、其他天照常比對；下一個整點重抓最近 4 天時，兩天都補回來了。"
+  - label: "關鍵程式碼"
+    at: "ch-4-5"
+    pick: "pre"
+    beats:
+      - ".line:nth-child(n+1):nth-child(-n+3)"
+      - ".line:nth-child(n+4):nth-child(-n+15)"
+      - ".line:nth-child(n+16):nth-child(-n+17)"
+      - ".line:nth-child(n+19)"
+    line: "這個行為在程式裡就是這幾段：每一輪都重抓最近 4 天；每天的報表最多重試 10 次、間隔 5 秒；還是失敗就只跳過那一天；寫入前用 Merchant Order + Deposit Order Number 去重，沒有新案件也留一列比對時間。"
+  - label: "重試上限"
+    at: "ch-5-5"
+    pick: ".bar-figure"
+    beats:
+      - "li:nth-child(1)"
+      - "li:nth-child(2)"
+      - "li:nth-child(3)"
+    line: "至於重試幾次才夠：3/3 起上限從 3 次調高到 10 次，而 3/1 到 3/9 有 382 個步驟在重試後成功，其中 52 個是第 4 次以後才成功，照原本的上限都會被跳過。"
+  - label: "成果"
+    at: "ch-5-7"
     pick: ".bar-figure"
     beats:
       - "li:nth-child(1)"
@@ -378,12 +404,57 @@ flowchart LR
 **設計重點：**
 
 - **B 分支**會先查詢 LarkSheet 已有的案件，只追加新的異常，避免同一筆交易每小時重複通知。
-- 每個階段都輸出 JSON structured log（`service`、`stage`、`status`），出錯時可以直接定位是哪一個階段。
-- **權限範圍**：事前經主管核准，使用公司配發給營運的既有帳號，只讀取人工本來就看得到的報表，不寫入任何資料；帳密放在環境變數，不寫在程式碼中。
+- **權限範圍**：事前經主管核准，使用公司配發給營運的既有帳號，只讀取人工本來就看得到的報表，不寫入任何資料；CRM 與 Payabl 的帳密從唯讀掛載進容器的設定檔讀取，不寫在程式碼中。
 - **比對規則**（Area 3：Prepare → Build Logic → Separate Types → Regularity）：規則與營運端逐條對齊，判定流程見圖 3，A–E 的處理方式：
   - **A、C**：兩邊一致，不輸出。
   - **B、D**：Payabl 已退款但 CRM 對不上，寫入 LarkSheet 交給營運複核；輸出時以 `recon_source` 標示 CRM 有無對應紀錄（見 Result 的輸出格式）。
   - **E**：Payabl 沒有實際退款，不列入異常；3–7 月的輸出中沒有只出現在 CRM 的案件。
+
+<hr data-slide="失敗時怎麼辦">
+
+**失敗時怎麼辦：** CRM 的報表 API 常回 500／502，登入也可能被擋。每一個失敗點都要有明確的處理方式並留下紀錄，不能因為一次失敗就讓整輪對帳白跑，也不能讓跳過的資料就此消失。
+
+| 失敗情境 | 處理方式 | 證據 |
+|---|---|---|
+| 登入失敗 | 登入最多重試 5 次（CRM、Payabl 皆同），連線層遇到 429／5xx 另外自動退避；CRM 被導回登入頁（帳密、TOTP 或風控）、token 是空值或 HTML，都算失敗 | 登入重試（見 Result） |
+| API&nbsp;錯誤 | CRM 每天的報表分「產生 → 下載」兩步，各自最多重試 10 次、間隔 5 秒；每次失敗記一行 WARNING，寫明 regulator、日期與耗時 | 重試後成功的步驟（見 Result） |
+| 重試用盡 | 只跳過那個 regulator 的那一天、記一行 ERROR，其他天照常比對；每一輪都重抓 CRM 最近 4 天、Payabl 最近 2 天，跳過的那天由下一輪補回 | 出錯時的 log（見 Result） |
+| 重跑 | 寫入前先讀 LarkSheet 既有的 Merchant Order + Deposit Order Number，只追加新案件；沒有新案件也寫一列比對時間 | 圖 6 |
+| 事後查核 | 每次下載的原始報表依「年／月／日／系統」存成 CSV；log 每行帶 `service`、`stage`、`status`，每天一個 JSON 檔留在主機 | 一次實際執行的 log（見 Result） |
+
+- CRM 整個停擺時，所有天都會失敗，這一輪不會寫入 LarkSheet，表上就少了那個小時的比對時間列；缺少這一列，就是管線沒有跑完的訊號。
+
+<hr data-slide="關鍵程式碼">
+
+**關鍵程式碼：** 上一張的重試、跳過、滾動回補與去重，對應到這幾段：
+
+```python
+# cc_withdraw_crawler.py：CRM 報表，每天分「產生 → 下載」兩步
+for day in dayrange(tz='Asia/Nicosia', DayRange=4):   # 滾動視窗：每一輪重抓最近 4 天（Payabl 2 天）
+    filename = None
+    for attempt in range(1, MAX_RETRIES + 1):          # MAX_RETRIES = 10（3/3 起，原本 3）
+        try:
+            response = session.post(generate_url, json=json_data, timeout=POST_TIMEOUT)
+            response.raise_for_status()
+            filename = response.json()['data']['file']
+            break
+        except RequestException as e:
+            logger.warning(f"POST failed ({brand} {day}) attempt {attempt}: {e}")
+            if attempt < MAX_RETRIES:
+                time.sleep(RETRY_SLEEP)                # 間隔 5 秒
+            else:
+                logger.error(f"POST failed after {MAX_RETRIES} attempts ({brand} {day})")
+    if not filename:
+        continue                                       # 只跳過這一天，其他天照常
+
+# main.py：寫入前去重，只追加 LarkSheet 還沒有的案件
+keys = ['Merchant Order', 'Deposit Order Number']
+uploaded_keys = list(df_unique[keys].itertuples(index=False, name=None))
+mismatch_case1 = mismatch_case[~mismatch_case[keys].apply(tuple, axis=1).isin(uploaded_keys)]
+if mismatch_case1.empty: append_sheet(..., [['-'] * 11 + [detection_time]])   # 沒有新案件也留一列比對時間
+```
+
+*節錄自 `cc_withdraw_crawler.py`（CRM 報表下載函式）與 `main.py`，已簡化：網址改成變數名稱，CRM 下載的第二步與 Payabl 部分省略，去重的欄位清單抽成 `keys`、心跳列寫成一行；內部系統名稱改為 `crm`，其他函式與變數名稱照原始碼。*
 
 ## Result
 
@@ -429,13 +500,13 @@ flowchart LR
 <div class="tech-labels">
 <div class="tech-label">
 <p class="tech-label-kicker">Tech Label</p>
-<p class="tech-label-name">S2S ETL Pipeline Automation</p>
-<p class="tech-label-desc">支援排程執行，持續監控對帳流程。</p>
+<p class="tech-label-name">Two-step Report Fetch</p>
+<p class="tech-label-desc">CRM 報表先 POST 產生、再下載，是逆向分析後找出的呼叫方式；兩步各自重試與計時。</p>
 </div>
 <div class="tech-label">
 <p class="tech-label-kicker">Tech Label</p>
-<p class="tech-label-name">JSON Logging Design</p>
-<p class="tech-label-desc">每個流程階段皆有 structured log，提升可觀測性與除錯效率。</p>
+<p class="tech-label-name">Stage-tagged JSON Logging</p>
+<p class="tech-label-desc">每行帶 service、stage、status；重試中的失敗記 WARNING、放棄的步驟記 ERROR，每天一個檔。</p>
 </div>
 </div>
 </figure>
@@ -457,23 +528,68 @@ flowchart LR
 - `Payabl & Crm`：兩邊都有紀錄，但金額不一致。
 - `Payabl`：Payabl 已退款，但 CRM 查無對應紀錄。
 
-<hr data-slide="複核結果">
+<hr data-slide="出錯時">
 
-### 複核結果（2026-03-01 ~ 2026-07-31）
+### 出錯時：跳過一天，下一輪補回
 
-管線寧可多標、交給營運複核。「確認為錯誤」指營運複核標為 error，或營運備註寫明退錯金額、重複退款、退錯訂單的交易：
+- 以下是 2026-03-03 13:00 與 14:00 兩次執行的 log 節錄，取自原始 log 檔（JSON），這裡保留時間、等級、stage 與訊息。
+- 內部網址與報表檔名已移除，錯誤訊息只留 HTTP 狀態碼，內部系統名稱改為 `crm`。
+
+```text
+13:00:02  INFO   download      Start download reports...
+13:02:48  WARN   download_crm  POST failed (VFSC 2026-03-01) attempt 1: 500, took 14.4s
+   ...                         (attempt 2 ~ 9：500 與 502 交替)
+13:04:58  WARN   download_crm  POST failed (VFSC 2026-03-01) attempt 10: 500, took 14.0s
+13:04:58  ERROR  download_crm  POST failed after 10 attempts (VFSC 2026-03-01)
+13:06:54  ERROR  download_crm  POST failed after 10 attempts (VFSC 2026-03-02)
+13:07:32  INFO   download_crm  POST success (VFSC 2026-03-03): <report>.csv, took 19.2s
+   ...                         (VFSC2 的 4 天全部成功)
+13:11:03  INFO   lark          Upload data to LarkSheet Finish
+  -----   ----------------------- 下一個整點 -----------------------
+14:00:02  INFO   download      Start download reports...
+14:02:50  INFO   download_crm  POST success (VFSC 2026-03-01): <report>.csv, took 18.2s
+14:03:54  INFO   download_crm  POST success (VFSC 2026-03-02): <report>.csv, took 19.1s
+14:09:25  INFO   lark          Upload data to LarkSheet Finish
+```
+
+從這段紀錄可以看到：
+
+- **13:00 這一輪**：VFSC 的 3/1、3/2 各重試 10 次仍失敗，記成 ERROR 後跳過；3/3 與 VFSC2 的 4 天照常下載，這一輪仍完成比對並寫入 LarkSheet。
+- **14:00 下一輪**：滾動視窗再次涵蓋 3/1、3/2，兩天都下載成功（3/2 在第 4 次成功），不需要人工補跑。
+- **3/1–3/9 的 log 中**，重試 10 次仍失敗而跳過的報表共 6 次，6 次都在下一個整點補回；登入重試 5 次，都在第 2 次成功。
+
+<figure class="tech-figure">
+<div class="tech-labels">
+<div class="tech-label">
+<p class="tech-label-kicker">Tech Label</p>
+<p class="tech-label-name">Bounded Retry, Per-day Isolation</p>
+<p class="tech-label-desc">每個步驟最多重試 10 次；仍失敗只跳過那一天，不中斷整輪對帳。</p>
+</div>
+<div class="tech-label">
+<p class="tech-label-kicker">Tech Label</p>
+<p class="tech-label-name">Rolling-window Backfill</p>
+<p class="tech-label-desc">每一輪都重抓最近幾天的報表，跳過的那天由下一輪自動補回；搭配去重，重抓不會重複寫入。</p>
+</div>
+</div>
+</figure>
+
+<hr data-slide="重試上限">
+
+### 重試上限：從 3 次調高到 10 次
+
+2026-03-03 13:00 起，報表 API 的重試上限從 3 次調高到 10 次。3/1–3/9 的 log 中，有 382 個步驟（某個 regulator 某一天的「產生」或「下載」）在失敗後重試成功，依第幾次成功分布如下：
 
 <figure class="bar-figure">
 <ul class="bar-list">
-<li style="--v: 100%"><span class="bar-label">被標記待複核</span><span class="bar"></span><span class="bar-value">523</span></li>
-<li class="is-peak" style="--v: 5.5%"><span class="bar-label">確認為錯誤退款</span><span class="bar"></span><span class="bar-value">29</span></li>
-<li class="is-peak" style="--v: 5.4%"><span class="bar-label">偵測後撤銷或要求取消</span><span class="bar"></span><span class="bar-value">28</span></li>
+<li style="--v: 100%"><span class="bar-label">第 2 次成功</span><span class="bar"></span><span class="bar-value">181</span></li>
+<li style="--v: 82.3%"><span class="bar-label">第 3 次成功</span><span class="bar"></span><span class="bar-value">149</span></li>
+<li class="is-peak" style="--v: 28.7%"><span class="bar-label">第 4–10 次成功</span><span class="bar"></span><span class="bar-value">52</span></li>
 </ul>
-<figcaption>圖 7　從標記到撤銷的筆數（不重複交易；取自本頁公開 CSV）</figcaption>
+<figcaption>圖 7　重試後成功的 382 個步驟，依第幾次成功（2026-03-01 ~ 03-09 的原始 log）</figcaption>
 </figure>
 
-- **被標記的 523 筆**：金額不一致 307 筆、CRM 查無紀錄 216 筆。
-- **確認為錯誤的 29 筆**：退錯金額 19、重複退款 9、退錯訂單 1。
+- **第 4–10 次才成功的 52 個步驟**：在原本 3 次的上限下都會被跳過，要等下一輪才補回。
+- 失敗的回應全部是 HTTP 500 或 502，屬於 CRM 端暫時性的錯誤，所以適合用重試處理。
 
 <hr data-slide="執行統計">
 
@@ -494,6 +610,24 @@ flowchart LR
 </div>
 </details>
 
+<hr data-slide="複核結果">
+
+### 複核結果（2026-03-01 ~ 2026-07-31）
+
+管線寧可多標、交給營運複核，「確認為錯誤」指營運複核標為 error，或營運備註寫明退錯金額、重複退款、退錯訂單的交易：
+
+<figure class="bar-figure">
+<ul class="bar-list">
+<li style="--v: 100%"><span class="bar-label">被標記待複核</span><span class="bar"></span><span class="bar-value">523</span></li>
+<li class="is-peak" style="--v: 5.5%"><span class="bar-label">確認為錯誤退款</span><span class="bar"></span><span class="bar-value">29</span></li>
+<li class="is-peak" style="--v: 5.4%"><span class="bar-label">偵測後撤銷或要求取消</span><span class="bar"></span><span class="bar-value">28</span></li>
+</ul>
+<figcaption>圖 8　從標記到撤銷的筆數（不重複交易；取自本頁公開 CSV）</figcaption>
+</figure>
+
+- **被標記的 523 筆**：金額不一致 307 筆、CRM 查無紀錄 216 筆。
+- **確認為錯誤的 29 筆**：退錯金額 19、重複退款 9、退錯訂單 1。
+
 ## Impact
 
 ### 已驗證的成果
@@ -505,10 +639,11 @@ flowchart LR
 <div class="ba-row"><p class="ba-item">監控頻率</p><p class="ba-before">每日 5 次</p><p class="ba-after">排程每小時 1 次；3–7 月實際平均每日 20.7 次（約 4.1 倍）<small>依據：輪班表 5 個時段；執行次數（見 Result）÷ 153 天，每日中位數 23 次</small></p></div>
 <div class="ba-row"><p class="ba-item">偵測時效</p><p class="ba-before">最長約 5 小時（兩輪人工比對的間隔）</p><p class="ba-after">資料可取得後 1 小時內<small>依據：每小時排程；執行間隔見 Result</small></p></div>
 <div class="ba-row"><p class="ba-item">資料取得</p><p class="ba-before">手動下載、複製貼上，每輪約 45 分鐘</p><p class="ba-after">API 逆向工程自動擷取，一次執行只需幾分鐘<small>依據：Result 的執行 log；人工工時為估計值</small></p></div>
+<div class="ba-row"><p class="ba-item">抓取失敗</p><p class="ba-before">後台載入失敗就重新操作，含在每輪約 35 分鐘的平台操作內</p><p class="ba-after">自動重試；重試仍失敗的那一天，由下一輪自動補回<small>依據：Result 的「出錯時」與「重試上限」</small></p></div>
 <div class="ba-row"><p class="ba-item">比對範圍</p><p class="ba-before">人工 Excel 比對，筆數未紀錄</p><p class="ba-after">每次全量比對兩邊所有交易<small>依據：Result 的執行 log</small></p></div>
-<div class="ba-row"><p class="ba-item">實際攔截</p><p class="ba-before">無紀錄</p><p class="ba-after">確認的錯誤退款幾乎全部在偵測後撤銷或要求取消<small>依據：CSV 複核欄與營運備註；筆數見 Result 圖 7</small></p></div>
+<div class="ba-row"><p class="ba-item">實際攔截</p><p class="ba-before">無紀錄</p><p class="ba-after">確認的錯誤退款幾乎全部在偵測後撤銷或要求取消<small>依據：CSV 複核欄與營運備註；筆數見 Result 圖 8</small></p></div>
 </div>
-<figcaption>圖 8　Before / After 對照（依專案簡報重繪）。更正：原圖標示每日 4 次、↑600%、>24 小時；實際排班為每日 5 輪（間隔約 5 小時），自動化後 3–7 月實際平均每日 20.7 次，約 4.1 倍。原圖「準確程度」一列未納入，原因見下方說明。</figcaption>
+<figcaption>圖 9　Before / After 對照（依專案簡報重繪）。更正：原圖標示每日 4 次、↑600%、>24 小時；實際排班為每日 5 輪（間隔約 5 小時），自動化後 3–7 月實際平均每日 20.7 次，約 4.1 倍。原圖「準確程度」一列未納入，原因見下方說明。</figcaption>
 </figure>
 
 <!-- ### 尚未量化或需要說明的部分

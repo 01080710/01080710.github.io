@@ -20,6 +20,9 @@ story:
   - { label: "Screens", line: "Back to that case sheet to see it at work: a run with anomalies adds case rows that operations review right here; every hour without one still leaves a row with the comparison time." }
   - { label: "Running for real", line: "This is a real run at 11:00 on 2026-03-16: log in to Payabl and fetch its report, download the CRM report day by day, run the matching, then write new cases to LarkSheet. This time both sides matched, so there was nothing new." }
   - { label: "Output", line: "Transactions that don't match are written to LarkSheet: the first two rows exist on both sides with different amounts; the last one was refunded in Payabl with no record in CRM. Operations review them right on this sheet." }
+  - { label: "When it fails", line: "But the CRM report API is not reliable. In the 13:00 run on 3/3, VFSC's reports for 3/1 and 3/2 still failed after 10 retries each, so only those two days were skipped and the rest were compared as usual; when the next hour re-fetched the last 4 days, both came back." }
+  - { label: "Key code", line: "In the code: every run re-fetches the last 4 days; each report retries up to 10 times, 5 s apart; a day that still fails is skipped; and Merchant Order + Deposit Order Number de-duplicate before writing, leaving a time row when nothing is new." }
+  - { label: "Retry limit", line: "As for how many retries is enough: from 3/3 the limit went from 3 to 10, and between 3/1 and 3/9, 382 steps succeeded on retry, 52 of them only on the 4th try or later, which the old limit would have skipped." }
   - { label: "Result", line: "After launch, flagged transactions go to operations for review, and nearly all confirmed wrong refunds were reversed or had cancellation requested after detection." }
 impact:
   before: "Shift staff compared reports by hand; wrong refunds were found late"
@@ -280,12 +283,57 @@ flowchart LR
 **Design notes:**
 
 - **Branch B** first queries the cases already in LarkSheet and appends only new anomalies, so the same transaction is not reported every hour.
-- Every stage writes a JSON structured log (`service`, `stage`, `status`), so an error points straight to the stage that failed.
-- **Access scope**: approved in advance by my manager; uses an existing account the company issued to operations, reads only reports staff could already see, and writes nothing; credentials live in environment variables, not in code.
+- **Access scope**: approved in advance by my manager; uses an existing account the company issued to operations, reads only reports staff could already see, and writes nothing; the CRM and Payabl credentials are read from a config file mounted read-only into the container, not written in code.
 - **Matching rules** (Area 3: Prepare → Build Logic → Separate Types → Regularity): each rule was aligned with operations; the decision flow is in Figure 3. How each class is handled:
   - **A, C**: both sides agree; not output.
   - **B, D**: Payabl refunded but CRM does not match; written to LarkSheet for operations to review, with `recon_source` showing whether CRM has a matching record (see the output format in Result).
   - **E**: no refund actually went out on Payabl, so it is not an anomaly; the Mar–Jul output contains no case that appears only in CRM.
+
+<hr data-slide="When things fail">
+
+**When things fail:** the CRM report API often returns 500 / 502, and logins can be blocked. Every failure point needs a defined response and a record: one failure must not waste the whole reconciliation run, and skipped data must not just disappear.
+
+| Situation | Handling | Evidence |
+|---|---|---|
+| Login fails | Login retries up to 5 times (CRM and Payabl alike), with automatic backoff on 429 / 5xx at the connection layer; being sent back to the CRM login page (credentials, TOTP or risk control) or getting an empty / HTML token counts as a failure | Login retries (see Result) |
+| API errors | Each day's CRM report takes two steps, "generate → download", and each retries up to 10 times, 5 seconds apart; every failure logs a WARNING line with the regulator, date and duration | Steps that succeeded on retry (see Result) |
+| Retries run out | Skip only that regulator's day and log an ERROR; the other days are compared as usual. Every run re-fetches the last 4 days from CRM and the last 2 from Payabl, so the next run fills in the skipped day | The failure log (see Result) |
+| Re-runs | Before writing, read the existing Merchant Order + Deposit Order Number keys from LarkSheet and append only new cases; with no new case, still write a row with the comparison time | Figure 6 |
+| Later audits | Every downloaded raw report is saved as CSV by year / month / day / system; each log line carries `service`, `stage` and `status`, with one JSON file per day kept on the host | The real-run log (see Result) |
+
+- If CRM is down entirely, every day fails and the run writes nothing to LarkSheet, so that hour's comparison-time row is missing from the sheet; a missing row is the signal that the pipeline did not finish.
+
+<hr data-slide="Key code">
+
+**Key code:** the retries, skipping, rolling backfill and de-duplication from the last slide map to these parts:
+
+```python
+# cc_withdraw_crawler.py: the CRM report, two steps per day, "generate → download"
+for day in dayrange(tz='Asia/Nicosia', DayRange=4):   # rolling window: last 4 days per run (Payabl 2)
+    filename = None
+    for attempt in range(1, MAX_RETRIES + 1):          # MAX_RETRIES = 10 (from 3/3, was 3)
+        try:
+            response = session.post(generate_url, json=json_data, timeout=POST_TIMEOUT)
+            response.raise_for_status()
+            filename = response.json()['data']['file']
+            break
+        except RequestException as e:
+            logger.warning(f"POST failed ({brand} {day}) attempt {attempt}: {e}")
+            if attempt < MAX_RETRIES:
+                time.sleep(RETRY_SLEEP)                # 5 seconds apart
+            else:
+                logger.error(f"POST failed after {MAX_RETRIES} attempts ({brand} {day})")
+    if not filename:
+        continue                                       # skip just this day
+
+# main.py: de-duplicate before writing, append only cases LarkSheet does not have yet
+keys = ['Merchant Order', 'Deposit Order Number']
+uploaded_keys = list(df_unique[keys].itertuples(index=False, name=None))
+mismatch_case1 = mismatch_case[~mismatch_case[keys].apply(tuple, axis=1).isin(uploaded_keys)]
+if mismatch_case1.empty: append_sheet(..., [['-'] * 11 + [detection_time]])   # nothing new: still log the time
+```
+
+*Excerpt from `cc_withdraw_crawler.py` (the CRM report download function) and `main.py`, simplified: URLs replaced by a variable name, the CRM download step and the Payabl part omitted, the key columns pulled into `keys` and the heartbeat row written on one line; the internal system name is replaced with `crm`, other function and variable names are as in the source.*
 
 ## Result
 
@@ -331,13 +379,13 @@ What this log shows:
 <div class="tech-labels">
 <div class="tech-label">
 <p class="tech-label-kicker">Tech Label</p>
-<p class="tech-label-name">S2S ETL Pipeline Automation</p>
-<p class="tech-label-desc">Runs on a schedule and continuously monitors the reconciliation process.</p>
+<p class="tech-label-name">Two-step Report Fetch</p>
+<p class="tech-label-desc">The CRM report is generated with a POST and then downloaded, a call pattern found through reverse engineering; each step retries and is timed on its own.</p>
 </div>
 <div class="tech-label">
 <p class="tech-label-kicker">Tech Label</p>
-<p class="tech-label-name">JSON Logging Design</p>
-<p class="tech-label-desc">Every stage has a structured log, improving observability and debugging speed.</p>
+<p class="tech-label-name">Stage-tagged JSON Logging</p>
+<p class="tech-label-desc">Each line carries service, stage and status; failures being retried log WARNING, abandoned steps log ERROR, one file per day.</p>
 </div>
 </div>
 </figure>
@@ -359,23 +407,68 @@ Anomalies are written to LarkSheet with the same columns as the CSV. The three r
 - `Payabl & Crm`: both sides have a record, but the amounts differ.
 - `Payabl`: Payabl has refunded, but the CRM has no matching record.
 
-<hr data-slide="Review results">
+<hr data-slide="When it fails">
 
-### Review results (2026-03-01 ~ 2026-07-31)
+### When it fails: skip a day, fill it in next run
 
-The pipeline errs on the side of flagging and leaves the call to operations. "Confirmed as an error" means operations marked the transaction as error in review, or their note says it was a wrong amount, a duplicate refund or a refund to the wrong order:
+- Below is a log excerpt from the runs at 2026-03-03 13:00 and 14:00, taken from the original JSON log files; time, level, stage and message are kept.
+- Internal URLs and report file names are removed, error messages keep only the HTTP status code, and the internal system name is replaced with `crm`.
+
+```text
+13:00:02  INFO   download      Start download reports...
+13:02:48  WARN   download_crm  POST failed (VFSC 2026-03-01) attempt 1: 500, took 14.4s
+   ...                         (attempts 2 ~ 9: 500 and 502 alternating)
+13:04:58  WARN   download_crm  POST failed (VFSC 2026-03-01) attempt 10: 500, took 14.0s
+13:04:58  ERROR  download_crm  POST failed after 10 attempts (VFSC 2026-03-01)
+13:06:54  ERROR  download_crm  POST failed after 10 attempts (VFSC 2026-03-02)
+13:07:32  INFO   download_crm  POST success (VFSC 2026-03-03): <report>.csv, took 19.2s
+   ...                         (all 4 days of VFSC2 succeed)
+13:11:03  INFO   lark          Upload data to LarkSheet Finish
+  -----   ------------------------- next hour -------------------------
+14:00:02  INFO   download      Start download reports...
+14:02:50  INFO   download_crm  POST success (VFSC 2026-03-01): <report>.csv, took 18.2s
+14:03:54  INFO   download_crm  POST success (VFSC 2026-03-02): <report>.csv, took 19.1s
+14:09:25  INFO   lark          Upload data to LarkSheet Finish
+```
+
+What this log shows:
+
+- **The 13:00 run**: VFSC's 3/1 and 3/2 still failed after 10 retries each, were logged as ERROR and skipped; 3/3 and all 4 days of VFSC2 downloaded as usual, and the run still finished the comparison and wrote to LarkSheet.
+- **The 14:00 run**: the rolling window covered 3/1 and 3/2 again and both downloaded (3/2 on the 4th try), with no manual re-run.
+- **In the 3/1–3/9 logs**, reports skipped after 10 failed retries happened 6 times, and all 6 were filled in on the next hour's run; login retried 5 times, each succeeding on the 2nd try.
+
+<figure class="tech-figure">
+<div class="tech-labels">
+<div class="tech-label">
+<p class="tech-label-kicker">Tech Label</p>
+<p class="tech-label-name">Bounded Retry, Per-day Isolation</p>
+<p class="tech-label-desc">Each step retries up to 10 times; if it still fails, only that day is skipped and the run carries on.</p>
+</div>
+<div class="tech-label">
+<p class="tech-label-kicker">Tech Label</p>
+<p class="tech-label-name">Rolling-window Backfill</p>
+<p class="tech-label-desc">Every run re-fetches the last few days, so the next run fills in a skipped day; with de-duplication, re-fetching never writes twice.</p>
+</div>
+</div>
+</figure>
+
+<hr data-slide="Retry limit">
+
+### Retry limit: raised from 3 to 10
+
+From 2026-03-03 13:00 the report API's retry limit went from 3 to 10. In the 3/1–3/9 logs, 382 steps (one regulator's "generate" or "download" for one day) succeeded after failing, distributed by the attempt that succeeded:
 
 <figure class="bar-figure">
 <ul class="bar-list">
-<li style="--v: 100%"><span class="bar-label">Flagged for review</span><span class="bar"></span><span class="bar-value">523</span></li>
-<li class="is-peak" style="--v: 5.5%"><span class="bar-label">Confirmed wrong refunds</span><span class="bar"></span><span class="bar-value">29</span></li>
-<li class="is-peak" style="--v: 5.4%"><span class="bar-label">Reversed or cancellation requested after detection</span><span class="bar"></span><span class="bar-value">28</span></li>
+<li style="--v: 100%"><span class="bar-label">Succeeded on the 2nd try</span><span class="bar"></span><span class="bar-value">181</span></li>
+<li style="--v: 82.3%"><span class="bar-label">Succeeded on the 3rd try</span><span class="bar"></span><span class="bar-value">149</span></li>
+<li class="is-peak" style="--v: 28.7%"><span class="bar-label">Succeeded on the 4th–10th try</span><span class="bar"></span><span class="bar-value">52</span></li>
 </ul>
-<figcaption>Figure 7　From flagged to reversed (unique transactions; from the public CSV on this page)</figcaption>
+<figcaption>Figure 7　The 382 steps that succeeded on retry, by attempt (original logs, 2026-03-01 ~ 03-09)</figcaption>
 </figure>
 
-- **The 523 flagged**: 307 amount mismatches, 216 with no CRM record.
-- **The 29 confirmed errors**: 19 wrong amounts, 9 duplicate refunds, 1 refund to the wrong order.
+- **The 52 steps that needed the 4th–10th try**: under the old limit of 3 they would all have been skipped until the next run.
+- Every failed response was HTTP 500 or 502, a temporary error on the CRM side, which is why retrying suits it.
 
 <hr data-slide="Run statistics">
 
@@ -396,6 +489,24 @@ Source: the full record CSV produced by the pipeline (`Payabl QC new Template - 
 </div>
 </details>
 
+<hr data-slide="Review results">
+
+### Review results (2026-03-01 ~ 2026-07-31)
+
+The pipeline errs on the side of flagging and leaves the call to operations. "Confirmed as an error" means operations marked the transaction as error in review, or their note says it was a wrong amount, a duplicate refund or a refund to the wrong order:
+
+<figure class="bar-figure">
+<ul class="bar-list">
+<li style="--v: 100%"><span class="bar-label">Flagged for review</span><span class="bar"></span><span class="bar-value">523</span></li>
+<li class="is-peak" style="--v: 5.5%"><span class="bar-label">Confirmed wrong refunds</span><span class="bar"></span><span class="bar-value">29</span></li>
+<li class="is-peak" style="--v: 5.4%"><span class="bar-label">Reversed or cancellation requested after detection</span><span class="bar"></span><span class="bar-value">28</span></li>
+</ul>
+<figcaption>Figure 8　From flagged to reversed (unique transactions; from the public CSV on this page)</figcaption>
+</figure>
+
+- **The 523 flagged**: 307 amount mismatches, 216 with no CRM record.
+- **The 29 confirmed errors**: 19 wrong amounts, 9 duplicate refunds, 1 refund to the wrong order.
+
 ## Impact
 
 ### Verified results
@@ -407,8 +518,9 @@ Source: the full record CSV produced by the pipeline (`Payabl QC new Template - 
 <div class="ba-row"><p class="ba-item">Check frequency</p><p class="ba-before">5 times a day</p><p class="ba-after">Scheduled once an hour; actual average 20.7 runs a day Mar–Jul (about 4.1×)<small>Basis: 5 slots on the roster; runs (see Result) ÷ 153 days, daily median 23 runs</small></p></div>
 <div class="ba-row"><p class="ba-item">Detection time</p><p class="ba-before">Up to about 5 hours (the gap between two manual rounds)</p><p class="ba-after">Within 1 hour of the data becoming available<small>Basis: hourly schedule; run interval in Result</small></p></div>
 <div class="ba-row"><p class="ba-item">Getting the data</p><p class="ba-before">Manual download and copy-paste, about 45 minutes per round</p><p class="ba-after">Pulled automatically via API reverse engineering; a run takes only a few minutes<small>Basis: run log in Result; manual time is an estimate</small></p></div>
+<div class="ba-row"><p class="ba-item">Fetch failures</p><p class="ba-before">If a back office page failed to load, redo the steps; part of the ~35 minutes of platform work per round</p><p class="ba-after">Retried automatically; a day that still fails is filled in by the next run<small>Basis: "When it fails" and "Retry limit" in Result</small></p></div>
 <div class="ba-row"><p class="ba-item">Coverage</p><p class="ba-before">Manual Excel comparison, volume not recorded</p><p class="ba-after">Every run compares all transactions on both sides<small>Basis: run log in Result</small></p></div>
-<div class="ba-row"><p class="ba-item">Actually caught</p><p class="ba-before">No record</p><p class="ba-after">Nearly all confirmed wrong refunds were reversed or had cancellation requested after detection<small>Basis: CSV review column and operations notes; counts in Result Figure 7</small></p></div>
+<div class="ba-row"><p class="ba-item">Actually caught</p><p class="ba-before">No record</p><p class="ba-after">Nearly all confirmed wrong refunds were reversed or had cancellation requested after detection<small>Basis: CSV review column and operations notes; counts in Result Figure 8</small></p></div>
 </div>
-<figcaption>Figure 8　Before / After (redrawn from the project deck). Correction: the original slide said 4 times a day, ↑600% and >24 hours; the actual roster had 5 rounds a day (about 5 hours apart), and after automation the actual average Mar–Jul was 20.7 runs a day, about 4.1×. The original "accuracy" row is left out.</figcaption>
+<figcaption>Figure 9　Before / After (redrawn from the project deck). Correction: the original slide said 4 times a day, ↑600% and >24 hours; the actual roster had 5 rounds a day (about 5 hours apart), and after automation the actual average Mar–Jul was 20.7 runs a day, about 4.1×. The original "accuracy" row is left out.</figcaption>
 </figure>

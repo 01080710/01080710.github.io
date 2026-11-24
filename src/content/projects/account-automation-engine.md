@@ -6,7 +6,7 @@ company: "海科科技有限公司"
 period: "2026/05~2026/06"
 launch: "2026/06~"
 role: "從 OP 痛點歸納出共通查詢流程，獨立設計並實作批量查詢引擎"
-stack: ["Python", "Asyncio", "API Reverse Engineering", "LarkSheet API", "Input Validation", "Data Normalization", "Audit Log"]
+stack: ["Python", "Asyncio", "aiohttp", "API Reverse Engineering", "pyotp (2FA)", "LarkSheet API", "Docker", "Input Validation", "Data Normalization", "Audit Log"]
 focus: ["Batch Processing", "Process Automation"]
 system_map: { map: "hytech", area: "account" }
 metrics:
@@ -74,6 +74,33 @@ story:
       - "tbody tr:nth-child(4)"
       - "tbody tr:nth-child(5)"
     line: "看一次真實申請：68 個客戶展開成 322 個帳戶，平均一人將近 5 個，散在 2 個 regulator、33 個 Server，引擎一次查完。"
+  - label: "怎麼查完"
+    at: "ch-4-3"
+    pick: ".split-figure"
+    beats:
+      - "[data-b=\"jobs\"]"
+      - "[data-b=\"switch\"]"
+      - "[data-b=\"slots\"]"
+      - "[data-b=\"pages\"]"
+      - "[data-b=\"merge\"]"
+    line: "但「一次查完」背後是量：68 個 userId 變成 68 個查詢，再乘上 4 套後台。後台綁在登入 session 上，所以依序切換、確認後才查；每套後台內，查詢同時送出但共用 20 個並行槽位，分頁抓完依頁碼合併，4 套都查無才算查無。"
+  - label: "並行與重試"
+    at: "ch-4-4"
+    pick: "table"
+    beats:
+      - "tbody tr:nth-child(1)"
+      - "tbody tr:nth-child(2)"
+      - "tbody tr:nth-child(3)"
+    line: "20 和 10 次都是我對後台測出來的：初版沒有整體上限，名單一大後台就回 429／5xx、甚至踢掉登入，所以改成整次共用 20 個槽位；被限流後立刻重試又會被擋，所以每次多等 1.5 秒；而 401 代表登入已失效，就直接停下、不再重試。"
+  - label: "關鍵程式碼"
+    at: "ch-4-5"
+    pick: "pre"
+    beats:
+      - ".line:nth-child(n+1):nth-child(-n+4)"
+      - ".line:nth-child(n+5):nth-child(-n+8)"
+      - ".line:nth-child(n+10):nth-child(-n+14)"
+      - ".line:nth-child(n+16)"
+    line: "落在程式裡就是這幾段：整次執行只有一個 Semaphore(20)，4 套後台在迴圈裡依序切換；每個請求要先拿到槽位才送出；分頁先抓第 1 頁再一起抓其餘頁；重試時 401 直接拋出，429／5xx 則每次多等 1.5 秒。"
   - label: "實際運作"
     at: "ch-5-1"
     pick: ".video-figure"
@@ -92,8 +119,16 @@ story:
       - ".line:nth-child(n+14):nth-child(-n+19)"
       - ".line:nth-child(n+20)"
     line: "看一次真實的大批次：5,696 個帳號，引擎依序切進 4 套後台，FCA、ASIC 都查無，結果全在 VFSC 兩套；54 個查無的被收集，分批寫回後清空 Input，全程 11 分半。缺欄位的申請則在查詢前就被攔下。"
+  - label: "耗時"
+    at: "ch-5-3"
+    pick: ".bar-figure"
+    beats:
+      - "li:nth-child(-n+2)"
+      - "li:nth-child(3)"
+      - "li:nth-child(4)"
+    line: "所以耗時跟著名單線性成長：100 個以下約 13 秒，501 到 2,000 個約 1.5 分鐘，2,001 個以上也只要 5 分鐘左右。"
   - label: "成果"
-    at: "ch-5-4"
+    at: "ch-5-5"
     pick: ".bar-figure"
     beats:
       - "li:nth-child(-n+2)"
@@ -315,6 +350,67 @@ flowchart LR
 - **資料保留**：Output 明細只保留當天，隔天自動刪除；Record 只留摘要，作為長期的執行紀錄。
 - **權限範圍**：使用我的自動化帳號登入各 regulator 的 CRM 後台，權限為唯讀，不寫入任何資料。
 
+<hr data-slide="一份名單怎麼查完">
+
+**一份名單怎麼查完：** 引擎的難處不在單一查詢，而在一份名單會展開成「userId 數 × 4 套後台」次查詢。以對照範例的 68 個 userId 為例，至少要查 272 次；最大的一批是 5,696 個（見 Result）。
+
+<figure class="split-figure step-figure">
+<div class="split-scroll">
+<svg viewBox="0 0 760 360" role="img" aria-labelledby="af-title-zh"><title id="af-title-zh">一份名單怎麼查完：68 個 userId 展開成 68 個查詢，依序切換 4 套後台，每套後台內共用 20 個並行槽位，分頁抓完後合併</title><defs><marker id="af-arrow-zh" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="sf-head" d="M0,0 L8,4 L0,8 z"/></marker></defs><g data-b="jobs"><rect class="sf-parent" x="20" y="16" width="150" height="52" rx="8"/><text class="sf-t" x="95" y="38">名單</text><text class="sf-s" x="95" y="56">68 個 userId</text><path class="sf-line" d="M170 42 H206" marker-end="url(#af-arrow-zh)"/><rect class="sf-node" x="212" y="16" width="190" height="52" rx="8"/><text class="sf-t" x="307" y="38">展開成 68 個查詢</text><text class="sf-s" x="307" y="56">每個 userId 一個</text><path class="sf-line" d="M402 42 H438" marker-end="url(#af-arrow-zh)"/><text class="sf-note sf-start" x="446" y="38">× 4 套後台 = 至少 272 次查詢</text><text class="sf-s sf-start" x="446" y="56">每個查詢至少 1 頁</text></g><g data-b="reg-lane"><rect class="sf-box" x="20" y="104" width="162" height="146" rx="8"/><text class="sf-t" x="101" y="126">FCA</text><rect class="sf-box" x="206" y="104" width="162" height="146" rx="8"/><text class="sf-t" x="287" y="126">ASIC</text><rect class="sf-box" x="392" y="104" width="162" height="146" rx="8"/><text class="sf-t" x="473" y="126">VFSC</text><rect class="sf-box" x="578" y="104" width="162" height="146" rx="8"/><text class="sf-t" x="659" y="126">VFSC2</text></g><g data-b="switch"><text class="sf-note sf-start" x="20" y="92">依序切換：regulator 綁在登入 session 上，一次只能在一套後台</text><text class="sf-s" x="101" y="142">切換 → 確認 → 查</text><text class="sf-s" x="287" y="142">切換 → 確認 → 查</text><text class="sf-s" x="473" y="142">切換 → 確認 → 查</text><text class="sf-s" x="659" y="142">切換 → 確認 → 查</text><path class="sf-line" d="M182 177 H200" marker-end="url(#af-arrow-zh)"/><path class="sf-line" d="M368 177 H386" marker-end="url(#af-arrow-zh)"/><path class="sf-line" d="M554 177 H572" marker-end="url(#af-arrow-zh)"/></g><g data-b="slots"><rect class="sf-child" x="63" y="154" width="12" height="12" rx="2"/><rect class="sf-child" x="79" y="154" width="12" height="12" rx="2"/><rect class="sf-child" x="95" y="154" width="12" height="12" rx="2"/><rect class="sf-child" x="111" y="154" width="12" height="12" rx="2"/><rect class="sf-child" x="127" y="154" width="12" height="12" rx="2"/><rect class="sf-child" x="63" y="170" width="12" height="12" rx="2"/><rect class="sf-child" x="79" y="170" width="12" height="12" rx="2"/><rect class="sf-child" x="95" y="170" width="12" height="12" rx="2"/><rect class="sf-child" x="111" y="170" width="12" height="12" rx="2"/><rect class="sf-child" x="127" y="170" width="12" height="12" rx="2"/><rect class="sf-child" x="63" y="186" width="12" height="12" rx="2"/><rect class="sf-child" x="79" y="186" width="12" height="12" rx="2"/><rect class="sf-child" x="95" y="186" width="12" height="12" rx="2"/><rect class="sf-child" x="111" y="186" width="12" height="12" rx="2"/><rect class="sf-child" x="127" y="186" width="12" height="12" rx="2"/><rect class="sf-child" x="63" y="202" width="12" height="12" rx="2"/><rect class="sf-child" x="79" y="202" width="12" height="12" rx="2"/><rect class="sf-child" x="95" y="202" width="12" height="12" rx="2"/><rect class="sf-child" x="111" y="202" width="12" height="12" rx="2"/><rect class="sf-child" x="127" y="202" width="12" height="12" rx="2"/><text class="sf-s" x="101" y="240">共用 20 個並行槽位</text><rect class="sf-child" x="249" y="154" width="12" height="12" rx="2"/><rect class="sf-child" x="265" y="154" width="12" height="12" rx="2"/><rect class="sf-child" x="281" y="154" width="12" height="12" rx="2"/><rect class="sf-child" x="297" y="154" width="12" height="12" rx="2"/><rect class="sf-child" x="313" y="154" width="12" height="12" rx="2"/><rect class="sf-child" x="249" y="170" width="12" height="12" rx="2"/><rect class="sf-child" x="265" y="170" width="12" height="12" rx="2"/><rect class="sf-child" x="281" y="170" width="12" height="12" rx="2"/><rect class="sf-child" x="297" y="170" width="12" height="12" rx="2"/><rect class="sf-child" x="313" y="170" width="12" height="12" rx="2"/><rect class="sf-child" x="249" y="186" width="12" height="12" rx="2"/><rect class="sf-child" x="265" y="186" width="12" height="12" rx="2"/><rect class="sf-child" x="281" y="186" width="12" height="12" rx="2"/><rect class="sf-child" x="297" y="186" width="12" height="12" rx="2"/><rect class="sf-child" x="313" y="186" width="12" height="12" rx="2"/><rect class="sf-child" x="249" y="202" width="12" height="12" rx="2"/><rect class="sf-child" x="265" y="202" width="12" height="12" rx="2"/><rect class="sf-child" x="281" y="202" width="12" height="12" rx="2"/><rect class="sf-child" x="297" y="202" width="12" height="12" rx="2"/><rect class="sf-child" x="313" y="202" width="12" height="12" rx="2"/><text class="sf-s" x="287" y="240">共用 20 個並行槽位</text><rect class="sf-child" x="435" y="154" width="12" height="12" rx="2"/><rect class="sf-child" x="451" y="154" width="12" height="12" rx="2"/><rect class="sf-child" x="467" y="154" width="12" height="12" rx="2"/><rect class="sf-child" x="483" y="154" width="12" height="12" rx="2"/><rect class="sf-child" x="499" y="154" width="12" height="12" rx="2"/><rect class="sf-child" x="435" y="170" width="12" height="12" rx="2"/><rect class="sf-child" x="451" y="170" width="12" height="12" rx="2"/><rect class="sf-child" x="467" y="170" width="12" height="12" rx="2"/><rect class="sf-child" x="483" y="170" width="12" height="12" rx="2"/><rect class="sf-child" x="499" y="170" width="12" height="12" rx="2"/><rect class="sf-child" x="435" y="186" width="12" height="12" rx="2"/><rect class="sf-child" x="451" y="186" width="12" height="12" rx="2"/><rect class="sf-child" x="467" y="186" width="12" height="12" rx="2"/><rect class="sf-child" x="483" y="186" width="12" height="12" rx="2"/><rect class="sf-child" x="499" y="186" width="12" height="12" rx="2"/><rect class="sf-child" x="435" y="202" width="12" height="12" rx="2"/><rect class="sf-child" x="451" y="202" width="12" height="12" rx="2"/><rect class="sf-child" x="467" y="202" width="12" height="12" rx="2"/><rect class="sf-child" x="483" y="202" width="12" height="12" rx="2"/><rect class="sf-child" x="499" y="202" width="12" height="12" rx="2"/><text class="sf-s" x="473" y="240">共用 20 個並行槽位</text><rect class="sf-child" x="621" y="154" width="12" height="12" rx="2"/><rect class="sf-child" x="637" y="154" width="12" height="12" rx="2"/><rect class="sf-child" x="653" y="154" width="12" height="12" rx="2"/><rect class="sf-child" x="669" y="154" width="12" height="12" rx="2"/><rect class="sf-child" x="685" y="154" width="12" height="12" rx="2"/><rect class="sf-child" x="621" y="170" width="12" height="12" rx="2"/><rect class="sf-child" x="637" y="170" width="12" height="12" rx="2"/><rect class="sf-child" x="653" y="170" width="12" height="12" rx="2"/><rect class="sf-child" x="669" y="170" width="12" height="12" rx="2"/><rect class="sf-child" x="685" y="170" width="12" height="12" rx="2"/><rect class="sf-child" x="621" y="186" width="12" height="12" rx="2"/><rect class="sf-child" x="637" y="186" width="12" height="12" rx="2"/><rect class="sf-child" x="653" y="186" width="12" height="12" rx="2"/><rect class="sf-child" x="669" y="186" width="12" height="12" rx="2"/><rect class="sf-child" x="685" y="186" width="12" height="12" rx="2"/><rect class="sf-child" x="621" y="202" width="12" height="12" rx="2"/><rect class="sf-child" x="637" y="202" width="12" height="12" rx="2"/><rect class="sf-child" x="653" y="202" width="12" height="12" rx="2"/><rect class="sf-child" x="669" y="202" width="12" height="12" rx="2"/><rect class="sf-child" x="685" y="202" width="12" height="12" rx="2"/><text class="sf-s" x="659" y="240">共用 20 個並行槽位</text></g><g data-b="pages"><rect class="sf-node" x="20" y="270" width="350" height="78" rx="8"/><text class="sf-t" x="195" y="294">每個查詢：先抓第 1 頁拿到 total</text><text class="sf-s" x="195" y="314">其餘頁一起送出，同樣佔用槽位</text><text class="sf-s" x="195" y="332">依頁碼排序後合併</text></g><g data-b="merge"><path class="sf-line" d="M659 250 V264" marker-end="url(#af-arrow-zh)"/><rect class="sf-parent" x="390" y="270" width="350" height="78" rx="8"/><text class="sf-t" x="565" y="294">4 套都查無，才算查無（empty_jobs）</text><text class="sf-s" x="565" y="314">結果合併成 Output 明細</text><text class="sf-s" x="565" y="332">分批寫回 LarkSheet，每批 4,000 列</text></g></svg>
+</div>
+<figcaption>圖 6　一份名單怎麼查完：依序切換 4 套後台，每套後台內的查詢共用 20 個並行槽位，分頁抓完後依頁碼合併（以對照範例的 68 個 userId 為例；示意）</figcaption>
+</figure>
+
+- **後台依序切換**：regulator 是登入 session 上的狀態，同一個 session 一次只能停在一套後台。所以 4 套依序處理：送出切換後，輪詢頁面上顯示的 regulator，確認已切換（最多等 6 秒）才開始查。
+- **後台內並行、有上限**：每個 userId 一個查詢，全部同時送出，但共用 20 個並行槽位（`asyncio.Semaphore(20)`）；為什麼是 20 見下一張。
+- **分頁**：每個查詢先抓第 1 頁取得總筆數，其餘頁再並行抓取，最後依頁碼排序合併。
+- **查詢描述與執行分開**：每個查詢是一份描述（網址、組 payload 的函式與參數），交給同一個執行器；Trading Account 與 Rebate Account 只差在網址與查詢欄位。
+
+<hr data-slide="並行與重試怎麼定">
+
+**並行與重試怎麼定：** 這兩組參數不是預設值，而是我對實際後台測出來的。後台沒有公開的限流規則，只能從測試中看它什麼時候開始擋：
+
+| 設計項目 | 測試時看到的狀況 | 因此這樣做 |
+|---|---|---|
+| 並行上限 | 初版每個查詢只限制自己的分頁（各 10 個），所有查詢一起送出，整體沒有上限。名單一大，後台開始回 429／5xx，登入 session 也會被踢掉 | 6/5 起改成整次執行共用 20 個槽位：名單再大，同時也最多 20 個請求 |
+| 重試間隔 | 被限流（429）後立刻重試，會再次被擋 | 第 N 次失敗等 1.5 × N 秒再試（1.5、3、4.5…秒），讓請求錯開；最多 10 次，累積約 82 秒 |
+| 不重試 | session 被踢掉後回 401，再試也是同一個失效的登入 | 401 直接中止，不浪費重試，等下一輪重新登入 |
+
+*測試時沒有留下各並行數的錯誤數與耗時紀錄，這裡只寫結論；並行上限的改版見原始碼的版本紀錄（2026-06-05）。*
+
+<hr data-slide="關鍵程式碼">
+
+**關鍵程式碼：** 前兩張講的切換、槽位、分頁與重試，對應到 `general.py` 的這幾段：
+
+```python
+global_sem = asyncio.Semaphore(20)            # 整次執行共用（初版是每個查詢各自 Semaphore(10)）
+for brand in BRANDS:                          # 4 套後台依序處理
+    await switch_regulator(session, brand)    # 送出切換，輪詢頁面上的 regulator，最多等 6 秒
+    results = await asyncio.gather(*[fetch_job(session, job, global_sem) for job in brand_jobs])
+async def fetch_one_page(session, job, page_no, limit, sem):
+    async with sem:                           # 拿到槽位才送出請求
+        payload = job["build_payload"](page_no=page_no, limit=limit, **job["payload_kwargs"])
+        return await post_json_with_retry(session, url=job["url"], json_data=payload)
+
+async def fetch_job(session, job, global_sem):
+    first = await fetch_one_page(session, job, 1, limit, global_sem)    # 先抓第 1 頁拿 total
+    pages = await asyncio.gather(*[fetch_one_page(session, job, p, limit, global_sem)
+                                   for p in range(2, math.ceil(first["total"] / limit) + 1)])
+    pages.sort(key=lambda x: x["page_no"])    # 依頁碼排序後合併
+
+async def post_json_with_retry(session, url, json_data, max_retry=10, base_sleep=1.5):
+    for attempt in range(1, max_retry + 1):
+        async with session.post(url, json=json_data) as resp:
+            if resp.status == 401: raise PermissionError("Cookie expired")  # 登入已失效，不重試
+            if resp.status in RETRY_STATUS:                   # 429、500、502、503、504
+                await asyncio.sleep(base_sleep * attempt)    # 第 N 次等 1.5 × N 秒
+                continue
+            return await resp.json()
+    raise RuntimeError(f"Request failed after {max_retry} retries")
+```
+
+*節錄自 `general.py`（`run_admin_jobs`、`fetch_one_page`、`fetch_job`、`post_json_with_retry`），已簡化：省略 log、例外處理、timeout 與回傳結構，網址已移除；函式與變數名稱沿用原始碼。*
+
 ## Result
 
 <hr data-slide="操作畫面">
@@ -334,7 +430,7 @@ flowchart LR
 <video controls muted playsinline preload="metadata" src="../../media/account-automation-engine/crm_system.mp4"></video>
 </div>
 </div>
-<figcaption>圖 6　實際操作錄影（點擊播放）</figcaption>
+<figcaption>圖 7　實際操作錄影（點擊播放）</figcaption>
 </figure>
 
 <hr data-slide="一次實際執行">
@@ -370,6 +466,7 @@ Record R-0066  2026-07-15 14:10:02  Input validation failed: 未提供任何查�
 從這段紀錄可以看到：
 
 - **4 套後台都得查過才知道**：引擎依序切進 FCA、ASIC、VFSC、VFSC2（VFSC 的第二套後台），這批帳戶全在 VFSC 兩套，FCA、ASIC 查無；人工一樣得每一套都進去查。
+- **每套後台 2.5–3.5 分鐘**：5,696 個 userId 在每套後台都是一次完整查詢（同時最多 20 個請求），4 套依序共約 11 分鐘；寫回 5,642 列分成 4,000 與 1,642 兩批。
 - **查無不丟棄**：四套都查無的 54 個帳號收進 `empty_jobs`，和結果一起留下。
 - **可追溯、不靜默失敗**：log 的 run id 對得上 Record 的 R-0549；輸入不完整的申請在查詢前就被攔下，並寫明缺哪個欄位。
 
@@ -377,8 +474,8 @@ Record R-0066  2026-07-15 14:10:02  Input validation failed: 未提供任何查�
 <div class="tech-labels">
 <div class="tech-label">
 <p class="tech-label-kicker">Tech Label</p>
-<p class="tech-label-name">Batch Query Engine</p>
-<p class="tech-label-desc">一次輸入整份名單，跨 regulator、跨 Server 批量查回帳戶狀態。</p>
+<p class="tech-label-name">Bounded Fan-out</p>
+<p class="tech-label-desc">一份名單展開成每個 userId 一個查詢；後台依序切換，後台內共用 20 個並行槽位。</p>
 </div>
 <div class="tech-label">
 <p class="tech-label-kicker">Tech Label</p>
@@ -392,6 +489,25 @@ Record R-0066  2026-07-15 14:10:02  Input validation failed: 未提供任何查�
 </div>
 </div>
 </figure>
+
+<hr data-slide="名單大小與耗時">
+
+### 名單大小與耗時（2026-08-01 ~ 2026-11-16）
+
+資料來源：引擎的執行 log，只取對得上 Record 成功紀錄的 394 次執行（6–7 月的 log 沒有完整保留）。時間是從排程撿取到清空 Input 的整趟耗時，取中位數：
+
+<figure class="bar-figure">
+<ul class="bar-list">
+<li style="--v: 4.5%"><span class="bar-label">100 個以下（253 次）</span><span class="bar"></span><span class="bar-value">13 秒</span></li>
+<li style="--v: 11.5%"><span class="bar-label">101–500 個（60 次）</span><span class="bar"></span><span class="bar-value">33 秒</span></li>
+<li style="--v: 34%"><span class="bar-label">501–2,000 個（62 次）</span><span class="bar"></span><span class="bar-value">98 秒</span></li>
+<li class="is-peak" style="--v: 100%"><span class="bar-label">2,001 個以上（19 次）</span><span class="bar"></span><span class="bar-value">288 秒</span></li>
+</ul>
+<figcaption>圖 8　單批 userId 數與整趟耗時（中位數；取自執行 log，2026-08-01 ~ 11-16）</figcaption>
+</figure>
+
+- **耗時隨名單線性成長**：每套後台每 1,000 個 userId 約 25 秒（中位數，取名單 500 個以上的 336 次後台查詢）；切換並確認 regulator 約 1 秒。
+- **最大的一批也在一趟內跑完**：2,001 個以上的 19 批中，最久的是上一張的 11/06 那一批，約 11.5 分鐘。
 
 <hr data-slide="輸出格式">
 
@@ -421,7 +537,7 @@ Output 每個帳戶一列，共 23 個欄位。以下兩列取自 2026-11-16 的
 <li class="is-peak" style="--v: 100%"><span class="bar-label">2026-10（207 次）</span><span class="bar"></span><span class="bar-value">113,659</span></li>
 <li style="--v: 26.8%"><span class="bar-label">2026-11（至 11/16，38 次）</span><span class="bar"></span><span class="bar-value">30,458</span></li>
 </ul>
-<figcaption>圖 7　每月驗證帳戶數（括號內為成功執行次數；取自 Record 工作表）</figcaption>
+<figcaption>圖 9　每月驗證帳戶數（括號內為成功執行次數；取自 Record 工作表）</figcaption>
 </figure>
 
 <hr data-slide="執行統計">
@@ -456,12 +572,13 @@ Output 每個帳戶一列，共 23 個欄位。以下兩列取自 2026-11-16 的
 <div class="ba-table">
 <div class="ba-row ba-head"><p class="ba-item">項目</p><p class="ba-before">Before：逐筆人工查詢</p><p class="ba-after">After：批量查詢引擎</p></div>
 <div class="ba-row"><p class="ba-item">查詢方式</p><p class="ba-before">每個帳戶切換對應 regulator 的 CRM 後台，逐筆查</p><p class="ba-after">一次輸入整份名單，跨 regulator、跨 Server 批量查回<small>依據：Rule 工作表；單批涵蓋範圍見 Problem</small></p></div>
+<div class="ba-row"><p class="ba-item">單批耗時</p><p class="ba-before">逐筆查，批次越大越久，最大一批要好幾個工作天（見 Problem）</p><p class="ba-after">2,001 個 userId 以上的批次，整趟中位數約 5 分鐘<small>依據：Result 圖 8（執行 log，2026-08-01 起）</small></p></div>
 <div class="ba-row"><p class="ba-item">人工工時</p><p class="ba-before">每帳戶約 45 秒</p><p class="ba-after">累計約 4,770 小時改由引擎處理<small>依據：累計驗證帳戶（見 Result）× 45 秒 ÷ 3,600；45 秒為估計值</small></p></div>
 <div class="ba-row"><p class="ba-item">人力成本</p><p class="ba-before">無紀錄</p><p class="ba-after">累計約 NT$1.91M<small>依據：4,770 小時 × NT$400／小時（成本基準為估計值）</small></p></div>
 <div class="ba-row"><p class="ba-item">使用方式</p><p class="ba-before">需要 OP 親自操作每一個後台</p><p class="ba-after">各團隊自行填表送件，排程每 5 分鐘自動執行<small>依據：Rule 工作表；每月使用量見 Result</small></p></div>
 <div class="ba-row"><p class="ba-item">錯誤輸入</p><p class="ba-before">無紀錄</p><p class="ba-after">不完整的申請在查詢前被攔下，並說明缺少的欄位<small>依據：Record 的 return_msg；攔截次數見 Result</small></p></div>
 </div>
-<figcaption>圖 8　Before / After 對照（工時與成本為估計值，計算基準見下方）</figcaption>
+<figcaption>圖 10　Before / After 對照（工時與成本為估計值，計算基準見下方）</figcaption>
 </figure>
 
 <hr data-slide="尚未量化的部分">
@@ -471,5 +588,5 @@ Output 每個帳戶一列，共 23 個欄位。以下兩列取自 2026-11-16 的
 - **計算基準**：人工查詢每帳戶 45 秒、人力成本 NT$400／小時，皆為估計值。只計算成功執行的批次，排除驗證失敗的申請。
 - **帳戶數會重複計算**：累計驗證帳戶是各批次帳戶數的加總；同一個帳戶在不同批次被查詢，會各算一次，因為每次查詢都對應一次人工作業。
 - **80% 涵蓋率**：指 OP 日常帳戶查詢需求中可以用這套流程處理的比例，是依需求類型歸納的估計，沒有逐件統計。
-- **引擎執行時間**：Record 沒有記錄每批的執行耗時，因此本頁不寫「從 X 小時縮短到 Y 分鐘」。
+- **引擎執行時間**：取自 2026-08-01 起的執行 log（見 Result 圖 8），6–7 月的 log 沒有完整保留；人工查詢沒有逐批計時，因此本頁不寫「從 X 小時縮短到 Y 分鐘」。
 - **單次上限的單位**：2,000 筆指輸入的 userId 列數，不是帳戶數；一個 userId 會展開成多個帳戶，所以 Record 中有批次的帳戶數超過 2,000（見 Problem）。

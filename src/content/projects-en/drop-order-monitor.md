@@ -16,8 +16,13 @@ story:
   - { label: "Rules", line: "The third check is the rules themselves: operations and I agreed, rule by rule, on which status combinations count as a drop order, covering deposits, three kinds of ordinary withdrawals and card withdrawals." }
   - { label: "Worked example", line: "Back to the two orders: the deposit has CPS at Success (manual) and CRM at Audit; the withdrawal has CRM at Completed and CPS at Failed (manual). Both match the rules and are flagged as drop orders." }
   - { label: "Solution", line: "CRM has no database access, so the pipeline downloads its reports with an operations account and queries CPS directly, comparing every hour; each order is assigned once, and a heartbeat row is written even when nothing is new, proving monitoring never stopped." }
+  - { label: "Rules as code", line: "In the code the rule table is these parts: CPS failures and rejections are already filtered in SQL; deposits check that CPS succeeded and CRM has not; cards check that CRM booked a refund; the other three withdrawal types share one rule with only the channel category changed; and finally the CRM and CPS statuses are chained into one trail, so the Handler need not open two back offices." }
+  - { label: "Error handling", line: "But with incomplete data, \"no new cases\" would be false and would write a fake heartbeat. So failures are handled at three levels: a failed request is retried, while no data is not; a day is given up only when both reports fail, and the next run fills it in; if CPS is unreachable or the login fails, the whole run stops without writing, and a missing heartbeat row tells someone to look." }
+  - { label: "Error-handling code", line: "In the code: SELECT 1 first checks CPS is reachable; a failed query is retried 5 times and then raised, stopping the run; each CRM report day is one task that waits 60 seconds between up to 10 tries; status: error from the API means no data and is skipped; if both reports fail, the day returns None and is given up." }
   - { label: "Screens", line: "These are the LarkSheet case sheets as they really look, one per case type: a Handler marks Status as Done or Reversed; a period with nothing new still gets a heartbeat row every hour." }
   - { label: "Running for real", line: "This is a real run at 03:00 on 2026-11-18: query CPS, download the CRM reports and lookup tables, then compare by the five case types and write only new cases; a type with nothing new gets a heartbeat row." }
+  - { label: "Status combinations", line: "Laid out as status combinations, the cases flagged since launch show deposits almost all stuck in Audit, Submit to third party or Processing, while withdrawal failure patterns differ by channel: LBT is mostly 交易失敗(人工), Crypto&Wallet mostly 提交拒絕." }
+  - { label: "A run with failures", line: "This is what a real failure looks like: in the 15:00 run on 2026-10-20, the CPS withdrawal query failed once and succeeded on the 2nd try; the CRM card report returned 524 and succeeded after 60 seconds; the run still wrote 10 new cases. Of the 1,418 runs since 9/12, 1,404 finished and 14 stopped before writing anything." }
   - { label: "Output", line: "Cases in LarkSheet look like this: a deposit is marked done once a Handler credits it, a withdrawal reversed once it is reversed; the last row is a heartbeat, meaning that run found nothing new." }
   - { label: "Result: deposits", line: "A real case, 2026/11/6: the upstream side launched 85 channels at once without testing, which hit other routes and left every downstream integration stuck, so callbacks failed en masse. The 10:00 run surfaced 450 deposit drop orders and the 11:00 run another 483, against at most 75 in a single run normally; the cases went straight into LarkSheet, each assigned once, and were handed to operations. With twice-daily manual checks, they would have waited for the next round." }
   - { label: "Result: withdrawals", line: "The withdrawal case is 2026/10/23: UK card issuers rejected refunds in a batch; operations set CPS to Failed (manual), yet CRM still showed the refunds as successful. The pipeline kept comparing every hour, and the 19:09 run surfaced 117 cases at once, against a normal single-run max of 85; of the 329 cases that day, 220 were card withdrawals, mostly in the UK with the same bank-side failure reason: that batch rejection. All 329 were reversed." }
@@ -261,6 +266,83 @@ flowchart LR
 - **Traceability**: each run gets a `uid`, and JSON logs carry `service`, `stage` and `status`; raw CPS data is backed up to Lark Drive on every run, so the data compared at the time can be audited later.
 - **Access scope**: the CRM is accessed with an existing operations account (with 2FA), only downloading reports and never writing; CPS runs only SELECT queries; Lark writes to the case sheet and backup folder through a self-built app. CRM and CPS credentials are read from a read-only mounted config file, not written in code.
 
+<hr data-slide="Rules as code">
+
+**Rules as code:** each row of the matching-rule table in 01 maps to one part of the code below. CPS "failure" is already filtered in SQL, so the comparison only has to judge status combinations:
+
+```python
+# losttrader_crawler.py: CPS withdrawals are filtered to failed or rejected orders in SQL
+w_query_update = """SELECT ...
+    WHERE w1.update_time >= %s AND w1.update_time < %s
+      AND (w.WITHDRAWAL_STATUS LIKE '%%審核拒絕%%' OR w.WITHDRAWAL_STATUS LIKE '%%提交拒絕%%'
+           OR w.WITHDRAWAL_STATUS LIKE '%%交易失敗%%')"""      # a second query checks APPROVE_STATUS
+
+def compare_logic(crm_report, cps_report, cc_report, cps_type, ...):    # losttrader_basiclogic.py
+    if cps_type == 'Deposit':                     # CPS succeeded, CRM has not
+        df = crm_report.merge(cps_report, left_on='Order Number', right_on='商戶訂單號', how='left')
+        return df[df['交易狀態'].isin(['交易成功', '交易成功(人工)']) & ~df['Status'].str.contains('Succ')]
+    elif cps_type == 'Withdraw_CreditCard':       # CRM booked a refund; CPS side is a failed payout
+        df = cps_report.merge(cc_report, left_on='商戶訂單號', right_on='CPS Order ID', how='inner')
+        return df.query("`Status`.str.contains('Completed|Partial Success|Success') "
+                        "and `Order Status`.str.contains('Refunded')")
+    elif cps_type == 'Withdraw_LBT':              # LBT, Crypto&Wallet and IBT share one rule
+        return process_withdraw_report(cps_report, crm_report, ..., category_filter='LBT')
+def process_withdraw_report(cps_report, crm_report, ..., category_filter):   # CRM done, CPS failed/rejected
+    df['status_rank'] = df['Status'].map({'Risk Audit': 1, 'Accepted': 2}).fillna(99)
+    workflow = (df.sort_values(['商戶訂單號', 'status_rank', 'Last Update Time']).groupby('商戶訂單號')
+                ['Status'].agg(lambda x: ' -> '.join(dict.fromkeys(x))))   # trail, then both CPS statuses
+    return df_out[df_out['Category'].str.contains(category_filter)
+                  & df_out['Apply Status'].str.contains('Completed|Partial Success|Success')
+                  & (df_out['交易狀態'].str.contains(transaction_status)
+                     | df_out['出金狀態'].str.contains(withdrawal_status))]
+```
+
+*Excerpt from `losttrader_crawler.py` (the CPS withdrawal query) and `losttrader_basiclogic.py` (`compare_logic`, `process_withdraw_report`), simplified: column lists, empty-data checks and the Reason Table merge are left out; the Crypto&Wallet and IBT branches differ only in `category_filter` (`'Ewallet|Crypto'`, `'IBT'`) and are not listed. Field names and status values are shown in Traditional Chinese (the source uses Simplified); other identifiers are as in the source.*
+
+<hr data-slide="Error handling">
+
+**Error handling:** with incomplete data, "no new cases" would be a false result, and it would write a fake heartbeat row. So failures are handled at three levels by how far they reach, and only the outermost one stops the run:
+
+<figure class="split-figure step-figure">
+<div class="split-scroll">
+<svg viewBox="0 0 760 300" role="img" aria-labelledby="de-title-en"><title id="de-title-en">Errors are handled at three levels: a failed request is retried, a day whose reports all fail is given up, and a run with incomplete data stops without writing</title><defs><marker id="de-arrow-en" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="sf-head" d="M0,0 L8,4 L0,8 z"/></marker></defs><g data-b="run"><rect class="sf-box" x="20" y="16" width="300" height="268" rx="10"/><text class="sf-t sf-start" x="36" y="40">The run</text><text class="sf-s sf-start" x="36" y="58">once an hour</text><path class="sf-line" d="M320 44 H344" marker-end="url(#de-arrow-en)"/><text class="sf-t sf-start" x="352" y="40">Stop: no comparison, no writes</text><text class="sf-s sf-start" x="352" y="58">CPS unreachable or out of retries; CRM login fails 5 times</text><text class="sf-note sf-start" x="352" y="76">A missing heartbeat row for that hour tells someone to look</text></g><g data-b="day"><rect class="sf-box" x="40" y="80" width="260" height="190" rx="8"/><text class="sf-t sf-start" x="56" y="104">One day's reports</text><text class="sf-s sf-start" x="56" y="122">one task per day, up to 5 at once</text><path class="sf-line" d="M300 108 H344" marker-end="url(#de-arrow-en)"/><text class="sf-t sf-start" x="352" y="112">Give up that day, the rest go on</text><text class="sf-s sf-start" x="352" y="130">only when both reports run out of retries; logs an ERROR</text><text class="sf-s sf-start" x="352" y="148">filled in when the next run re-fetches the last 4 days</text></g><g data-b="req"><rect class="sf-parent" x="60" y="140" width="220" height="116" rx="6"/><text class="sf-t sf-start" x="76" y="166">One request</text><text class="sf-s sf-start" x="76" y="186">CRM report generate / download</text><text class="sf-s sf-start" x="76" y="204">CPS deposit / withdrawal query</text><path class="sf-line" d="M280 190 H344" marker-end="url(#de-arrow-en)"/><text class="sf-t sf-start" x="352" y="186">Retry</text><text class="sf-s sf-start" x="352" y="204">CRM report: up to 10 times, 60 s apart</text><text class="sf-s sf-start" x="352" y="222">CPS query: up to 5 times, 3 s apart</text></g><g data-b="nodata"><path class="sf-line" d="M280 236 H344" marker-end="url(#de-arrow-en)"/><text class="sf-t sf-start" x="352" y="250">No data: no retry</text><text class="sf-s sf-start" x="352" y="268">an API reply of status: error is skipped</text></g></svg>
+</div>
+<figcaption>Figure 6　Three levels of error handling: retry the request, give up one day, stop the run (how often each happened is in Result)</figcaption>
+</figure>
+
+<hr data-slide="Error-handling code">
+
+**Error-handling code:** the three levels on the last slide map to these parts of `losttrader_crawler.py`:
+
+```python
+# losttrader_crawler.py: CPS database, check the connection first, retry failed queries
+conn.execute(text("SELECT 1"))                        # unreachable: raise, the run stops
+def read_database_with_retry(*, query, ..., max_retry=5, retry_interval=3):
+    for attempt in range(1, max_retry + 1):
+        try:
+            return pl.read_database(query=query, connection=connection, ...)
+        except Exception:
+            logger.exception(f"{query_name} query failed (attempt {attempt}/{max_retry})")
+            if attempt == max_retry:
+                raise                                 # out of retries: stop, no fake heartbeat
+            time.sleep(retry_interval)
+async with SEM:                                       # CRM reports: one task per day, 5 at once
+    for attempt in range(1, MAX_RETRIES + 1):         # up to 10 times, RETRY_SLEEP = 60 s
+        try:
+            data = await resp.json()
+            if data.get("status") == "error":         # the API's way of saying "no data"
+                no_data = True
+                break                                 # no retry
+        except Exception as e:
+            logger.warning(f"POST failed ({report_name} DW {brand} {day}) attempt {attempt}: {e}")
+            if attempt < MAX_RETRIES:
+                await asyncio.sleep(RETRY_SLEEP)
+    if not dfs:
+        return None                                   # both reports failed: ERROR, drop this day
+```
+
+*Excerpt from `losttrader_crawler.py` (`Cps_reports`, `read_database_with_retry`, `fetch_one_day_dw`), simplified: the connection string, the download step's retries (written the same way), timing and log details are left out; URLs and database names removed; function and variable names are as in the source.*
+
 ## Result
 
 <hr data-slide="Screens">
@@ -302,7 +384,7 @@ There is one sheet per case type. Once a Handler is done, `Status` is set to Don
 
 </div>
 </div>
-<figcaption>Figure 6　The LarkSheet case sheets as they really look (swipe to see all 5 sheets; browser and document path cropped; client IDs, account numbers, order numbers and Handler names blurred; click an image to enlarge)</figcaption>
+<figcaption>Figure 7　The LarkSheet case sheets as they really look (swipe to see all 5 sheets; browser and document path cropped; client IDs, account numbers, order numbers and Handler names blurred; click an image to enlarge)</figcaption>
 </figure>
 
 <hr data-slide="One real run">
@@ -359,6 +441,50 @@ What this log shows:
 </div>
 </figure>
 
+<hr data-slide="Status combinations">
+
+### Status combinations flagged (Deposit 2026-03-30 ~ 11-17; Withdrawal 2026-09-09 ~ 11-17)
+
+Cases since launch, grouped by their CRM and CPS status combination (from the public CSV):
+
+<figure class="split-figure step-figure">
+<div class="split-scroll">
+<svg viewBox="0 0 760 440" role="img" aria-labelledby="dm-title-en"><title id="dm-title-en">Status combinations flagged: deposits are CRM status × CPS transaction status, withdrawals are CPS failure pattern × case type; each cell is a case count</title><g data-b="dep"><text class="sf-h sf-start" x="20" y="20">Deposits: CPS succeeded, CRM has not</text><text class="sf-k sf-start" x="20" y="50">CRM status</text><text class="sf-k" x="350" y="50">交易成功</text><text class="sf-k" x="480" y="50">交易成功(人工)</text><text class="sf-f sf-start" x="20" y="78">Audit</text><rect class="sf-parent" x="290" y="60" width="120" height="28" rx="4"/><text class="sf-t" x="350" y="78">3,412</text><rect class="sf-node" x="420" y="60" width="120" height="28" rx="4"/><text class="sf-t" x="480" y="78">533</text><text class="sf-f sf-start" x="20" y="110">Submit to third party</text><rect class="sf-parent" x="290" y="92" width="120" height="28" rx="4"/><text class="sf-t" x="350" y="110">1,443</text><rect class="sf-node" x="420" y="92" width="120" height="28" rx="4"/><text class="sf-t" x="480" y="110">2</text><text class="sf-f sf-start" x="20" y="142">Processing</text><rect class="sf-parent" x="290" y="124" width="120" height="28" rx="4"/><text class="sf-t" x="350" y="142">1,027</text><rect class="sf-node" x="420" y="124" width="120" height="28" rx="4"/><text class="sf-t" x="480" y="142">6</text><text class="sf-f sf-start" x="20" y="174">5 others (Wait for MT4 deposit, etc.)</text><rect class="sf-node" x="290" y="156" width="120" height="28" rx="4"/><text class="sf-t" x="350" y="174">65</text><rect class="sf-node" x="420" y="156" width="120" height="28" rx="4"/><text class="sf-t" x="480" y="174">7</text></g><line class="sf-sep" x1="20" y1="200" x2="740" y2="200"/><g data-b="wd"><text class="sf-h sf-start" x="20" y="226">Withdrawals: CRM done (Success for cards), CPS failed or rejected</text><text class="sf-k sf-start" x="20" y="256">CPS transaction / payout status</text><text class="sf-k" x="342.5" y="256">LBT</text><text class="sf-k" x="457.5" y="256">Crypto&Wallet</text><text class="sf-k" x="572.5" y="256">IBT</text><text class="sf-k" x="687.5" y="256">CreditCard</text><text class="sf-f sf-start" x="20" y="284">處理完成／交易失敗(人工)</text><rect class="sf-parent" x="290" y="266" width="105" height="26" rx="4"/><text class="sf-t" x="342.5" y="283">6,350</text><rect class="sf-node" x="405" y="266" width="105" height="26" rx="4"/><text class="sf-t" x="457.5" y="283">163</text><rect class="sf-node" x="520" y="266" width="105" height="26" rx="4"/><text class="sf-t" x="572.5" y="283">10</text><rect class="sf-parent" x="635" y="266" width="105" height="26" rx="4"/><text class="sf-t" x="687.5" y="283">1,027</text><text class="sf-f sf-start" x="20" y="313">處理完成／交易失敗(銀行退款)</text><rect class="sf-node" x="290" y="295" width="105" height="26" rx="4"/><text class="sf-t" x="342.5" y="312">106</text><rect class="sf-node" x="405" y="295" width="105" height="26" rx="4"/><text class="sf-s" x="457.5" y="312">—</text><rect class="sf-node" x="520" y="295" width="105" height="26" rx="4"/><text class="sf-t" x="572.5" y="312">12</text><rect class="sf-node" x="635" y="295" width="105" height="26" rx="4"/><text class="sf-s" x="687.5" y="312">—</text><text class="sf-f sf-start" x="20" y="342">處理完成／交易失敗</text><rect class="sf-node" x="290" y="324" width="105" height="26" rx="4"/><text class="sf-t" x="342.5" y="341">100</text><rect class="sf-node" x="405" y="324" width="105" height="26" rx="4"/><text class="sf-t" x="457.5" y="341">14</text><rect class="sf-node" x="520" y="324" width="105" height="26" rx="4"/><text class="sf-s" x="572.5" y="341">—</text><rect class="sf-node" x="635" y="324" width="105" height="26" rx="4"/><text class="sf-s" x="687.5" y="341">—</text><text class="sf-f sf-start" x="20" y="371">審核拒絕／審核拒絕</text><rect class="sf-node" x="290" y="353" width="105" height="26" rx="4"/><text class="sf-t" x="342.5" y="370">276</text><rect class="sf-node" x="405" y="353" width="105" height="26" rx="4"/><text class="sf-t" x="457.5" y="370">71</text><rect class="sf-node" x="520" y="353" width="105" height="26" rx="4"/><text class="sf-t" x="572.5" y="370">24</text><rect class="sf-node" x="635" y="353" width="105" height="26" rx="4"/><text class="sf-s" x="687.5" y="370">—</text><text class="sf-f sf-start" x="20" y="400">提交拒絕／—</text><rect class="sf-node" x="290" y="382" width="105" height="26" rx="4"/><text class="sf-s" x="342.5" y="399">—</text><rect class="sf-node" x="405" y="382" width="105" height="26" rx="4"/><text class="sf-t" x="457.5" y="399">740</text><rect class="sf-node" x="520" y="382" width="105" height="26" rx="4"/><text class="sf-s" x="572.5" y="399">—</text><rect class="sf-node" x="635" y="382" width="105" height="26" rx="4"/><text class="sf-s" x="687.5" y="399">—</text><text class="sf-f sf-start" x="20" y="429">2 others</text><rect class="sf-node" x="290" y="411" width="105" height="26" rx="4"/><text class="sf-t" x="342.5" y="428">1</text><rect class="sf-node" x="405" y="411" width="105" height="26" rx="4"/><text class="sf-t" x="457.5" y="428">4</text><rect class="sf-node" x="520" y="411" width="105" height="26" rx="4"/><text class="sf-s" x="572.5" y="428">—</text><rect class="sf-node" x="635" y="411" width="105" height="26" rx="4"/><text class="sf-s" x="687.5" y="428">—</text></g></svg>
+</div>
+<figcaption>Figure 8　Status combinations flagged: each cell is a case count, cells in the thousands are outlined in the theme colour; status values are shown in Traditional Chinese (the CSV keeps the source system's Simplified characters)</figcaption>
+</figure>
+
+- **Deposits cluster in 3 CRM statuses**: Audit, Submit to third party and Processing, all cases where CPS succeeded and CRM is still midway.
+- **Withdrawal failure patterns differ by channel**: LBT is mostly "處理完成／交易失敗(人工)" and Crypto&Wallet mostly "提交拒絕", which is why the three withdrawal types share one rule but each gets its own sheet and its own reasons.
+
+<hr data-slide="A run with failures">
+
+### A run with failures: retried, then finished as usual
+
+- Below is a log excerpt from the run at 2026-10-20 15:00, taken from the original JSON log file; time, level, stage and message are kept.
+- Repeated download lines are left out; internal URLs and report file names are removed, and error messages keep only the HTTP status code.
+
+```text
+15:00:06  INFO   Download DataSource  Successfully connected to CPS database.
+15:00:18  INFO   Download DataSource  Deposit query finished, rows=159927.
+15:03:01  ERROR  Download DataSource  Withdraw query failed (attempt 1/5)
+15:03:04  INFO   Download DataSource  Executing Withdraw query (attempt 2/5)
+15:05:31  INFO   Download DataSource  CPS report downloaded successfully. deposit_rows=159927, withdraw_rows=939
+   ...                         (CRM deposit/withdrawal reports, 4 regulators × last 4 days, all succeeded)
+15:10:18  INFO   Download DataSource  No data found (fcs-cc-detail CC VFSC 2026-10-18), skip retry
+15:13:17  WARN   Download DataSource  POST failed (cc-detail CC VFSC2 2026-10-15) attempt 1: 524, took 125.1s
+15:14:19  INFO   Download DataSource  Download success (CC VFSC2 2026-10-15): <report>.csv, rows=10578
+15:15:15  INFO   Compare Existing Data - Deposit        Total new mismatch cases to upload: 4
+15:15:19  INFO   Compare Existing Data - Withdraw_LBT   Total new mismatch cases to upload: 6
+15:15:22  INFO   LarkSheet Upload Complete              Upload total data to LarkSheet Finish
+```
+
+What this log shows:
+
+- **The CPS withdrawal query failed on the 1st try** and succeeded on the 2nd, 3 seconds later; **the CRM card report returned 524** and succeeded after waiting 60 seconds; the FCS report had no data and was skipped without retrying.
+- The run still finished the comparison and wrote 4 new Deposit and 6 new LBT cases.
+- **Across the 1,418 runs from 2026-09-12 to 11-17**: 1,404 finished; all 9 runs with a failed CPS query succeeded on retry within the same run; 229 CRM report steps succeeded after retrying; a day's reports ran out of retries 46 times, and all 46 were filled in by the next hourly run; 14 runs stopped before writing, and those hours have no heartbeat row.
+
 <hr data-slide="Output format">
 
 ### Output format
@@ -386,7 +512,7 @@ That day the upstream side launched 85 channels at once without testing the effe
 <div class="split-scroll">
 <svg viewBox="0 0 760 310" role="img" aria-labelledby="tl-title"><title id="tl-title">2026/11/6, 85 channels launched upstream without testing left everything downstream stuck: the 10:00 run surfaced 450 deposit drop orders and the 11:00 run another 483, against at most 75 in a normal single run; cases were written to LarkSheet and handed to operations</title><g data-b="t-axis"><text class="sf-h sf-start" x="40" y="22">Pipeline (24 runs on 11/6, one every hour)</text><line class="sf-line" x1="40" y1="232" x2="470" y2="232"/><line class="sf-line" x1="80" y1="232" x2="80" y2="238"/><line class="sf-line" x1="210" y1="232" x2="210" y2="238"/><line class="sf-line" x1="340" y1="232" x2="340" y2="238"/><line class="sf-line" x1="470" y1="232" x2="470" y2="238"/><text class="sf-s" x="80" y="254">09:00</text><text class="sf-s" x="210" y="254">10:00 run</text><text class="sf-s" x="340" y="254">11:00 run</text><text class="sf-s" x="470" y="254">12:00</text></g><g data-b="t-up"><rect class="sf-bad" x="85" y="36" width="380" height="26" rx="13"/><text class="sf-bad-t sf-small" x="275" y="53">85 channels launched untested upstream · all stuck downstream</text></g><g data-b="t-10"><rect class="sf-trx" x="188" y="92" width="44" height="140" rx="3"/><text class="sf-t" x="210" y="84">450</text></g><g data-b="t-11"><rect class="sf-trx" x="318" y="82" width="44" height="150" rx="3"/><text class="sf-t" x="340" y="74">483</text><line class="sf-sep" x1="40" y1="209" x2="470" y2="209"/><text class="sf-s sf-start" x="44" y="203">Normal single-run max: 75</text><text class="sf-k" x="255" y="276">933 in two runs · 85 channels · 61 countries</text></g><g data-b="t-ops"><defs><marker id="tl-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="8" markerHeight="8" orient="auto"><path class="sf-head" d="M0,0 L8,4 L0,8 z"/></marker></defs><path class="sf-line" d="M478 150 H519" marker-end="url(#tl-arrow)"/><rect class="sf-box" x="525" y="96" width="215" height="108" rx="6"/><text class="sf-t" x="632" y="128">Written to LarkSheet</text><text class="sf-s" x="632" y="152">Each order assigned once</text><text class="sf-good" x="632" y="182">Handlers take over</text></g><g data-b="t-manual"><line class="sf-sep" x1="40" y1="288" x2="740" y2="288"/><text class="sf-k sf-start" x="40" y="304">With manual checks twice a day, drop orders between checks wait for the next round</text></g></svg>
 </div>
-<figcaption>Figure 7　Deposit drop orders surfaced per run during the 2026/11/6 upstream failure (bar heights proportional to counts; the normal single-run max of 75 was on 2026/09/22; from the public CSV on this page)</figcaption>
+<figcaption>Figure 9　Deposit drop orders surfaced per run during the 2026/11/6 upstream failure (bar heights proportional to counts; the normal single-run max of 75 was on 2026/09/22; from the public CSV on this page)</figcaption>
 </figure>
 
 <hr data-slide="Withdrawal case: 10/23">
@@ -399,7 +525,7 @@ That day, UK card issuers rejected refunds in a batch, so card refunds failed en
 <div class="split-scroll">
 <svg viewBox="0 0 760 312" role="img" aria-labelledby="wd-title"><title id="wd-title">2026/10/23 withdrawals: the 19:09 run surfaced 117 cases against a normal single-run max of 85; 220 were card withdrawals, concentrated in the UK with the same bank-side failure reason (an issuer-side batch rejection); all 329 cases that day were reversed</title><g data-b="o-axis"><text class="sf-h sf-start" x="40" y="22">Pipeline (24 runs on 10/23, one every hour)</text><line class="sf-line" x1="40" y1="240" x2="522" y2="240"/><text class="sf-s" x="51" y="258">00:00</text><text class="sf-s" x="171" y="258">06:00</text><text class="sf-s" x="291" y="258">12:00</text><text class="sf-s" x="411" y="258">18:00</text><rect class="sf-node" x="44" y="234.9" width="14" height="5.1" rx="2"/><rect class="sf-node" x="84" y="238.7" width="14" height="1.3" rx="2"/><rect class="sf-node" x="104" y="233.6" width="14" height="6.4" rx="2"/><rect class="sf-node" x="124" y="238.7" width="14" height="1.3" rx="2"/><rect class="sf-node" x="144" y="234.9" width="14" height="5.1" rx="2"/><rect class="sf-node" x="164" y="238.7" width="14" height="1.3" rx="2"/><rect class="sf-node" x="184" y="223.3" width="14" height="16.7" rx="2"/><rect class="sf-node" x="204" y="216.9" width="14" height="23.1" rx="2"/><rect class="sf-node" x="224" y="237.4" width="14" height="2.6" rx="2"/><rect class="sf-node" x="264" y="232.3" width="14" height="7.7" rx="2"/><rect class="sf-node" x="284" y="231.0" width="14" height="9.0" rx="2"/><rect class="sf-node" x="304" y="234.9" width="14" height="5.1" rx="2"/><rect class="sf-node" x="444" y="227.2" width="14" height="12.8" rx="2"/><rect class="sf-node" x="464" y="225.9" width="14" height="14.1" rx="2"/><rect class="sf-node" x="484" y="224.6" width="14" height="15.4" rx="2"/><rect class="sf-node" x="504" y="237.4" width="14" height="2.6" rx="2"/></g><g data-b="o-up"><rect class="sf-bad" x="90" y="36" width="380" height="26" rx="13"/><text class="sf-bad-t sf-small" x="280" y="53">UK issuers rejected refunds in a batch · card refunds failing</text></g><g data-b="o-pm"><rect class="sf-trx" x="324" y="200.3" width="14" height="39.7" rx="2"/><text class="sf-t sf-small" x="331" y="193.3">31</text><rect class="sf-trx" x="344" y="166.9" width="14" height="73.1" rx="2"/><text class="sf-t sf-small" x="351" y="159.9">57</text><rect class="sf-trx" x="364" y="210.5" width="14" height="29.5" rx="2"/><text class="sf-t sf-small" x="371" y="203.5">23</text></g><g data-b="o-peak"><rect class="sf-trx" x="424" y="90.0" width="14" height="150.0" rx="2"/><text class="sf-t sf-small" x="431" y="83.0">117</text><line class="sf-sep" x1="40" y1="131.0" x2="522" y2="131.0"/><text class="sf-s sf-start" x="44" y="125.0">Normal single-run max: 85</text></g><g data-b="o-why"><rect class="sf-box" x="536" y="36" width="214" height="104" rx="6"/><text class="sf-t" x="643" y="62">220 card withdrawals</text><text class="sf-s" x="643" y="80">usually about 12 a day</text><text class="sf-s" x="643" y="104">189 in the UK</text><text class="sf-s" x="643" y="122">197 bank-side failures</text></g><g data-b="o-done"><rect class="sf-box" x="536" y="174" width="214" height="66" rx="6"/><text class="sf-t" x="643" y="201">To LarkSheet · 329 that day</text><text class="sf-good" x="643" y="225">All reversed</text></g><g data-b="o-manual"><line class="sf-sep" x1="40" y1="280" x2="750" y2="280"/><text class="sf-k sf-start" x="40" y="300">With manual checks twice a day, drop orders between checks wait for the next round</text></g></svg>
 </div>
-<figcaption>Figure 8　Withdrawal drop orders surfaced per run on 2026/10/23 (bar heights proportional to counts; the normal single-run max of 85 was on 2026/11/08, excluding the backlog in the first run after a stop; from the public CSV on this page)</figcaption>
+<figcaption>Figure 10　Withdrawal drop orders surfaced per run on 2026/10/23 (bar heights proportional to counts; the normal single-run max of 85 was on 2026/11/08, excluding the backlog in the first run after a stop; from the public CSV on this page)</figcaption>
 </figure>
 
 <hr data-slide="Failure reasons">
@@ -417,7 +543,7 @@ Withdrawal cases get a reason category from the Reason Table, and Handlers reply
 <li style="--v: 0.1%"><span class="bar-label">CPS issue, internal error</span><span class="bar"></span><span class="bar-value">7</span></li>
 <li style="--v: 21.7%"><span class="bar-label">Uncategorized (reason blank)</span><span class="bar"></span><span class="bar-value">1,444</span></li>
 </ul>
-<figcaption>Figure 9　Withdrawal failure reason categories (Withdrawal 2026-09-09 ~ 11-17, from the public CSV on this page)</figcaption>
+<figcaption>Figure 11　Withdrawal failure reason categories (Withdrawal 2026-09-09 ~ 11-17, from the public CSV on this page)</figcaption>
 </figure>
 
 - **Client issue** subcategories are mostly bank-side transaction failures, wrong account numbers, invalid accounts and wrong names.
@@ -462,7 +588,7 @@ Source: the full records the pipeline wrote to LarkSheet (public CSV). A "case" 
 <div class="ba-row"><p class="ba-item">Coverage</p><p class="ba-before">Manual Excel comparison, volume not recorded</p><p class="ba-after">Each run compares about 195,000 CPS deposits and about 322,000 CRM deposit/withdrawal records<small>Basis: run log in Result</small></p></div>
 <div class="ba-row"><p class="ba-item">Monitoring continuity</p><p class="ba-before">Depends on shifts; gaps during leave and handovers</p><p class="ba-after">Every run leaves a record: cases when there are new ones, a heartbeat row when not, 6,314 heartbeat rows in total<small>Basis: rows with Tx = - in the public CSV</small></p></div>
 </div>
-<figcaption>Figure 10　Before / After (manual hours are estimates)</figcaption>
+<figcaption>Figure 12　Before / After (manual hours are estimates)</figcaption>
 </figure>
 
 <hr data-slide="Not yet quantified">
