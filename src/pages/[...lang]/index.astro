@@ -28,7 +28,7 @@ const hero_text = { result: t("home.pipe_result"), open: t("home.machine_open"),
 <Base lang={lang}>
   <section class="hero hero-split" style={`--hp-lines:${hero_lines.length}`}>
     <!-- Project machines on one production line per company (JS only): drawn by the script below from the real
-         layout on wide screens, as a still illustration under the text on narrow ones. Without JS the hero is unchanged;
+         layout on wide screens, as an illustration under the text (packets running) on narrow ones. Without JS the hero is unchanged;
          the impact cards further down carry the same projects and links for keyboard and screen-reader users. -->
     <div class="hero-scene">
       <svg class="hero-pipes" aria-hidden="true" hidden
@@ -131,7 +131,8 @@ const hero_text = { result: t("home.pipe_result"), open: t("home.machine_open"),
   // clicking flies the camera into it and opens the case study, whose header shows the same machine exploded into its
   // layers. Dropping a packet (button, or a click on an empty spot) makes the camera follow it to the end. Moving the
   // pointer turns the drawing a little. First visit of a session: pieces snap together, then packets flood in.
-  // Narrow screens (< 900px): a still illustration of the same scene under the text. Reduced motion: a still frame,
+  // Narrow screens (< 900px): the same scene as an illustration under the text, packets running (no hover, camera or
+  // drop: there is no pointer to aim with). Reduced motion: a still frame,
   // no camera moves, clicks open the case study at once. Paused while off screen.
   import { svg_el as el, make_packet, place, set_clean, rand } from "../../lib/pipe-packets";
   import { assemble } from "../../lib/scatter-text";
@@ -482,6 +483,8 @@ const hero_text = { result: t("home.pipe_result"), open: t("home.machine_open"),
       for (let i = 0; i < 300; i++) step(1 / 30, true);
       render();
       if (inline) { const b = (cam_g as SVGGElement).getBBox(); svg.setAttribute("viewBox", `${f(b.x - 8)} ${f(b.y - 8)} ${f(b.width + 16)} ${f(b.height + 16)}`); }
+      // Narrow: the pre-warmed illustration keeps running (no drop button, no camera moves); reduced motion stays still.
+      if (inline && !reduce) { live = true; sync(); }
       return;
     }
     drop.hidden = false;
@@ -781,7 +784,7 @@ const hero_text = { result: t("home.pipe_result"), open: t("home.machine_open"),
   }
   function stop() { running = false; live = false; cancelAnimationFrame(raf); }
   function sync() {
-    const go = live && scene && on_screen && !document.hidden && !reduce && !inline;
+    const go = live && scene && on_screen && !document.hidden && !reduce;
     if (go && !running) { running = true; last = performance.now(); raf = requestAnimationFrame(frame); }
     else if (!go && running) { running = false; cancelAnimationFrame(raf); }
   }
@@ -818,11 +821,14 @@ const hero_text = { result: t("home.pipe_result"), open: t("home.machine_open"),
     const first_run = !reduce && !document.documentElement.classList.contains("hero-seen");
     document.fonts.ready.then(() => {
       const wrap = hero.querySelector<HTMLElement>(".hero-photo");
-      if (first_run && wide.matches && wrap) {
+      build(first_run && wide.matches);
+      // After build(): a still build (narrow, where the pieces do not snap in) finishes the photo at once. Narrow: the
+      // packets end at the illustration's result tower, below the text; each live project's first arrival there
+      // still reveals one band of the photo above.
+      if (first_run && wrap) {
         const live_projects = new Set(LINES.flatMap((l) => l.machines.filter((m) => !m.building).map((m) => m.accent)));
         photo = assemble_photo(wrap, live_projects.size, PHOTO_DEADLINE_S * 1000);
       }
-      build(first_run && wide.matches);
       if (document.documentElement.classList.contains("ts-pending")) assemble_text();
       let built_w = hero.getBoundingClientRect().width;
       new ResizeObserver(() => {

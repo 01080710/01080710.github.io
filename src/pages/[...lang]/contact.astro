@@ -36,7 +36,7 @@ const sources = [
   </section>
 
   <!-- Key visual: one business card; pipelines from both sides flow into it (the favicon's data-flow P, scaled up). -->
-  <!-- Narrow screens: the same lines as a still strip (drawn by the script), since the side pipes are hidden there. -->
+  <!-- Narrow screens: the same lines as a strip with packets running (drawn by the script), since the side pipes are hidden there. -->
   <div class="bp-scroll contact-strip" data-lines={JSON.stringify(lines)} data-card={profile.name}><svg class="bp-svg" aria-hidden="true"></svg></div>
   <section class="contact-stage" data-lines={JSON.stringify(lines)}>
     <svg class="stage-pipe is-left" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true">
@@ -286,7 +286,7 @@ const sources = [
 </script>
 
 <script>
-  // Narrow screens: the company lines as a still strip that scrolls sideways (src/lib/bp-scene.ts), ending in the card.
+  // Narrow screens: the company lines as a strip that scrolls sideways, packets running (src/lib/bp-scene.ts), ending in the card.
   import { BpScene } from "../../lib/bp-scene";
   const strip = document.querySelector<HTMLElement>(".contact-strip");
   if (strip && !matchMedia("(min-width: 900px)").matches) {

@@ -2,7 +2,8 @@
 // About's career line and approach machine. Everything lives in one front plane sheared down to the right; housings
 // get depth along the receding direction R, which the pointer tilt turns. Hovering a machine magnifies it in place
 // while text keeps its size (CSS divides font sizes by --cam-s), so labels spread apart. Packets run Route3 paths.
-// Narrow screens (< 900px) and reduced motion: a still frame (the caller wraps the figure in a sideways scroller).
+// Narrow screens (< 900px): packets still run, but the camera stays put (the caller wraps the figure in a sideways
+// scroller, so magnifying would fight the scroll). Reduced motion: a still frame.
 import { BASE_VIEW, recede, ring, tilt, type View } from "./blueprint";
 import { svg_el as el, make_packet, place, set_clean } from "./pipe-packets";
 
@@ -33,7 +34,8 @@ interface Moving { g: SVGGElement; flow: Flow; s: number; a: number; spin: numbe
 
 export class BpScene {
   readonly svg: SVGSVGElement;
-  readonly still: boolean;
+  readonly still: boolean;     // reduced motion: no packets, no camera
+  readonly fixed_cam: boolean; // still, or narrow (sideways scroller): packets run, the camera never moves
   readonly layers: Record<"grid" | "back" | "edge" | "core" | "center" | "house" | "packets" | "glass" | "top" | "labels", Element>;
   private readonly cam_g: Element;
   private readonly COS: number;
@@ -50,7 +52,8 @@ export class BpScene {
 
   constructor(svg: SVGSVGElement, slope_deg = 5) {
     this.svg = svg;
-    this.still = matchMedia("(prefers-reduced-motion: reduce)").matches || !matchMedia("(min-width: 900px)").matches;
+    this.still = matchMedia("(prefers-reduced-motion: reduce)").matches;
+    this.fixed_cam = this.still || !matchMedia("(min-width: 900px)").matches;
     const a = (slope_deg * Math.PI) / 180;
     this.COS = Math.cos(a); this.SIN = Math.sin(a);
     svg.replaceChildren();
@@ -151,7 +154,7 @@ export class BpScene {
   }
   /** Magnify around a 3D point (kept inside the figure); null zooms back out. */
   magnify(p: P3 | null, s = 2, half = { w: 80, h: 50 }) {
-    if (!p || this.still) { this.goal = { x: 0, y: 0, s: 1 }; return; }
+    if (!p || this.fixed_cam) { this.goal = { x: 0, y: 0, s: 1 }; return; }
     const c = this.screen(p), v = this.vb;
     const tx = Math.min(Math.max(c.x, v.x + half.w * s), v.x + v.w - half.w * s);
     const ty = Math.min(Math.max(c.y, v.y + half.h * s), v.y + v.h - half.h * s);
@@ -183,7 +186,7 @@ export class BpScene {
     this.cam_g.setAttribute("transform", `translate(${f(c.x)} ${f(c.y)}) scale(${c.s.toFixed(4)})`);
     this.svg.style.setProperty("--cam-s", c.s.toFixed(4));
   }
-  /** Start: still frame (pre-warmed) on narrow screens or with reduced motion, otherwise run while on screen. */
+  /** Start: still frame (pre-warmed) with reduced motion, otherwise run while on screen (narrow screens included). */
   start(host: HTMLElement) {
     for (let i = 0; i < 300; i++) this.step(1 / 30);
     if (this.still) return;
